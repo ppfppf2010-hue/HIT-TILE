@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>히트타일 거래처 잔액</title>
+<style>
+  :root{
+    --bg:#f6f3ee;
+    --ink:#2c2a27;
+    --muted:#726d64;
+    --line:rgba(44,42,39,0.14);
+    --brass:#b08d57;
+    --brass-deep:#8c6b3e;
+    --warn:#b1503f;
+    --card:#ffffff;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Malgun Gothic',sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    padding:0 0 60px;
+  }
+  header{
+    padding:32px 6vw 20px;
+    border-bottom:1px solid var(--line);
+  }
+  header h1{
+    margin:0 0 6px;
+    font-size:22px;
+  }
+  header p{
+    margin:0;
+    color:var(--muted);
+    font-size:13px;
+  }
+
+  main{
+    max-width:640px;
+    margin:0 auto;
+    padding:24px 6vw 0;
+  }
+
+  .summary-card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:20px 22px;
+    margin-bottom:20px;
+  }
+  .summary-card .label{
+    font-size:12.5px;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  .summary-card .total{
+    font-size:28px;
+    font-weight:700;
+    font-variant-numeric:tabular-nums;
+  }
+  .summary-card .updated{
+    margin-top:8px;
+    font-size:11.5px;
+    color:var(--muted);
+  }
+
+  .list-card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    overflow:hidden;
+  }
+
+  .list-head{
+    display:grid;
+    grid-template-columns:1fr auto;
+    padding:12px 18px;
+    background:#faf8f4;
+    border-bottom:1px solid var(--line);
+  }
+  .list-head span{
+    font-size:11.5px;
+    color:var(--muted);
+    font-weight:600;
+  }
+  .amount-toggle{
+    display:flex;
+    align-items:center;
+    gap:4px;
+    background:none;
+    border:none;
+    font-size:11.5px;
+    color:var(--muted);
+    font-weight:600;
+    cursor:pointer;
+    padding:0;
+    font-family:inherit;
+  }
+  .amount-toggle:hover{ color:var(--brass-deep); }
+  .amount-toggle svg{ width:12px; height:12px; }
+
+  .row{
+    display:grid;
+    grid-template-columns:1fr auto;
+    align-items:center;
+    padding:16px 18px;
+    border-bottom:1px solid var(--line);
+  }
+  .row:last-child{ border-bottom:none; }
+  .row .name{
+    font-size:15px;
+    font-weight:600;
+  }
+  .row .amount{
+    font-size:17px;
+    font-weight:700;
+    font-variant-numeric:tabular-nums;
+  }
+  .row .amount.zero{ color:var(--muted); font-weight:500; }
+  .row .amount.positive{ color:var(--warn); }
+
+  .empty, .error-box, .loading{
+    padding:40px 20px;
+    text-align:center;
+    color:var(--muted);
+    font-size:14px;
+  }
+  .error-box{ color:var(--warn); }
+
+  .refresh-btn{
+    margin-top:16px;
+    width:100%;
+    padding:12px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--card);
+    color:var(--ink);
+    font-size:13px;
+    cursor:pointer;
+    font-family:inherit;
+  }
+  .refresh-btn:hover{ border-color:var(--brass); color:var(--brass-deep); }
+
+  .note{
+    margin-top:18px;
+    font-size:12px;
+    color:var(--muted);
+    line-height:1.6;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>히트타일 거래처 잔액</h1>
+  <p>거래처별 미수금 현황이에요. 금액을 눌러서 정렬 순서를 바꿀 수 있어요.</p>
+</header>
+
+<main>
+
+  <div class="summary-card">
+    <div class="label">전체 미수금 합계</div>
+    <div class="total" id="totalAmount">-</div>
+    <div class="updated" id="updatedAt"></div>
+  </div>
+
+  <div class="list-card">
+    <div class="list-head">
+      <span>거래처명</span>
+      <button class="amount-toggle" id="sortToggle">
+        미수금
+        <svg id="sortIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+      </button>
+    </div>
+    <div id="listBody">
+      <div class="loading">불러오는 중...</div>
+    </div>
+  </div>
+
+  <button class="refresh-btn" id="refreshBtn">새로고침</button>
+
+  <p class="note">
+    금액을 고치려면 구글시트의 "거래처잔액" 탭에서 직접 수정해주세요. 이 페이지는 시트를 그대로 보여주기만 해요.
+  </p>
+
+</main>
+
+<script>
+  const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec';
+
+  const listBody = document.getElementById('listBody');
+  const totalAmount = document.getElementById('totalAmount');
+  const updatedAt = document.getElementById('updatedAt');
+  const sortToggle = document.getElementById('sortToggle');
+  const sortIcon = document.getElementById('sortIcon');
+  const refreshBtn = document.getElementById('refreshBtn');
+
+  let rows = [];
+  let sortDir = 'desc'; // desc = 큰 금액 먼저
+
+  function formatWon(n) {
+    return Number(n).toLocaleString('ko-KR') + '원';
+  }
+
+  function render() {
+    if (!rows.length) {
+      listBody.innerHTML = '<div class="empty">등록된 거래처가 없어요.</div>';
+      totalAmount.textContent = formatWon(0);
+      return;
+    }
+
+    const sorted = [...rows].sort((a, b) => sortDir === 'desc' ? b.balance - a.balance : a.balance - b.balance);
+    const total = rows.reduce((sum, r) => sum + (Number(r.balance) || 0), 0);
+    totalAmount.textContent = formatWon(total);
+
+    listBody.innerHTML = '';
+    sorted.forEach((r) => {
+      const row = document.createElement('div');
+      row.className = 'row';
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'name';
+      nameEl.textContent = r.name;
+
+      const amountEl = document.createElement('div');
+      const bal = Number(r.balance) || 0;
+      amountEl.className = 'amount' + (bal === 0 ? ' zero' : ' positive');
+      amountEl.textContent = formatWon(bal);
+
+      row.appendChild(nameEl);
+      row.appendChild(amountEl);
+      listBody.appendChild(row);
+    });
+  }
+
+  function updateSortIcon() {
+    sortIcon.style.transform = sortDir === 'asc' ? 'rotate(180deg)' : 'rotate(0deg)';
+  }
+
+  sortToggle.addEventListener('click', () => {
+    sortDir = sortDir === 'desc' ? 'asc' : 'desc';
+    updateSortIcon();
+    render();
+  });
+
+  async function load() {
+    listBody.innerHTML = '<div class="loading">불러오는 중...</div>';
+    try {
+      const res = await fetch(ENDPOINT + '?action=balances');
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || '불러오지 못했어요.');
+      rows = data.rows || [];
+      updatedAt.textContent = data.updatedAt ? ('업데이트: ' + new Date(data.updatedAt).toLocaleString('ko-KR')) : '';
+      updateSortIcon();
+      render();
+    } catch (err) {
+      listBody.innerHTML = '<div class="error-box">' + (err.message || String(err)) + '</div>';
+    }
+  }
+
+  refreshBtn.addEventListener('click', load);
+
+  load();
+</script>
+
+</body>
+</html>
