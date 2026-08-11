@@ -26,6 +26,7 @@
   header{
     padding:32px 6vw 20px;
     border-bottom:1px solid var(--line);
+    position:relative;
   }
   header h1{
     margin:0 0 6px;
@@ -36,6 +37,21 @@
     color:var(--muted);
     font-size:13px;
   }
+  .edit-toggle{
+    position:absolute;
+    top:32px;
+    right:6vw;
+    font-family:inherit;
+    font-size:12px;
+    padding:7px 14px;
+    border-radius:999px;
+    border:1px solid var(--line);
+    background:var(--card);
+    color:var(--ink);
+    cursor:pointer;
+  }
+  .edit-toggle:hover{ border-color:var(--brass); color:var(--brass-deep); }
+  .edit-toggle.active{ background:var(--ink); color:#fff; border-color:var(--ink); }
 
   main{
     max-width:640px;
@@ -121,6 +137,75 @@
   .row .amount.zero{ color:var(--muted); font-weight:500; }
   .row .amount.positive{ color:var(--warn); }
 
+  .row.edit-row{
+    grid-template-columns:1fr 130px 32px;
+    gap:8px;
+  }
+  .row.edit-row input{
+    font-family:inherit;
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:8px 10px;
+    font-size:14px;
+    color:var(--ink);
+    width:100%;
+  }
+  .row.edit-row input.amount-input{
+    text-align:right;
+    font-variant-numeric:tabular-nums;
+  }
+  .row.edit-row input:focus{ outline:none; border-color:var(--brass); }
+  .row-delete{
+    width:32px;
+    height:32px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:var(--card);
+    color:var(--warn);
+    cursor:pointer;
+    font-size:15px;
+    line-height:1;
+  }
+  .row-delete:hover{ border-color:var(--warn); background:#fbeeeb; }
+
+  .add-row-btn{
+    display:block;
+    width:100%;
+    padding:14px 18px;
+    border:none;
+    background:#faf8f4;
+    color:var(--muted);
+    font-size:13.5px;
+    font-family:inherit;
+    cursor:pointer;
+    text-align:left;
+  }
+  .add-row-btn:hover{ color:var(--brass-deep); }
+
+  .save-btn{
+    margin-top:16px;
+    width:100%;
+    padding:14px;
+    border:none;
+    border-radius:10px;
+    background:var(--ink);
+    color:#fff;
+    font-size:14px;
+    font-weight:600;
+    cursor:pointer;
+    font-family:inherit;
+  }
+  .save-btn:hover{ background:var(--brass-deep); }
+  .save-btn:disabled{ background:#ccc7bd; cursor:default; }
+
+  .save-status{
+    margin-top:10px;
+    font-size:12.5px;
+    color:var(--muted);
+    text-align:center;
+    min-height:16px;
+  }
+
   .empty, .error-box, .loading{
     padding:40px 20px;
     text-align:center;
@@ -156,6 +241,7 @@
 <header>
   <h1>히트타일 거래처 잔액</h1>
   <p>거래처별 미수금 현황이에요. 금액을 눌러서 정렬 순서를 바꿀 수 있어요.</p>
+  <button class="edit-toggle" id="editToggle" type="button">편집</button>
 </header>
 
 <main>
@@ -167,7 +253,7 @@
   </div>
 
   <div class="list-card">
-    <div class="list-head">
+    <div class="list-head" id="listHead">
       <span>거래처명</span>
       <button class="amount-toggle" id="sortToggle">
         미수금
@@ -177,12 +263,16 @@
     <div id="listBody">
       <div class="loading">불러오는 중...</div>
     </div>
+    <button class="add-row-btn" id="addRowBtn" style="display:none;">+ 거래처 추가</button>
   </div>
+
+  <button class="save-btn" id="saveBtn" style="display:none;">저장하기</button>
+  <div class="save-status" id="saveStatus"></div>
 
   <button class="refresh-btn" id="refreshBtn">새로고침</button>
 
-  <p class="note">
-    금액을 고치려면 구글시트의 "거래처잔액" 탭에서 직접 수정해주세요. 이 페이지는 시트를 그대로 보여주기만 해요.
+  <p class="note" id="noteText">
+    금액을 고치려면 우측 상단 "편집"을 눌러서 이 화면에서 바로 수정·추가할 수 있어요.
   </p>
 
 </main>
@@ -191,29 +281,44 @@
   const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec';
 
   const listBody = document.getElementById('listBody');
+  const listHead = document.getElementById('listHead');
   const totalAmount = document.getElementById('totalAmount');
   const updatedAt = document.getElementById('updatedAt');
   const sortToggle = document.getElementById('sortToggle');
   const sortIcon = document.getElementById('sortIcon');
   const refreshBtn = document.getElementById('refreshBtn');
+  const editToggle = document.getElementById('editToggle');
+  const addRowBtn = document.getElementById('addRowBtn');
+  const saveBtn = document.getElementById('saveBtn');
+  const saveStatus = document.getElementById('saveStatus');
+  const noteText = document.getElementById('noteText');
 
   let rows = [];
   let sortDir = 'desc'; // desc = 큰 금액 먼저
+  let editMode = false;
 
   function formatWon(n) {
     return Number(n).toLocaleString('ko-KR') + '원';
   }
 
+  function computeTotal(list) {
+    return list.reduce((sum, r) => sum + (Number(r.balance) || 0), 0);
+  }
+
   function render() {
+    totalAmount.textContent = formatWon(computeTotal(rows));
+
+    if (editMode) {
+      renderEditRows();
+      return;
+    }
+
     if (!rows.length) {
       listBody.innerHTML = '<div class="empty">등록된 거래처가 없어요.</div>';
-      totalAmount.textContent = formatWon(0);
       return;
     }
 
     const sorted = [...rows].sort((a, b) => sortDir === 'desc' ? b.balance - a.balance : a.balance - b.balance);
-    const total = rows.reduce((sum, r) => sum + (Number(r.balance) || 0), 0);
-    totalAmount.textContent = formatWon(total);
 
     listBody.innerHTML = '';
     sorted.forEach((r) => {
@@ -235,6 +340,48 @@
     });
   }
 
+  function renderEditRows() {
+    listBody.innerHTML = '';
+    rows.forEach((r, idx) => {
+      const row = document.createElement('div');
+      row.className = 'row edit-row';
+
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.value = r.name;
+      nameInput.placeholder = '거래처명';
+      nameInput.addEventListener('input', () => { rows[idx].name = nameInput.value; });
+
+      const amountInput = document.createElement('input');
+      amountInput.type = 'number';
+      amountInput.className = 'amount-input';
+      amountInput.value = r.balance;
+      amountInput.placeholder = '0';
+      amountInput.addEventListener('input', () => {
+        rows[idx].balance = Number(amountInput.value) || 0;
+        totalAmount.textContent = formatWon(computeTotal(rows));
+      });
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'row-delete';
+      delBtn.type = 'button';
+      delBtn.textContent = '×';
+      delBtn.addEventListener('click', () => {
+        rows.splice(idx, 1);
+        render();
+      });
+
+      row.appendChild(nameInput);
+      row.appendChild(amountInput);
+      row.appendChild(delBtn);
+      listBody.appendChild(row);
+    });
+
+    if (!rows.length) {
+      listBody.innerHTML = '<div class="empty">아직 등록된 거래처가 없어요. 아래에서 추가해주세요.</div>';
+    }
+  }
+
   function updateSortIcon() {
     sortIcon.style.transform = sortDir === 'asc' ? 'rotate(180deg)' : 'rotate(0deg)';
   }
@@ -245,8 +392,49 @@
     render();
   });
 
+  function setEditMode(on) {
+    editMode = on;
+    editToggle.textContent = on ? '완료' : '편집';
+    editToggle.classList.toggle('active', on);
+    listHead.style.display = on ? 'none' : 'grid';
+    addRowBtn.style.display = on ? 'block' : 'none';
+    saveBtn.style.display = on ? 'block' : 'none';
+    refreshBtn.style.display = on ? 'none' : 'block';
+    noteText.style.display = on ? 'none' : 'block';
+    saveStatus.textContent = '';
+    render();
+  }
+
+  editToggle.addEventListener('click', () => setEditMode(!editMode));
+
+  addRowBtn.addEventListener('click', () => {
+    rows.push({ name: '', balance: 0 });
+    renderEditRows();
+    const inputs = listBody.querySelectorAll('.edit-row input');
+    if (inputs.length) inputs[inputs.length - 2].focus();
+  });
+
+  saveBtn.addEventListener('click', async () => {
+    saveBtn.disabled = true;
+    saveStatus.textContent = '저장 중이에요...';
+    try {
+      const res = await fetch(ENDPOINT, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'save_balances', rows: rows })
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || '저장하지 못했어요.');
+      saveStatus.textContent = '저장됐어요. (' + data.count + '개 거래처)';
+      setTimeout(() => { setEditMode(false); load(); }, 800);
+    } catch (err) {
+      saveStatus.textContent = '오류: ' + (err.message || String(err));
+    } finally {
+      saveBtn.disabled = false;
+    }
+  });
+
   async function load() {
-    listBody.innerHTML = '<div class="loading">불러오는 중...</div>';
+    if (!editMode) listBody.innerHTML = '<div class="loading">불러오는 중...</div>';
     try {
       const res = await fetch(ENDPOINT + '?action=balances');
       const data = await res.json();
