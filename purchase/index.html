@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>히트타일 구매등록</title>
+<style>
+  :root{
+    --bg:#f6f3ee;
+    --ink:#2c2a27;
+    --muted:#726d64;
+    --line:rgba(44,42,39,0.14);
+    --brass:#b08d57;
+    --brass-deep:#8c6b3e;
+    --ok:#5c7a5e;
+    --warn:#b0824f;
+    --err:#b1503f;
+    --card:#ffffff;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Malgun Gothic',sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    padding:0 0 60px;
+  }
+  header{
+    padding:36px 6vw 24px;
+    border-bottom:1px solid var(--line);
+  }
+  header h1{
+    margin:0 0 8px;
+    font-size:24px;
+  }
+  header p{
+    margin:0;
+    color:var(--muted);
+    font-size:14px;
+    line-height:1.5;
+  }
+  main{
+    max-width:560px;
+    margin:32px auto 0;
+    padding:0 6vw;
+  }
+
+  .upload-panel{}
+
+  .drop{
+    border:2px dashed var(--line);
+    border-radius:14px;
+    padding:40px 20px;
+    text-align:center;
+    background:var(--card);
+    cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .drop.drag{
+    border-color:var(--brass);
+    background:#fbf8f2;
+  }
+  .drop p{ margin:6px 0; color:var(--muted); font-size:14px; }
+  .drop .big{ font-size:16px; color:var(--ink); font-weight:600; }
+  .drop input{ display:none; }
+
+  .file-chip{
+    margin-top:14px;
+    display:none;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:10px 14px;
+    font-size:13px;
+  }
+  .file-chip.show{ display:flex; }
+  .file-chip .name{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .file-chip button{
+    border:none; background:none; color:var(--muted); cursor:pointer; font-size:13px;
+  }
+
+  .month-field{
+    margin-top:14px;
+    display:none;
+  }
+  .month-field.show{ display:block; }
+  .month-field label{
+    display:block;
+    font-size:12.5px;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  .month-field label span{
+    font-size:11px;
+    color:rgba(114,109,100,0.75);
+  }
+  .month-field input{
+    width:100%;
+    padding:10px 12px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--card);
+    color:var(--ink);
+    font-size:14px;
+    font-family:inherit;
+  }
+  .month-field input:focus{
+    outline:none;
+    border-color:var(--brass);
+  }
+
+  button.submit{
+    margin-top:16px;
+    width:100%;
+    padding:14px;
+    border:none;
+    border-radius:10px;
+    background:var(--ink);
+    color:#fff;
+    font-size:15px;
+    font-weight:600;
+    cursor:pointer;
+    transition:background .15s ease;
+  }
+  button.submit:disabled{
+    background:#ccc7bd;
+    cursor:default;
+  }
+  button.submit:not(:disabled):hover{ background:var(--brass-deep); }
+
+  .status{
+    margin-top:18px;
+    font-size:13px;
+    color:var(--muted);
+    display:none;
+    align-items:center;
+    gap:8px;
+  }
+  .status.show{ display:flex; }
+  .spinner{
+    width:14px; height:14px;
+    border:2px solid var(--line);
+    border-top-color:var(--brass);
+    border-radius:50%;
+    animation:spin .7s linear infinite;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  .result{
+    margin-top:28px;
+    display:none;
+  }
+  .result.show{ display:block; }
+
+  .result-head{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:16px 18px;
+    margin-bottom:14px;
+  }
+  .result-head .vendor{
+    font-size:16px;
+    font-weight:700;
+  }
+  .result-head .summary{
+    margin:8px 0 0;
+    font-size:13px;
+    color:var(--muted);
+  }
+  .badge{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    font-size:11px;
+    padding:3px 8px;
+    border-radius:999px;
+    margin-left:8px;
+    font-weight:600;
+  }
+  .badge.ok{ background:rgba(92,122,94,0.12); color:var(--ok); }
+  .badge.warn{ background:rgba(176,130,79,0.14); color:var(--warn); }
+
+  .no-code{ color:var(--warn); font-size:11px; }
+  .blank-cell{ color:rgba(44,42,39,0.28); }
+
+  .error-box{
+    margin-top:18px;
+    display:none;
+    background:#fbeeeb;
+    border:1px solid rgba(177,80,63,0.3);
+    color:var(--err);
+    border-radius:10px;
+    padding:14px 16px;
+    font-size:13px;
+    line-height:1.5;
+  }
+  .error-box.show{ display:block; }
+
+  .again{
+    margin-top:16px;
+    text-align:center;
+  }
+  .again a{
+    color:var(--muted);
+    font-size:13px;
+    cursor:pointer;
+    text-decoration:underline;
+  }
+
+  .result-actions{
+    display:flex;
+    gap:10px;
+    margin-top:14px;
+  }
+  .action-btn{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:7px;
+    padding:11px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:var(--card);
+    color:var(--ink);
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+    text-decoration:none;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .action-btn:hover{
+    border-color:var(--brass);
+    background:#fbf8f2;
+  }
+  .action-btn svg{ width:15px; height:15px; }
+
+  .note-tag{
+    font-size:10.5px;
+    padding:2px 6px;
+    border-radius:5px;
+    white-space:nowrap;
+  }
+  .note-tag.new{ background:rgba(92,122,94,0.12); color:var(--ok); }
+  .note-tag.miss{ background:rgba(177,80,63,0.12); color:var(--err); }
+
+  .note{
+    margin-top:24px;
+    font-size:12px;
+    color:var(--muted);
+    line-height:1.6;
+  }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<header>
+  <h1>히트타일 구매등록</h1>
+  <p>매입 거래명세서·세금계산서(PDF 또는 사진)를 올리면 거래처와 품목을 자동으로 인식해서 구매입력 시트에 등록합니다.</p>
+</header>
+
+<main>
+
+  <div class="upload-panel">
+    <div class="drop" id="dropZone">
+      <div class="big">클릭해서 파일 선택</div>
+      <p>또는 이 영역에 파일을 끌어다 놓으세요</p>
+      <p>PDF, JPG, PNG 지원</p>
+      <input type="file" id="fileInput" accept="application/pdf,image/*">
+    </div>
+
+    <div class="file-chip" id="fileChip">
+      <span class="name" id="fileName"></span>
+      <button type="button" id="fileClear">지우기</button>
+    </div>
+
+    <div class="month-field" id="monthField">
+      <label for="monthInput">특정 월만 등록 <span>(선택, 거래처원장처럼 여러 달이 섞인 문서일 때)</span></label>
+      <input type="month" id="monthInput">
+    </div>
+
+    <button class="submit" id="submitBtn" disabled>업로드해서 등록하기</button>
+
+    <div class="status" id="statusBox">
+      <span class="spinner"></span>
+      <span id="statusText">문서를 분석하는 중이에요...</span>
+    </div>
+
+    <div class="error-box" id="errorBox"></div>
+  </div>
+
+  <div class="result" id="resultBox">
+    <div class="result-head">
+      <span class="vendor" id="resultVendor"></span>
+      <span class="badge" id="vendorBadge"></span>
+      <p class="summary" id="resultSummary"></p>
+    </div>
+
+    <div class="result-actions">
+      <a class="action-btn" id="sheetLink" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+        구글시트에서 확인
+      </a>
+      <button type="button" class="action-btn" id="excelBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        이상 없음 · 엑셀로 저장
+      </button>
+    </div>
+
+    <div class="again">
+      <a id="againLink">다른 파일 업로드하기</a>
+    </div>
+  </div>
+
+  <p class="note">
+    거래처코드(Ecount)·담당자·입고창고·거래유형은 자동으로 채워지지 않아요. 구글시트에서 확인하시고, Ecount에 업로드하기 전에 채워주세요.
+  </p>
+
+</main>
+
+<script>
+  const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec';
+  const SPREADSHEET_ID = '1XBzkR5oVC1kmRkT270FnbIm_IdRzzumpB48TGorKJSM';
+  const SHEET_URL = 'https://docs.google.com/spreadsheets/d/' + SPREADSHEET_ID + '/edit';
+
+  let lastResult = null;
+
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  const fileChip = document.getElementById('fileChip');
+  const fileName = document.getElementById('fileName');
+  const fileClear = document.getElementById('fileClear');
+  const monthField = document.getElementById('monthField');
+  const monthInput = document.getElementById('monthInput');
+  const submitBtn = document.getElementById('submitBtn');
+  const statusBox = document.getElementById('statusBox');
+  const statusText = document.getElementById('statusText');
+  const errorBox = document.getElementById('errorBox');
+  const resultBox = document.getElementById('resultBox');
+  const resultVendor = document.getElementById('resultVendor');
+  const vendorBadge = document.getElementById('vendorBadge');
+  const resultSummary = document.getElementById('resultSummary');
+  const againLink = document.getElementById('againLink');
+  const sheetLink = document.getElementById('sheetLink');
+  const excelBtn = document.getElementById('excelBtn');
+
+  sheetLink.href = SHEET_URL;
+
+  let selectedFile = null;
+
+  function resetAll() {
+    selectedFile = null;
+    fileInput.value = '';
+    fileChip.classList.remove('show');
+    monthField.classList.remove('show');
+    monthInput.value = '';
+    submitBtn.disabled = true;
+    statusBox.classList.remove('show');
+    errorBox.classList.remove('show');
+    resultBox.classList.remove('show');
+  }
+
+  function pickFile(file) {
+    if (!file) return;
+    selectedFile = file;
+    fileName.textContent = file.name;
+    fileChip.classList.add('show');
+    monthField.classList.add('show');
+    submitBtn.disabled = false;
+    errorBox.classList.remove('show');
+    resultBox.classList.remove('show');
+  }
+
+  dropZone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', (e) => pickFile(e.target.files[0]));
+
+  ['dragenter', 'dragover'].forEach(evt => {
+    dropZone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      dropZone.classList.add('drag');
+    });
+  });
+  ['dragleave', 'drop'].forEach(evt => {
+    dropZone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag');
+    });
+  });
+  dropZone.addEventListener('drop', (e) => {
+    const file = e.dataTransfer.files[0];
+    pickFile(file);
+  });
+
+  fileClear.addEventListener('click', (e) => {
+    e.stopPropagation();
+    resetAll();
+  });
+
+  againLink.addEventListener('click', resetAll);
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  submitBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+
+    submitBtn.disabled = true;
+    statusBox.classList.add('show');
+    errorBox.classList.remove('show');
+    resultBox.classList.remove('show');
+    statusText.textContent = '문서를 분석하는 중이에요...';
+
+    try {
+      const base64 = await fileToBase64(selectedFile);
+      const mimeType = selectedFile.type || 'application/pdf';
+
+      statusText.textContent = '거래처·품목을 인식하고 시트에 등록하는 중이에요...';
+
+      const res = await fetch(ENDPOINT, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'purchase_extract',
+          fileBase64: base64,
+          mimeType: mimeType,
+          targetMonth: monthInput.value || ''
+        })
+      });
+
+      const data = await res.json();
+
+      if (!data.ok) {
+        throw new Error(data.error || '처리 중 오류가 발생했어요.');
+      }
+
+      showResult(data);
+    } catch (err) {
+      errorBox.textContent = err.message || String(err);
+      errorBox.classList.add('show');
+    } finally {
+      statusBox.classList.remove('show');
+      submitBtn.disabled = false;
+    }
+  });
+
+  function showResult(data) {
+    lastResult = data;
+
+    resultVendor.textContent = data.vendorName;
+    if (data.vendorMatched) {
+      vendorBadge.textContent = '기존 거래처 매칭됨';
+      vendorBadge.className = 'badge ok';
+    } else {
+      vendorBadge.textContent = '신규/미등록 거래처';
+      vendorBadge.className = 'badge warn';
+    }
+
+    const rows = data.rows || [];
+    const autoCount = rows.filter(r => r.note && r.note.indexOf('자동등록') !== -1).length;
+    const missCount = rows.filter(r => !r.itemCode).length;
+    let summary = `${rows.length}개 품목이 구매입력 시트에 등록됐어요.`;
+    if (autoCount) summary += ` 신규 자동등록 ${autoCount}건.`;
+    if (missCount) summary += ` 미매칭 ${missCount}건.`;
+    resultSummary.textContent = summary;
+
+    resultBox.classList.add('show');
+  }
+
+  excelBtn.addEventListener('click', () => {
+    if (!lastResult || !lastResult.rows || !lastResult.rows.length) return;
+
+    const header = ['일자', '순번', '거래처코드', '거래처명', '담당자', '입고창고', '거래유형', '통화', '환율', '품목코드', '품목명', '규격명', '수량', '단가(vat포함)', '외화금액', '공급가액', '부가세', '적요'];
+
+    const rows = lastResult.rows.map((r) => ([
+      r.date, r.seq, r.vendorCode, r.vendorName, r.manager, r.warehouse,
+      r.dealType, r.currency, r.rate, r.itemCode, r.itemName, r.spec,
+      r.qty, r.unitPrice, r.foreignAmount, r.supply, r.vat, r.note
+    ]));
+
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '구매입력');
+
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    XLSX.writeFile(wb, `구매입력_${lastResult.vendorName}_${today}.xlsx`);
+  });
+</script>
+
+</body>
+</html>
