@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>히트타일 사진 업로드 도우미</title>
+<style>
+  :root{
+    --bg:#F1EFE8; --surface:#FFFFFF; --border:#D8D4CC; --border-strong:#B4B2A9;
+    --text:#2C2C2A; --text-secondary:#5F5E5A; --text-muted:#888780;
+    --accent-bg:#FAEEDA; --accent-border:#BA7517; --accent-text:#633806;
+    --ok:#3D7A4F;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:-apple-system,"Malgun Gothic",sans-serif;
+    background:var(--bg); color:var(--text); padding:1.5rem 1rem 4rem;
+  }
+  main{max-width:760px; margin:0 auto;}
+  h1{font-size:20px; margin:0 0 4px;}
+  p.lead{font-size:13px; color:var(--text-muted); margin:0 0 1.25rem;}
+  .box{background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:1rem 1.1rem; margin-bottom:1rem;}
+  .box h2{font-size:14px; margin:0 0 8px;}
+  .box p{font-size:13px; color:var(--text-secondary); line-height:1.6; margin:0 0 8px;}
+  .box a{color:var(--accent-text);}
+  input[type=text], input[type=password]{
+    width:100%; height:42px; padding:0 12px; font-size:14px;
+    border:1px solid var(--border-strong); border-radius:8px; background:#fff;
+  }
+  select{
+    width:100%; height:38px; padding:0 8px; font-size:13px;
+    border:1px solid var(--border-strong); border-radius:8px; background:#fff;
+  }
+  .filebtn{
+    display:inline-flex; align-items:center; gap:8px; height:44px; padding:0 18px;
+    border:1px dashed var(--border-strong); border-radius:10px; background:#fff;
+    font-size:14px; cursor:pointer;
+  }
+  #fileInput{display:none;}
+  .row{
+    display:grid; grid-template-columns:70px 1fr 1fr 1fr 1fr auto; gap:8px; align-items:center;
+    padding:10px; border:1px solid var(--border); border-radius:10px; margin-bottom:8px; background:#fff;
+  }
+  .row img{width:60px; height:60px; object-fit:cover; border-radius:6px; background:#E4E1D6;}
+  .row .status{font-size:11px; text-align:center;}
+  .row .status.ok{color:var(--ok); font-weight:600;}
+  .row .status.pending{color:var(--text-muted);}
+  .row .status.err{color:#B23B3B; font-weight:600;}
+  .removeBtn{
+    border:none; background:none; color:var(--text-muted); cursor:pointer; font-size:16px; padding:4px;
+  }
+  button.main{
+    width:100%; height:48px; border-radius:10px; border:none;
+    background:var(--accent-border); color:#fff; font-size:15px; font-weight:600; cursor:pointer;
+  }
+  button.main:disabled{background:var(--border-strong); cursor:not-allowed;}
+  button.copy{
+    height:40px; padding:0 16px; border-radius:8px; border:1px solid var(--border-strong);
+    background:#fff; font-size:13px; cursor:pointer;
+  }
+  textarea{
+    width:100%; min-height:120px; font-family:monospace; font-size:12px;
+    border:1px solid var(--border-strong); border-radius:8px; padding:10px; margin-top:8px;
+  }
+  .empty{font-size:13px; color:var(--text-muted); padding:1rem 0; text-align:center;}
+  .col-labels{
+    display:grid; grid-template-columns:70px 1fr 1fr 1fr 1fr auto; gap:8px;
+    font-size:11px; color:var(--text-muted); padding:0 10px; margin-bottom:4px;
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>히트타일 사진 업로드 도우미</h1>
+  <p class="lead">사진을 넣고 정보만 채우면, 자동으로 imgbb에 올리고 구글 시트에 바로 붙여넣을 데이터를 만들어줍니다.</p>
+
+  <div class="box">
+    <h2>1. 무료 API 키 (최초 1회만)</h2>
+    <p>
+      <a href="https://api.imgbb.com/" target="_blank">api.imgbb.com</a> 접속 → 구글 계정으로 로그인 →
+      화면의 "Get API Key" 클릭 → 나오는 키를 복사해서 아래에 붙여넣으세요.
+      한 번 발급받으면 계속 재사용하시면 됩니다 (매번 새로 만들 필요 없음).
+    </p>
+    <input type="password" id="apiKey" placeholder="여기에 API 키 붙여넣기">
+  </div>
+
+  <div class="box">
+    <h2>2. 사진 추가</h2>
+    <label class="filebtn">
+      📷 사진 선택 (여러 장 가능)
+      <input type="file" id="fileInput" accept="image/*" multiple>
+    </label>
+    <div style="margin-top:12px;">
+      <div class="col-labels" id="colLabels" style="display:none;">
+        <span>사진</span><span>넘버</span><span>사이즈</span><span>색상태그</span><span>공간</span><span></span>
+      </div>
+      <div id="rows"></div>
+      <p class="empty" id="emptyMsg">아직 추가된 사진이 없어요.</p>
+    </div>
+  </div>
+
+  <button class="main" id="uploadBtn" disabled>업로드 시작</button>
+
+  <div class="box" id="resultBox" style="display:none; margin-top:1rem;">
+    <h2>3. 이 내용을 구글 시트에 붙여넣기</h2>
+    <p>아래 "결과 복사" 버튼을 누른 다음, 구글 시트에서 넘버 열의 빈 줄을 클릭하고 <b>Ctrl+V</b> 하시면 여러 줄이 한 번에 채워집니다.</p>
+    <button class="copy" id="copyBtn">결과 복사</button>
+    <textarea id="resultText" readonly></textarea>
+  </div>
+</main>
+
+<script>
+const SIZES = ["300x600","600x600","600x1200","800x800","모자이크"];
+let items = [];
+let idCounter = 0;
+
+const fileInput = document.getElementById("fileInput");
+const rowsEl = document.getElementById("rows");
+const emptyMsg = document.getElementById("emptyMsg");
+const colLabels = document.getElementById("colLabels");
+const uploadBtn = document.getElementById("uploadBtn");
+
+fileInput.addEventListener("change", (e)=>{
+  const files = Array.from(e.target.files);
+  files.forEach(file=>{
+    const id = "item_" + (idCounter++);
+    const previewUrl = URL.createObjectURL(file);
+    items.push({ id, file, previewUrl, num:"", size:SIZES[0], color:"", room:"", status:"pending", link:"" });
+  });
+  fileInput.value = "";
+  renderRows();
+});
+
+function renderRows(){
+  rowsEl.innerHTML = "";
+  emptyMsg.style.display = items.length ? "none" : "block";
+  colLabels.style.display = items.length ? "grid" : "none";
+  uploadBtn.disabled = items.length === 0;
+
+  items.forEach(it=>{
+    const row = document.createElement("div");
+    row.className = "row";
+
+    const img = document.createElement("img");
+    img.src = it.previewUrl;
+    row.appendChild(img);
+
+    const numInput = document.createElement("input");
+    numInput.type = "text"; numInput.placeholder = "넘버";
+    numInput.value = it.num;
+    numInput.addEventListener("input", ()=>{ it.num = numInput.value; });
+    row.appendChild(numInput);
+
+    const sizeSelect = document.createElement("select");
+    SIZES.forEach(s=>{
+      const opt = document.createElement("option");
+      opt.value = s; opt.textContent = s;
+      if(s === it.size) opt.selected = true;
+      sizeSelect.appendChild(opt);
+    });
+    sizeSelect.addEventListener("change", ()=>{ it.size = sizeSelect.value; });
+    row.appendChild(sizeSelect);
+
+    const colorInput = document.createElement("input");
+    colorInput.type = "text"; colorInput.placeholder = "색상태그";
+    colorInput.value = it.color;
+    colorInput.addEventListener("input", ()=>{ it.color = colorInput.value; });
+    row.appendChild(colorInput);
+
+    const roomInput = document.createElement("input");
+    roomInput.type = "text"; roomInput.placeholder = "공간";
+    roomInput.value = it.room;
+    roomInput.addEventListener("input", ()=>{ it.room = roomInput.value; });
+    row.appendChild(roomInput);
+
+    const statusEl = document.createElement("div");
+    statusEl.className = "status " + it.status;
+    statusEl.textContent = it.status === "ok" ? "완료" : it.status === "err" ? "실패" : "대기";
+    row.appendChild(statusEl);
+
+    rowsEl.appendChild(row);
+  });
+}
+
+uploadBtn.addEventListener("click", async ()=>{
+  const apiKey = document.getElementById("apiKey").value.trim();
+  if(!apiKey){ alert("먼저 API 키를 입력해주세요."); return; }
+
+  uploadBtn.disabled = true;
+  uploadBtn.textContent = "업로드 중...";
+
+  for(const it of items){
+    if(it.status === "ok") continue;
+    try{
+      const formData = new FormData();
+      formData.append("image", it.file);
+      const res = await fetch("https://api.imgbb.com/1/upload?key=" + encodeURIComponent(apiKey), {
+        method: "POST",
+        body: formData
+      });
+      const json = await res.json();
+      if(json.success){
+        it.link = json.data.url;
+        it.status = "ok";
+      }else{
+        it.status = "err";
+      }
+    }catch(e){
+      it.status = "err";
+    }
+    renderRows();
+  }
+
+  uploadBtn.disabled = false;
+  uploadBtn.textContent = "업로드 시작";
+  showResult();
+});
+
+function showResult(){
+  const lines = items
+    .filter(it=>it.status === "ok")
+    .map(it=> [it.num, it.size, it.color, it.room, it.link].join("\t"));
+  document.getElementById("resultText").value = lines.join("\n");
+  document.getElementById("resultBox").style.display = "block";
+}
+
+document.getElementById("copyBtn").addEventListener("click", ()=>{
+  const ta = document.getElementById("resultText");
+  ta.select();
+  navigator.clipboard.writeText(ta.value).then(()=>{
+    document.getElementById("copyBtn").textContent = "복사됨!";
+    setTimeout(()=>{ document.getElementById("copyBtn").textContent = "결과 복사"; }, 1500);
+  }).catch(()=>{
+    document.execCommand("copy");
+  });
+});
+</script>
+</body>
+</html>
