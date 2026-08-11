@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HIT TILE 상담 체크리스트</title>
+<script>
+(function(){
+  var ua = navigator.userAgent.toLowerCase();
+  if(ua.indexOf('kakaotalk') !== -1){
+    var currentUrl = location.href;
+    if(/android/i.test(ua)){
+      location.href = 'intent://' + currentUrl.replace(/https?:\/\//i, '') + '#Intent;scheme=https;package=com.android.chrome;end';
+    } else if(/iphone|ipad|ipod/i.test(ua)){
+      location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(currentUrl);
+    }
+  }
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  :root{
+    --paper:#FAF8F3;
+    --paper-line:#DAD4C6;
+    --ink:#1C1B19;
+    --muted:#8A8474;
+    --red:#D4302B;
+    --red-dark:#A9231E;
+    --green:#2E7D32;
+    --card:#FFFFFF;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    background-image:
+      linear-gradient(var(--paper-line) 1px, transparent 1px);
+    background-size: 100% 34px;
+    font-family:'Noto Sans KR', sans-serif;
+    color:var(--ink);
+    padding-bottom:80px;
+  }
+  header.top{
+    background:var(--ink);
+    padding:18px 20px;
+  }
+  .clip{
+    width:80px; height:26px;
+    background:#2b2a28;
+    border-radius:6px 6px 3px 3px;
+    margin:0 auto 8px auto;
+    position:relative;
+    box-shadow:0 3px 6px rgba(0,0,0,.35);
+  }
+  .clip:after{
+    content:'';
+    position:absolute; left:50%; top:6px; transform:translateX(-50%);
+    width:34px; height:10px; background:#111; border-radius:2px;
+  }
+  .brand{
+    text-align:center;
+    font-family:'Black Han Sans', sans-serif;
+    color:#fff;
+    letter-spacing:1px;
+  }
+  .brand .hit{color:var(--red); font-size:26px;}
+  .brand .rest{font-size:26px;}
+  .brand .sub{
+    display:block;
+    font-family:'Noto Sans KR', sans-serif;
+    font-weight:500;
+    font-size:12px;
+    color:#C9C4B6;
+    letter-spacing:2px;
+    margin-top:-2px;
+  }
+  main{
+    max-width:720px;
+    margin:22px auto;
+    padding:0 16px;
+  }
+  .view{display:none;}
+  .view.active{display:block;}
+
+  .card{
+    background:var(--card);
+    border:1px solid var(--paper-line);
+    border-radius:var(--radius);
+    padding:18px;
+    margin-bottom:16px;
+    box-shadow:0 1px 3px rgba(0,0,0,.04);
+  }
+  .card h3{
+    margin:0 0 12px 0;
+    font-size:14px;
+    color:var(--red-dark);
+    letter-spacing:.5px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .card h3:before{
+    content:'';
+    width:4px; height:14px; background:var(--red);
+    border-radius:2px;
+    display:inline-block;
+  }
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  @media(max-width:520px){ .grid2{grid-template-columns:1fr;} }
+
+  label{
+    display:block;
+    font-size:11px;
+    color:var(--muted);
+    font-weight:700;
+    margin-bottom:4px;
+    letter-spacing:.3px;
+  }
+  input[type=text], input[type=date], input[type=tel], textarea{
+    width:100%;
+    border:1px solid var(--paper-line);
+    border-radius:6px;
+    padding:9px 10px;
+    font-family:'Noto Sans KR';
+    font-size:13px;
+    color:var(--ink);
+    background:#fff;
+  }
+  input:focus, textarea:focus{
+    outline:none;
+    border-color:var(--red);
+    box-shadow:0 0 0 3px rgba(212,48,43,.12);
+  }
+  .field{margin-bottom:10px;}
+
+  table.tile-table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:12.5px;
+  }
+  table.tile-table th{
+    background:#F4F1E9;
+    color:var(--muted);
+    font-weight:700;
+    padding:8px 6px;
+    border:1px solid var(--paper-line);
+    font-size:11px;
+  }
+  table.tile-table td{
+    border:1px solid var(--paper-line);
+    padding:5px;
+    vertical-align:middle;
+  }
+  table.tile-table td.rowlabel{
+    background:#FBFAF6;
+    font-weight:700;
+    font-size:12px;
+    white-space:nowrap;
+    text-align:center;
+    color:var(--ink);
+    position:relative;
+  }
+  .row-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:16px;
+    height:16px;
+    border-radius:50%;
+    border:none;
+    font-size:11px;
+    font-weight:900;
+    line-height:1;
+    cursor:pointer;
+    margin-left:4px;
+    padding:0;
+    vertical-align:middle;
+  }
+  .row-btn.add{ background:var(--red); color:#fff; }
+  .row-btn.remove{ background:#E3DED2; color:var(--muted); }
+  table.tile-table input{
+    border:none;
+    padding:6px 4px;
+    font-size:12.5px;
+    background:transparent;
+  }
+  table.tile-table input:focus{ box-shadow:none; background:#FFF7E8; }
+
+  .size-cell{ padding:3px !important; }
+  .size-cell select{
+    width:100%;
+    border:none;
+    background:transparent;
+    padding:6px 4px;
+    font-size:12.5px;
+    font-family:'Noto Sans KR';
+    color:var(--ink);
+  }
+  .size-cell select:focus{ outline:none; background:#FFF7E8; }
+  .size-cell .size-custom{
+    display:none;
+    border-top:1px solid var(--paper-line) !important;
+  }
+  table.tile-table input:read-only{
+    background:#F4F1E9 !important;
+    color:var(--muted);
+  }
+
+  .fixture-block{margin-bottom:14px;}
+  .fixture-block .label-row{
+    display:flex; justify-content:space-between; align-items:center;
+    background:#F4F1E9; padding:6px 10px; border-radius:6px 6px 0 0;
+    font-size:12px; font-weight:700; color:var(--red-dark);
+    border:1px solid var(--paper-line); border-bottom:none;
+  }
+  .fixture-row{
+    display:grid; grid-template-columns:88px 1fr;
+    border:1px solid var(--paper-line); border-top:none;
+  }
+  .fixture-row:last-child{ border-radius:0 0 6px 6px; }
+  .fixture-row .name{
+    background:#FBFAF6; padding:7px 8px; font-size:12px; font-weight:600;
+    border-right:1px solid var(--paper-line);
+    display:flex; align-items:center;
+  }
+  .fixture-row input{
+    border:none; padding:7px 8px; font-size:12.5px; width:100%;
+  }
+  .fixture-row input::placeholder{ color:#C6C0B2; }
+  .fixture-row .value{
+    padding:7px 8px; font-size:12.5px; display:flex; align-items:center;
+  }
+
+  button.primary{
+    width:100%;
+    background:var(--red);
+    color:#fff;
+    border:none;
+    padding:14px;
+    border-radius:8px;
+    font-size:15px;
+    font-weight:700;
+    cursor:pointer;
+    font-family:'Noto Sans KR';
+  }
+  button.primary:disabled{ background:#D8D3C8; cursor:default; }
+  button.primary:active{ background:var(--red-dark); }
+
+  button.secondary{
+    width:100%;
+    background:#fff;
+    color:var(--ink);
+    border:1px solid var(--paper-line);
+    padding:12px;
+    border-radius:8px;
+    font-size:14px;
+    font-weight:700;
+    cursor:pointer;
+    font-family:'Noto Sans KR';
+    margin-top:10px;
+  }
+  button.secondary:active{ background:#F4F1E9; }
+  button.secondary:disabled{ opacity:.5; cursor:default; }
+
+  .status-msg{
+    text-align:center; font-size:13px; margin-top:10px; font-weight:600;
+  }
+  .status-msg.ok{ color:var(--green); }
+  .status-msg.err{ color:var(--red); }
+
+  .success-banner{
+    background:#EAF6EC; border:1px solid #BFE3C4; color:var(--green);
+    padding:12px 14px; border-radius:8px; font-size:13.5px; font-weight:700;
+    margin-bottom:16px; text-align:center;
+  }
+
+  .config-warning{
+    background:#FFF3E0; border:1px solid #FFCC80; color:#8A5A00;
+    padding:10px 12px; border-radius:8px; font-size:12.5px; margin-bottom:14px;
+  }
+
+  .share-toast{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+    background:var(--ink); color:#fff; padding:10px 18px; border-radius:20px;
+    font-size:13px; font-weight:600; z-index:50; box-shadow:0 4px 14px rgba(0,0,0,.25);
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="clip"></div>
+  <div class="brand">
+    <span class="hit">HIT</span><span class="rest"> TILE</span>
+    <span class="sub">상담 체크리스트 · 디지털</span>
+  </div>
+</header>
+
+<main>
+
+  <div id="configWarning" class="config-warning" style="display:none;">
+    ⚠ 아직 저장소(Apps Script 웹앱) 주소가 연결되지 않았어요. index.html 상단의
+    <code>WEBAPP_URL</code> 값을 배포된 웹 앱 URL로 바꿔주세요.
+  </div>
+
+  <!-- ===================== 입력 화면 ===================== -->
+  <section id="view-input" class="view active">
+
+    <div class="card">
+      <h3>현장 기본정보</h3>
+      <div class="grid2">
+        <div class="field"><label>업체</label><input type="text" id="f-company" placeholder="예: 예담"></div>
+        <div class="field"><label>현장주소</label><input type="text" id="f-address" placeholder="예: 동시타운"></div>
+        <div class="field"><label>연락처</label><input type="tel" id="f-contact" placeholder="010-0000-0000"></div>
+        <div class="field"><label>현장비번</label><input type="text" id="f-sitepw" placeholder="현장 출입 비밀번호"></div>
+        <div class="field"><label>타일시공일</label><input type="date" id="f-tiledate"></div>
+        <div class="field"><label>도기시공일</label><input type="date" id="f-ceramicdate"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>TILE NUMBER / SIZE</h3>
+      <table class="tile-table" id="tileTable">
+        <thead>
+          <tr><th style="width:15%">공간</th><th style="width:18%">사이즈</th><th>타일 종류 / 컬러</th><th style="width:24%">비고</th></tr>
+        </thead>
+        <tbody><!-- JS로 렌더링 --></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>욕실 집기류</h3>
+      <div id="fixtureContainer"><!-- JS로 렌더링 --></div>
+    </div>
+
+    <div class="card">
+      <h3>특이사항</h3>
+      <textarea id="f-note" rows="3" placeholder="추가로 메모할 내용을 적어주세요"></textarea>
+    </div>
+
+    <button class="primary" id="saveBtn" onclick="saveConsultation()">상담 내용 저장</button>
+    <div id="saveStatus" class="status-msg"></div>
+  </section>
+
+  <!-- ===================== 저장 완료 / 이미지 저장 화면 ===================== -->
+  <section id="view-detail" class="view">
+    <div class="success-banner">✓ 저장 완료 &amp; 이대한님 이메일로 발송되었습니다</div>
+    <div id="detailContainer"></div>
+    <button class="secondary" id="imageBtn" onclick="saveAsImage()">🖼 이미지로 저장</button>
+    <button class="primary" style="margin-top:10px;" onclick="startNewEntry()">+ 새 상담 입력하기</button>
+  </section>
+
+</main>
+
+<script>
+/* ============ 설정 ============
+   아래 URL을 Apps Script 배포 후 받은 "웹 앱 URL"로 교체하세요.
+   예: https://script.google.com/macros/s/AKfycb.../exec
+*/
+const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyGTRMKSfiTQvhAeFDH0BUtFYjhaLal8ba_S9rFGDi2JhiRn49Dp4OR7tQ3GGkmeHze/exec';
+
+const DEFAULT_TILE_ROWS = [
+  { key:'entrance', label:'현관' },
+  { key:'kitchen', label:'주방' },
+  { key:'veranda', label:'베란다' },
+  { key:'commonWall', label:'공동욕실\n(벽체)' },
+  { key:'commonFloor', label:'공동욕실\n(바닥)' },
+  { key:'masterWall', label:'안방욕실\n(벽체)' },
+  { key:'masterFloor', label:'안방욕실\n(바닥)' },
+  { key:'floor', label:'바닥' },
+  { key:'artwall', label:'아트월' },
+];
+
+let tileRows = DEFAULT_TILE_ROWS.map(r => ({ ...r }));
+
+const FIXTURE_ITEMS = [
+  { key:'toilet', label:'양변기' },
+  { key:'sink', label:'세면대' },
+  { key:'sinkFaucet', label:'세면 수전' },
+  { key:'showerFaucet', label:'샤워 수전' },
+  { key:'slideBar', label:'슬라이드바' },
+  { key:'towelBar', label:'수건걸이' },
+  { key:'hanger', label:'옷걸이' },
+  { key:'tissue', label:'휴지걸이' },
+  { key:'shelf', label:'코너선반' },
+  { key:'cabinet', label:'욕실장', hint:'*사이즈' },
+  { key:'mirror', label:'거울' },
+  { key:'sprayGun', label:'스프레이건', hint:'샤워줄 / 코일' },
+  { key:'tub', label:'욕조', hint:'아크릴 / SMC' },
+  { key:'partition', label:'파티션' },
+  { key:'ventilator', label:'환풍기' },
+  { key:'kitchenFaucet', label:'주방수전' },
+];
+
+const FIXTURE_ZONES = [
+  { key:'common', label:'공용욕실' },
+  { key:'master', label:'안방욕실' },
+];
+
+let currentRecord = null;
+
+function showView(name){
+  document.getElementById('view-input').classList.toggle('active', name==='input');
+  document.getElementById('view-detail').classList.toggle('active', name==='detail');
+}
+
+const SIZE_PRESETS = ['600*600', '800*800', '300*600', '300*300', '600*1200'];
+
+// 바닥 행 -> 대응하는 벽체 행 (세트 선택 시 사이즈를 매핑, 이름은 벽체와 동일 + (세트))
+const FLOOR_WALL_PAIR = {
+  commonFloor: 'commonWall',
+  masterFloor: 'masterWall',
+};
+
+// 벽체 사이즈 -> 가능한 바닥 세트 사이즈 (여러 개면 선택지로 노출)
+const SET_SIZE_MAP = {
+  '300*600': ['300*300'],
+  '600*600': ['600*600'],
+  '600*1200': ['600*600', '600*1200'],
+};
+
+function isVerandaKey(key){
+  return /^veranda\d*$/.test(key);
+}
+
+function isLastVerandaRow(key){
+  const verandaKeys = tileRows.filter(r => isVerandaKey(r.key)).map(r => r.key);
+  return verandaKeys[verandaKeys.length - 1] === key;
+}
+
+function addVerandaRow(afterKey){
+  const savedTile = collectTileData();
+  const verandaCount = tileRows.filter(r => isVerandaKey(r.key)).length;
+  const nextNum = verandaCount + 1;
+  const newKey = 'veranda' + nextNum;
+  const newLabel = '베란다 ' + nextNum;
+  const insertIndex = tileRows.findIndex(r => r.key === afterKey) + 1;
+  tileRows.splice(insertIndex, 0, { key:newKey, label:newLabel });
+  renderTileTable();
+  restoreTileData(savedTile);
+}
+
+function removeVerandaRow(key){
+  const savedTile = collectTileData();
+  delete savedTile[key];
+  tileRows = tileRows.filter(r => r.key !== key);
+  renderTileTable();
+  restoreTileData(savedTile);
+}
+
+function restoreTileData(savedTile){
+  Object.keys(savedTile).forEach(key => {
+    const entry = savedTile[key];
+    const sizeInput = document.querySelector(`input[data-tile="${key}"][data-field="size"]`);
+    const nameInput = document.querySelector(`input[data-tile="${key}"][data-field="name"]`);
+    const memoInput = document.querySelector(`input[data-tile="${key}"][data-field="memo"]`);
+    const selectEl = document.querySelector(`select[data-tile="${key}"][data-field="sizeSelect"]`);
+
+    if(memoInput) memoInput.value = entry.memo || '';
+    if(nameInput) nameInput.value = entry.name || '';
+
+    if(sizeInput && selectEl){
+      const sizeVal = entry.size || '';
+      if(sizeVal && SIZE_PRESETS.includes(sizeVal)){
+        selectEl.value = sizeVal;
+        sizeInput.value = sizeVal;
+        sizeInput.style.display = 'none';
+      } else if(sizeVal){
+        selectEl.value = '__custom__';
+        sizeInput.value = sizeVal;
+        sizeInput.style.display = 'block';
+      }
+    }
+  });
+
+  Object.keys(FLOOR_WALL_PAIR).forEach(floorKey => refreshSetOptions(floorKey));
+}
+
+function renderTileTable(){
+  const tbody = document.querySelector('#tileTable tbody');
+  tbody.innerHTML = tileRows.map(row => {
+    const hasSetOption = !!FLOOR_WALL_PAIR[row.key];
+    const veranda = isVerandaKey(row.key);
+    const showAddBtn = veranda && isLastVerandaRow(row.key);
+    const showRemoveBtn = veranda && row.key !== 'veranda';
+
+    return `
+    <tr data-row-key="${row.key}">
+      <td class="rowlabel">
+        <span>${row.label.replace('\n','<br>')}</span>
+        ${showAddBtn ? `<button type="button" class="row-btn add" onclick="addVerandaRow('${row.key}')" title="베란다 추가">+</button>` : ''}
+        ${showRemoveBtn ? `<button type="button" class="row-btn remove" onclick="removeVerandaRow('${row.key}')" title="삭제">×</button>` : ''}
+      </td>
+      <td class="size-cell">
+        <select data-tile="${row.key}" data-field="sizeSelect" onchange="handleSizeSelect(this)">
+          <option value="">선택</option>
+          ${hasSetOption ? getSetOptionsHtml(row.key) : ''}
+          ${SIZE_PRESETS.map(s => `<option value="${s}">${s}</option>`).join('')}
+          <option value="__custom__">기타</option>
+        </select>
+        <input type="text" data-tile="${row.key}" data-field="size" class="size-custom" placeholder="직접 입력">
+      </td>
+      <td><input type="text" data-tile="${row.key}" data-field="name" placeholder="타일명/컬러"></td>
+      <td><input type="text" data-tile="${row.key}" data-field="memo" placeholder="비고"></td>
+    </tr>
+  `;
+  }).join('');
+
+  attachFloorWallSync();
+}
+
+function getSetOptionsHtml(floorKey){
+  const wallKey = FLOOR_WALL_PAIR[floorKey];
+  if(!wallKey) return '';
+  const wallSizeInput = document.querySelector(`input[data-tile="${wallKey}"][data-field="size"]`);
+  const wallSize = wallSizeInput ? wallSizeInput.value : '';
+  const mapped = SET_SIZE_MAP[wallSize];
+  if(!mapped) return '';
+  return mapped.map(sz => `<option value="SET:${sz}">세트 (${sz})</option>`).join('');
+}
+
+function refreshSetOptions(floorKey){
+  const selectEl = document.querySelector(`select[data-tile="${floorKey}"][data-field="sizeSelect"]`);
+  if(!selectEl) return;
+  const prevValue = selectEl.value;
+  const setOptionsHtml = getSetOptionsHtml(floorKey);
+
+  selectEl.innerHTML = `
+    <option value="">선택</option>
+    ${setOptionsHtml}
+    ${SIZE_PRESETS.map(s => `<option value="${s}">${s}</option>`).join('')}
+    <option value="__custom__">기타</option>
+  `;
+
+  const stillValid = Array.from(selectEl.options).some(o => o.value === prevValue);
+  if(stillValid){
+    selectEl.value = prevValue;
+    if(prevValue.startsWith('SET:')){
+      applySetSize(floorKey, prevValue.slice(4));
+      applySetName(floorKey);
+    }
+  } else if(prevValue.startsWith('SET:')){
+    // 이전에 세트로 맞춰뒀던 사이즈가 더 이상 유효하지 않으면 선택 해제 + 잠금 해제
+    selectEl.value = '';
+    const row = selectEl.closest('tr');
+    const cell = selectEl.closest('.size-cell');
+    const customInput = cell.querySelector('.size-custom');
+    const nameInput = row.querySelector('input[data-field="name"]');
+    customInput.style.display = 'none';
+    customInput.readOnly = false;
+    customInput.value = '';
+    if(nameInput){
+      nameInput.readOnly = false;
+    }
+  }
+}
+
+function handleSizeSelect(selectEl){
+  const row = selectEl.closest('tr');
+  const rowKey = row.getAttribute('data-row-key');
+  const cell = selectEl.closest('.size-cell');
+  const customInput = cell.querySelector('.size-custom');
+  const nameInput = row.querySelector('input[data-field="name"]');
+  const val = selectEl.value;
+
+  if(val.startsWith('SET:')){
+    const targetSize = val.slice(4);
+    customInput.style.display = 'block';
+    customInput.readOnly = true;
+    if(nameInput) nameInput.readOnly = true;
+    applySetSize(rowKey, targetSize);
+    applySetName(rowKey);
+  } else if(val === '__custom__'){
+    customInput.style.display = 'block';
+    customInput.readOnly = false;
+    customInput.value = '';
+    customInput.focus();
+    if(nameInput) nameInput.readOnly = false;
+  } else {
+    customInput.style.display = 'none';
+    customInput.readOnly = false;
+    customInput.value = val;
+    customInput.dispatchEvent(new Event('input'));
+    if(nameInput) nameInput.readOnly = false;
+  }
+}
+
+function applySetSize(floorKey, size){
+  const floorSizeInput = document.querySelector(`input[data-tile="${floorKey}"][data-field="size"]`);
+  if(floorSizeInput) floorSizeInput.value = size;
+}
+
+function applySetName(floorKey){
+  const wallKey = FLOOR_WALL_PAIR[floorKey];
+  if(!wallKey) return;
+  const wallNameInput = document.querySelector(`input[data-tile="${wallKey}"][data-field="name"]`);
+  const floorNameInput = document.querySelector(`input[data-tile="${floorKey}"][data-field="name"]`);
+  if(floorNameInput){
+    const baseName = (wallNameInput ? wallNameInput.value.trim() : '');
+    floorNameInput.value = baseName ? (baseName + ' (세트)') : '(세트)';
+  }
+}
+
+// 벽체 사이즈/이름이 바뀌면, 세트로 설정된 바닥의 선택지와 값을 자동으로 다시 맞춤
+function attachFloorWallSync(){
+  Object.keys(FLOOR_WALL_PAIR).forEach(floorKey => {
+    const wallKey = FLOOR_WALL_PAIR[floorKey];
+    const wallSizeInput = document.querySelector(`input[data-tile="${wallKey}"][data-field="size"]`);
+    const wallNameInput = document.querySelector(`input[data-tile="${wallKey}"][data-field="name"]`);
+
+    if(wallSizeInput){
+      wallSizeInput.addEventListener('input', () => refreshSetOptions(floorKey));
+    }
+    if(wallNameInput){
+      wallNameInput.addEventListener('input', () => {
+        const floorSelect = document.querySelector(`select[data-tile="${floorKey}"][data-field="sizeSelect"]`);
+        if(floorSelect && floorSelect.value.startsWith('SET:')){
+          applySetName(floorKey);
+        }
+      });
+    }
+  });
+}
+
+function renderFixtures(){
+  const container = document.getElementById('fixtureContainer');
+  container.innerHTML = FIXTURE_ZONES.map(zone => `
+    <div class="fixture-block">
+      <div class="label-row">${zone.label}</div>
+      ${FIXTURE_ITEMS.map(item => `
+        <div class="fixture-row">
+          <div class="name">${item.label}</div>
+          <input type="text" data-zone="${zone.key}" data-fixture="${item.key}"
+                 placeholder="${item.hint ? item.hint : ''}">
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+}
+
+function collectTileData(){
+  const data = {};
+  document.querySelectorAll('#tileTable input').forEach(inp => {
+    const key = inp.getAttribute('data-tile');
+    const field = inp.getAttribute('data-field');
+    if(!data[key]) data[key] = {};
+    data[key][field] = inp.value;
+  });
+  Object.keys(data).forEach(key => {
+    const rowDef = tileRows.find(r => r.key === key);
+    data[key].label = rowDef ? rowDef.label.replace('\n', ' ') : key;
+  });
+  return data;
+}
+
+function collectFixtureData(){
+  const data = {};
+  document.querySelectorAll('#fixtureContainer input').forEach(inp => {
+    const zone = inp.getAttribute('data-zone');
+    const key = inp.getAttribute('data-fixture');
+    if(!data[zone]) data[zone] = {};
+    data[zone][key] = inp.value;
+  });
+  return data;
+}
+
+async function saveConsultation(){
+  if(WEBAPP_URL === 'YOUR_WEBAPP_URL_HERE'){
+    document.getElementById('configWarning').style.display = 'block';
+    window.scrollTo(0,0);
+    return;
+  }
+  const btn = document.getElementById('saveBtn');
+  const statusEl = document.getElementById('saveStatus');
+  const company = document.getElementById('f-company').value.trim();
+
+  if(!company){
+    statusEl.textContent = '업체명을 입력해주세요.';
+    statusEl.className = 'status-msg err';
+    return;
+  }
+
+  const payload = {
+    company: company,
+    address: document.getElementById('f-address').value.trim(),
+    contact: document.getElementById('f-contact').value.trim(),
+    sitePw: document.getElementById('f-sitepw').value.trim(),
+    tileDate: document.getElementById('f-tiledate').value,
+    ceramicDate: document.getElementById('f-ceramicdate').value,
+    tile: collectTileData(),
+    fixture: collectFixtureData(),
+    note: document.getElementById('f-note').value.trim(),
+  };
+
+  btn.disabled = true;
+  btn.textContent = '저장 중...';
+  statusEl.textContent = '';
+
+  try {
+    const res = await fetch(WEBAPP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+    if(json.success){
+      const rec = {
+        id: json.id,
+        timestamp: new Date().toISOString(),
+        '업체': payload.company,
+        '현장주소': payload.address,
+        '연락처': payload.contact,
+        '현장비번': payload.sitePw,
+        '타일시공일': payload.tileDate,
+        '도기시공일': payload.ceramicDate,
+        'tile_json': JSON.stringify(payload.tile),
+        'fixture_json': JSON.stringify(payload.fixture),
+        '특이사항': payload.note,
+      };
+      renderDetail(rec);
+      resetForm();
+    } else {
+      throw new Error(json.error || '알 수 없는 오류');
+    }
+  } catch(err){
+    statusEl.textContent = '저장 실패: ' + err.message;
+    statusEl.className = 'status-msg err';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '상담 내용 저장';
+  }
+}
+
+function resetForm(){
+  ['f-company','f-address','f-contact','f-sitepw','f-tiledate','f-ceramicdate','f-note'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+  tileRows = DEFAULT_TILE_ROWS.map(r => ({ ...r }));
+  renderTileTable();
+  renderFixtures();
+  const statusEl = document.getElementById('saveStatus');
+  statusEl.textContent = '';
+}
+
+function startNewEntry(){
+  showView('input');
+}
+
+function renderDetail(rec){
+  currentRecord = rec;
+  const tile = safeParse(rec['tile_json']);
+  const fixture = safeParse(rec['fixture_json']);
+
+  let html = `
+    <div class="card">
+      <h3>현장 기본정보</h3>
+      <div class="grid2">
+        <div class="field"><label>업체</label><div>${escapeHtml(rec['업체'])}</div></div>
+        <div class="field"><label>현장주소</label><div>${escapeHtml(rec['현장주소'])}</div></div>
+        <div class="field"><label>연락처</label><div>${escapeHtml(rec['연락처'])}</div></div>
+        <div class="field"><label>현장비번</label><div>${escapeHtml(rec['현장비번'])}</div></div>
+        <div class="field"><label>타일시공일</label><div>${escapeHtml(rec['타일시공일'])}</div></div>
+        <div class="field"><label>도기시공일</label><div>${escapeHtml(rec['도기시공일'])}</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>TILE NUMBER / SIZE</h3>
+      <table class="tile-table">
+        <thead><tr><th>공간</th><th>사이즈</th><th>타일 종류 / 컬러</th><th>비고</th></tr></thead>
+        <tbody>
+          ${Object.keys(tile).map(key => {
+            const d = tile[key] || {};
+            const rowDef = tileRows.find(r => r.key === key);
+            const label = d.label || (rowDef ? rowDef.label : key);
+            return `<tr>
+              <td class="rowlabel">${(label||'').replace('\n','<br>')}</td>
+              <td>${escapeHtml(d.size||'-')}</td>
+              <td>${escapeHtml(d.name||'-')}</td>
+              <td>${escapeHtml(d.memo||'-')}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>욕실 집기류</h3>
+      ${FIXTURE_ZONES.map(zone => `
+        <div class="fixture-block">
+          <div class="label-row">${zone.label}</div>
+          ${FIXTURE_ITEMS.map(item => {
+            const val = (fixture[zone.key] || {})[item.key] || '-';
+            return `<div class="fixture-row">
+              <div class="name">${item.label}</div>
+              <div class="value">${escapeHtml(val)}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="card">
+      <h3>특이사항</h3>
+      <div>${escapeHtml(rec['특이사항']) || '없음'}</div>
+    </div>
+  `;
+
+  document.getElementById('detailContainer').innerHTML = html;
+  showView('detail');
+  window.scrollTo(0,0);
+}
+
+function showToast(msg){
+  const el = document.createElement('div');
+  el.className = 'share-toast';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+}
+
+function downloadBlob(blob, fileName){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function saveAsImage(){
+  const btn = document.getElementById('imageBtn');
+  const node = document.getElementById('detailContainer');
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '이미지 생성 중...';
+
+  try {
+    const canvas = await html2canvas(node, { backgroundColor: '#FAF8F3', scale: 2 });
+    canvas.toBlob((blob) => {
+      const company = (currentRecord && currentRecord['업체']) ? currentRecord['업체'].replace(/\s/g,'') : 'hittile';
+      const fileName = `상담지_${company}.png`;
+
+      canvas.toBlob(async (blobForShare) => {
+        const file = new File([blobForShare], fileName, { type:'image/png' });
+        if(navigator.canShare && navigator.canShare({ files:[file] })){
+          try {
+            await navigator.share({ files:[file], title:`HIT TILE 상담지 - ${company}` });
+            btn.disabled = false;
+            btn.textContent = originalText;
+            return;
+          } catch(e){
+            // 공유 취소/실패 시 다운로드로 대체
+          }
+        }
+        downloadBlob(blob, fileName);
+        showToast('이미지가 저장되었습니다.');
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }, 'image/png');
+    }, 'image/png');
+  } catch(err){
+    showToast('이미지 생성 실패: ' + err.message);
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+function safeParse(str){
+  try { return JSON.parse(str) || {}; } catch(e){ return {}; }
+}
+function escapeHtml(str){
+  if(str === undefined || str === null) return '';
+  return String(str)
+    .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+}
+
+// 초기 렌더링
+renderTileTable();
+renderFixtures();
+if(WEBAPP_URL === 'YOUR_WEBAPP_URL_HERE'){
+  document.getElementById('configWarning').style.display = 'block';
+}
+</script>
+
+</body>
+</html>
