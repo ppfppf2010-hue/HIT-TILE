@@ -266,6 +266,8 @@
     <button class="add-row-btn" id="addRowBtn" style="display:none;">+ 거래처 추가</button>
   </div>
 
+  <datalist id="vendorNameList"></datalist>
+
   <button class="save-btn" id="saveBtn" style="display:none;">저장하기</button>
   <div class="save-status" id="saveStatus"></div>
 
@@ -296,6 +298,24 @@
   let rows = [];
   let sortDir = 'desc'; // desc = 큰 금액 먼저
   let editMode = false;
+  let knownVendorNames = [];
+
+  async function loadVendorNames() {
+    try {
+      const res = await fetch(ENDPOINT + '?action=vendor_names');
+      const data = await res.json();
+      if (data.ok) {
+        knownVendorNames = data.names || [];
+        const list = document.getElementById('vendorNameList');
+        list.innerHTML = '';
+        knownVendorNames.forEach((n) => {
+          const opt = document.createElement('option');
+          opt.value = n;
+          list.appendChild(opt);
+        });
+      }
+    } catch (err) { /* 자동완성 실패해도 조용히 무시 */ }
+  }
 
   function formatWon(n) {
     return Number(n).toLocaleString('ko-KR') + '원';
@@ -350,6 +370,7 @@
       nameInput.type = 'text';
       nameInput.value = r.name;
       nameInput.placeholder = '거래처명';
+      nameInput.setAttribute('list', 'vendorNameList');
       nameInput.addEventListener('input', () => { rows[idx].name = nameInput.value; });
 
       const amountInput = document.createElement('input');
@@ -451,6 +472,7 @@
   refreshBtn.addEventListener('click', load);
 
   load();
+  loadVendorNames();
 </script>
 
 </body>
