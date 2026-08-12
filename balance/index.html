@@ -381,6 +381,32 @@
     return Number(n).toLocaleString('ko-KR') + '원';
   }
 
+  function parseMoneyInput(str) {
+    const cleaned = String(str || '').replace(/[^\d-]/g, '');
+    if (cleaned === '' || cleaned === '-') return 0;
+    return Number(cleaned) || 0;
+  }
+
+  // 천단위 콤마가 자동으로 붙는 금액 입력창을 만들어준다. onChange(numberValue)로 값 변경을 알려준다.
+  function makeMoneyInput(initialValue, placeholder, onChange) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.inputMode = 'numeric';
+    input.placeholder = placeholder || '0';
+    const num = Number(initialValue) || 0;
+    input.value = num ? num.toLocaleString('ko-KR') : '';
+    input.addEventListener('input', () => {
+      const caretFromEnd = input.value.length - input.selectionStart;
+      const value = parseMoneyInput(input.value);
+      const formatted = value ? value.toLocaleString('ko-KR') : (input.value.replace(/[^\d-]/g, '') === '-' ? '-' : '');
+      input.value = formatted;
+      const pos = Math.max(0, input.value.length - caretFromEnd);
+      input.setSelectionRange(pos, pos);
+      onChange(value);
+    });
+    return input;
+  }
+
   function computeTotal(list) {
     return list.reduce((sum, r) => sum + (Number(r.balance) || 0), 0);
   }
@@ -446,9 +472,11 @@
     span.className = 'pay-label';
     span.textContent = '입금액';
 
-    const input = document.createElement('input');
-    input.type = 'number';
-    input.placeholder = '0';
+    let paidAmount = 0;
+    const input = makeMoneyInput(0, '0', (val) => {
+      paidAmount = val;
+      preview.textContent = '입금 후 미수금 ' + formatWon(curBal - paidAmount);
+    });
 
     const confirmBtn = document.createElement('button');
     confirmBtn.className = 'pay-confirm';
@@ -470,15 +498,10 @@
     const curBal = Number(r.balance) || 0;
     preview.textContent = '현재 미수금 ' + formatWon(curBal);
 
-    input.addEventListener('input', () => {
-      const paid = Number(input.value) || 0;
-      preview.textContent = '입금 후 미수금 ' + formatWon(curBal - paid);
-    });
-
     cancelBtn.addEventListener('click', () => render());
 
     confirmBtn.addEventListener('click', async () => {
-      const paid = Number(input.value) || 0;
+      const paid = paidAmount;
       if (!paid) { render(); return; }
       const target = rows.find((x) => x.name === r.name);
       if (target) target.balance = (Number(target.balance) || 0) - paid;
@@ -517,15 +540,11 @@
       nameInput.setAttribute('list', 'vendorNameList');
       nameInput.addEventListener('input', () => { rows[idx].name = nameInput.value; });
 
-      const amountInput = document.createElement('input');
-      amountInput.type = 'number';
-      amountInput.className = 'amount-input';
-      amountInput.value = r.balance;
-      amountInput.placeholder = '0';
-      amountInput.addEventListener('input', () => {
-        rows[idx].balance = Number(amountInput.value) || 0;
+      const amountInput = makeMoneyInput(r.balance, '0', (val) => {
+        rows[idx].balance = val;
         totalAmount.textContent = formatWon(computeTotal(rows));
       });
+      amountInput.className = 'amount-input';
 
       const delBtn = document.createElement('button');
       delBtn.className = 'row-delete';
