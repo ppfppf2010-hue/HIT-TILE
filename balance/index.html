@@ -119,8 +119,9 @@
 
   .row{
     display:grid;
-    grid-template-columns:1fr auto;
+    grid-template-columns:1fr auto auto;
     align-items:center;
+    gap:10px;
     padding:16px 18px;
     border-bottom:1px solid var(--line);
   }
@@ -133,9 +134,68 @@
     font-size:17px;
     font-weight:700;
     font-variant-numeric:tabular-nums;
+    text-align:right;
   }
   .row .amount.zero{ color:var(--muted); font-weight:500; }
   .row .amount.positive{ color:var(--warn); }
+
+  .pay-btn{
+    font-family:inherit;
+    font-size:11.5px;
+    font-weight:600;
+    padding:6px 10px;
+    border-radius:8px;
+    border:1px solid rgba(92,122,94,0.35);
+    background:rgba(92,122,94,0.08);
+    color:#4d6a4f;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .pay-btn:hover{ background:rgba(92,122,94,0.16); }
+
+  .row.pay-row{
+    grid-template-columns:1fr;
+    gap:8px;
+    background:#faf8f4;
+  }
+  .pay-form{
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .pay-form .pay-label{
+    font-size:13px;
+    color:var(--muted);
+    white-space:nowrap;
+  }
+  .pay-form input{
+    flex:1;
+    font-family:inherit;
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:8px 10px;
+    font-size:14px;
+    text-align:right;
+    font-variant-numeric:tabular-nums;
+  }
+  .pay-form input:focus{ outline:none; border-color:var(--brass); }
+  .pay-form button{
+    font-family:inherit;
+    font-size:12.5px;
+    font-weight:600;
+    padding:8px 12px;
+    border-radius:8px;
+    border:none;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .pay-confirm{ background:var(--ink); color:#fff; }
+  .pay-confirm:hover{ background:var(--brass-deep); }
+  .pay-cancel{ background:none; color:var(--muted); }
+  .pay-preview{
+    font-size:12px;
+    color:var(--muted);
+  }
 
   .row.edit-row{
     grid-template-columns:1fr 130px 32px;
@@ -342,22 +402,106 @@
 
     listBody.innerHTML = '';
     sorted.forEach((r) => {
-      const row = document.createElement('div');
-      row.className = 'row';
-
-      const nameEl = document.createElement('div');
-      nameEl.className = 'name';
-      nameEl.textContent = r.name;
-
-      const amountEl = document.createElement('div');
-      const bal = Number(r.balance) || 0;
-      amountEl.className = 'amount' + (bal === 0 ? ' zero' : ' positive');
-      amountEl.textContent = formatWon(bal);
-
-      row.appendChild(nameEl);
-      row.appendChild(amountEl);
-      listBody.appendChild(row);
+      listBody.appendChild(buildRow(r));
     });
+  }
+
+  function buildRow(r) {
+    const row = document.createElement('div');
+    row.className = 'row';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'name';
+    nameEl.textContent = r.name;
+
+    const amountEl = document.createElement('div');
+    const bal = Number(r.balance) || 0;
+    amountEl.className = 'amount' + (bal === 0 ? ' zero' : ' positive');
+    amountEl.textContent = formatWon(bal);
+
+    const payBtn = document.createElement('button');
+    payBtn.className = 'pay-btn';
+    payBtn.type = 'button';
+    payBtn.textContent = '입금';
+    payBtn.addEventListener('click', () => openPayForm(row, r));
+
+    row.appendChild(nameEl);
+    row.appendChild(amountEl);
+    row.appendChild(payBtn);
+    return row;
+  }
+
+  function openPayForm(row, r) {
+    row.className = 'row pay-row';
+    row.innerHTML = '';
+
+    const label = document.createElement('div');
+    label.className = 'name';
+    label.textContent = r.name + ' 입금 처리';
+
+    const form = document.createElement('div');
+    form.className = 'pay-form';
+
+    const span = document.createElement('span');
+    span.className = 'pay-label';
+    span.textContent = '입금액';
+
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.placeholder = '0';
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'pay-confirm';
+    confirmBtn.type = 'button';
+    confirmBtn.textContent = '차감하기';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'pay-cancel';
+    cancelBtn.type = 'button';
+    cancelBtn.textContent = '취소';
+
+    form.appendChild(span);
+    form.appendChild(input);
+    form.appendChild(confirmBtn);
+    form.appendChild(cancelBtn);
+
+    const preview = document.createElement('div');
+    preview.className = 'pay-preview';
+    const curBal = Number(r.balance) || 0;
+    preview.textContent = '현재 미수금 ' + formatWon(curBal);
+
+    input.addEventListener('input', () => {
+      const paid = Number(input.value) || 0;
+      preview.textContent = '입금 후 미수금 ' + formatWon(curBal - paid);
+    });
+
+    cancelBtn.addEventListener('click', () => render());
+
+    confirmBtn.addEventListener('click', async () => {
+      const paid = Number(input.value) || 0;
+      if (!paid) { render(); return; }
+      const target = rows.find((x) => x.name === r.name);
+      if (target) target.balance = (Number(target.balance) || 0) - paid;
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = '저장 중...';
+      try {
+        const res = await fetch(ENDPOINT, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'save_balances', rows: rows })
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || '저장하지 못했어요.');
+      } catch (err) {
+        alert('저장 중 오류가 났어요: ' + (err.message || String(err)));
+      }
+      render();
+    });
+
+    row.appendChild(label);
+    row.appendChild(form);
+    row.appendChild(preview);
+
+    input.focus();
   }
 
   function renderEditRows() {
