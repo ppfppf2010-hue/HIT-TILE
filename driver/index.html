@@ -131,18 +131,38 @@
     display:flex;
     align-items:center;
     gap:10px;
-    padding:9px 0;
-    font-size:14px;
-    border-bottom:1px dashed var(--line);
+    padding:12px 14px;
+    font-size:14.5px;
+    border:1px solid var(--line);
+    border-radius:11px;
+    margin-bottom:8px;
+    background:var(--card);
+    cursor:pointer;
+    user-select:none;
+    transition:background .12s ease, border-color .12s ease;
     flex-wrap:wrap;
   }
-  .check-row:last-of-type{ border-bottom:none; }
-  .check-row input[type=checkbox]{ width:19px; height:19px; }
+  .check-row:last-of-type{ margin-bottom:0; }
+  .check-row:hover{ border-color:var(--brass); }
+  .check-row:focus-visible{ outline:2px solid var(--brass); outline-offset:1px; }
+  .check-row.done{ background:rgba(92,122,94,0.10); border-color:rgba(92,122,94,0.4); }
   .check-row .itnm{ flex:1; min-width:0; }
+  .check-row .qty-display{
+    min-width:38px;
+    text-align:center;
+    padding:7px 10px;
+    border-radius:8px;
+    background:rgba(44,42,39,0.07);
+    color:var(--ink);
+    font-weight:700;
+    font-variant-numeric:tabular-nums;
+    cursor:pointer;
+  }
+  .check-row.done .qty-display{ background:var(--ok); color:#fff; }
   .check-row input.qty-input{
     width:64px;
     padding:7px 8px;
-    border:1px solid var(--line);
+    border:1px solid var(--brass);
     border-radius:7px;
     font-size:14px;
     text-align:right;
@@ -151,8 +171,8 @@
     background:var(--card);
   }
   .check-row input.qty-input:focus{ outline:none; border-color:var(--brass); }
-  .check-row .shortfall-tag{ font-size:11px; color:var(--err); font-weight:600; min-width:44px; }
-  .check-row .cst{ margin-left:auto; font-size:10.5px; color:var(--muted); flex-basis:100%; text-align:right; }
+  .check-row .shortfall-tag{ font-size:11px; color:var(--err); font-weight:600; }
+  .check-row .cst{ font-size:10.5px; color:var(--muted); flex-basis:100%; text-align:right; }
 
   .form-actions{ display:flex; gap:8px; margin-top:14px; }
   .form-actions button{
@@ -396,6 +416,8 @@
     order.items.forEach((it) => {
       const row = document.createElement('div');
       row.className = 'check-row';
+      row.setAttribute('role', 'button');
+      row.tabIndex = 0;
 
       const nm = document.createElement('span');
       nm.className = 'itnm';
@@ -405,27 +427,61 @@
       const shortfall = document.createElement('span');
       shortfall.className = 'shortfall-tag';
 
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.inputMode = 'numeric';
-      input.className = 'qty-input';
-      input.value = deliveries[it.name];
+      const qtyDisplay = document.createElement('span');
+      qtyDisplay.className = 'qty-display';
 
-      function updateShortfall() {
-        const delivered = Number(deliveries[it.name]) || 0;
-        const diff = it.qty - delivered;
+      const qtyInput = document.createElement('input');
+      qtyInput.type = 'text';
+      qtyInput.inputMode = 'numeric';
+      qtyInput.className = 'qty-input';
+      qtyInput.style.display = 'none';
+
+      function currentQty() { return Number(deliveries[it.name]) || 0; }
+
+      function refresh() {
+        const q = currentQty();
+        qtyDisplay.textContent = q;
+        row.classList.toggle('done', it.qty > 0 && q >= it.qty);
+        const diff = it.qty - q;
         shortfall.textContent = diff > 0 ? diff + '개 부족' : '';
       }
-      input.addEventListener('input', () => {
-        const num = input.value.replace(/[^\d]/g, '');
-        deliveries[it.name] = num === '' ? 0 : Number(num);
-        input.value = num;
-        updateShortfall();
-      });
-      updateShortfall();
 
-      row.appendChild(input);
+      function setQty(q) {
+        deliveries[it.name] = Math.max(0, Number(q) || 0);
+        refresh();
+      }
+
+      function enterEditMode() {
+        qtyInput.value = currentQty();
+        qtyDisplay.style.display = 'none';
+        qtyInput.style.display = '';
+        qtyInput.focus();
+        qtyInput.select();
+      }
+      function exitEditMode() {
+        setQty(qtyInput.value);
+        qtyInput.style.display = 'none';
+        qtyDisplay.style.display = '';
+      }
+
+      qtyDisplay.addEventListener('click', (e) => { e.stopPropagation(); enterEditMode(); });
+      qtyInput.addEventListener('click', (e) => e.stopPropagation());
+      qtyInput.addEventListener('input', () => { qtyInput.value = qtyInput.value.replace(/[^\d]/g, ''); });
+      qtyInput.addEventListener('blur', exitEditMode);
+      qtyInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); qtyInput.blur(); }
+      });
+
+      row.addEventListener('click', () => { setQty(currentQty() >= it.qty ? 0 : it.qty); });
+      row.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQty(currentQty() >= it.qty ? 0 : it.qty); }
+      });
+
+      refresh();
+
       row.appendChild(shortfall);
+      row.appendChild(qtyDisplay);
+      row.appendChild(qtyInput);
 
       if (order.deliveryStatus === '일부누락' && (it.deliveryStatus === '누락' || it.deliveryStatus === '부분누락')) {
         const st = document.createElement('span');
