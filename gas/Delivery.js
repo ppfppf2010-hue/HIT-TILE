@@ -14,7 +14,7 @@ orderSheet.setFrozenRows(1);
 
 let itemSheet = ss.getSheetByName(ORDER_ITEM_SHEET);
 if (!itemSheet) itemSheet = ss.insertSheet(ORDER_ITEM_SHEET);
-const itemHeader = ['주문ID', '품목명', '규격', '수량', '단가', '공급가액', '부가세', '배송여부', '반품수량'];
+const itemHeader = ['주문ID', '품목명', '규격', '수량', '단가', '공급가액', '부가세', '배송여부', '반품수량', '배송수량'];
 itemSheet.getRange(1, 1, 1, itemHeader.length).setValues([itemHeader]);
 itemSheet.setFrozenRows(1);
 
@@ -69,7 +69,8 @@ if (String(ir[0]) === String(order.orderId)) {
 order.items.push({
 name: ir[1], spec: ir[2], qty: Number(ir[3]) || 0, price: Number(ir[4]) || 0,
 supply: Number(ir[5]) || 0, vat: Number(ir[6]) || 0, deliveryStatus: ir[7] || '대기',
-returnQty: Number(ir[8]) || 0
+returnQty: Number(ir[8]) || 0,
+deliveredQty: (ir[9] === '' || ir[9] === undefined || ir[9] === null) ? null : Number(ir[9])
 });
 }
 }
@@ -269,32 +270,45 @@ orderSheet.getRange(rowIdx, 10, 1, 2).setValues([[status, memo]]);
 return jsonOut({ ok: true, orderId: orderId, status: status });
 }
 
-// ---- 배송 처리: 체크된 품목 완료, 배송마감 시 나머지는 누락 처리 ----
+// ---- 배송 처리: 품목별 실제 배송수량 기록, 주문수량 대비 부족하면 부분누락/누락 처리 ----
+function ensureDeliveredQtyHeader(itemSheet) {
+if (itemSheet.getRange(1, 10).getValue() !== '배송수량') {
+itemSheet.getRange(1, 10).setValue('배송수량');
+}
+}
+
 function handleSaveDelivery(body) {
 const orderId = body.orderId;
-const deliveredNames = body.deliveredNames || [];
+const deliveries = body.deliveries || []; // [{name, qty}] 실제 배송한 수량
 const finalize = !!body.finalize;
 if (!orderId) throw new Error('orderId가 없습니다.');
 
 const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 const orderSheet = ss.getSheetByName(ORDER_SHEET);
 const itemSheet = ss.getSheetByName(ORDER_ITEM_SHEET);
+ensureDeliveredQtyHeader(itemSheet);
 const itemData = itemSheet.getDataRange().getValues();
 
+const deliveredMap = {};
+deliveries.forEach(function (d) { deliveredMap[d.name] = Number(d.qty) || 0; });
+
 let hasMissing = false;
-let allDone = true;
 for (let i = 1; i < itemData.length; i++) {
 if (String(itemData[i][0]) !== String(orderId)) continue;
 const name = itemData[i][1];
-const isDelivered = deliveredNames.indexOf(name) !== -1;
-if (isDelivered) {
-itemSheet.getRange(i + 1, 8).setValue('완료');
-} else if (finalize) {
-itemSheet.getRange(i + 1, 8).setValue('누락');
-hasMissing = true;
-} else {
-allDone = false;
-}
+if (!Object.prototype.hasOwnProperty.call(deliveredMap, name)) continue;
+const orderedQty = Number(itemData[i][3]) || 0;
+const deliveredQty = deliveredMap[name];
+
+let status;
+if (deliveredQty >= orderedQty) status = '완료';
+else if (deliveredQty > 0) status = '부분누락';
+else status = finalize ? '누락' : '대기';
+
+if (status !== '완료') hasMissing = true;
+
+itemSheet.getRange(i + 1, 8).setValue(status);
+itemSheet.getRange(i + 1, 10).setValue(deliveredQty);
 }
 
 const rowIdx = findOrderRowIndex(orderSheet, orderId);

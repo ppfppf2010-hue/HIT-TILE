@@ -134,10 +134,25 @@
     padding:9px 0;
     font-size:14px;
     border-bottom:1px dashed var(--line);
+    flex-wrap:wrap;
   }
   .check-row:last-of-type{ border-bottom:none; }
   .check-row input[type=checkbox]{ width:19px; height:19px; }
-  .check-row .cst{ margin-left:auto; font-size:10.5px; color:var(--muted); }
+  .check-row .itnm{ flex:1; min-width:0; }
+  .check-row input.qty-input{
+    width:64px;
+    padding:7px 8px;
+    border:1px solid var(--line);
+    border-radius:7px;
+    font-size:14px;
+    text-align:right;
+    font-family:inherit;
+    color:var(--ink);
+    background:var(--card);
+  }
+  .check-row input.qty-input:focus{ outline:none; border-color:var(--brass); }
+  .check-row .shortfall-tag{ font-size:11px; color:var(--err); font-weight:600; min-width:44px; }
+  .check-row .cst{ margin-left:auto; font-size:10.5px; color:var(--muted); flex-basis:100%; text-align:right; }
 
   .form-actions{ display:flex; gap:8px; margin-top:14px; }
   .form-actions button{
@@ -357,9 +372,14 @@
 
   function getCheckDraft(order) {
     if (!checkDrafts[order.orderId]) {
-      checkDrafts[order.orderId] = order.items
-        .filter((it) => it.deliveryStatus === '완료')
-        .map((it) => it.name);
+      const deliveries = {};
+      order.items.forEach((it) => {
+        let prefill = it.qty;
+        if (it.deliveredQty !== null && it.deliveredQty !== undefined) prefill = it.deliveredQty;
+        else if (it.deliveryStatus === '누락') prefill = 0;
+        deliveries[it.name] = prefill;
+      });
+      checkDrafts[order.orderId] = deliveries;
     }
     return checkDrafts[order.orderId];
   }
@@ -371,27 +391,47 @@
     h3.textContent = '배송 체크';
     sec.appendChild(h3);
 
-    const deliveredNames = getCheckDraft(order);
+    const deliveries = getCheckDraft(order);
 
     order.items.forEach((it) => {
-      const row = document.createElement('label');
+      const row = document.createElement('div');
       row.className = 'check-row';
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.checked = deliveredNames.indexOf(it.name) !== -1;
-      cb.addEventListener('change', () => {
-        const i = deliveredNames.indexOf(it.name);
-        if (cb.checked && i === -1) deliveredNames.push(it.name);
-        if (!cb.checked && i !== -1) deliveredNames.splice(i, 1);
-      });
-      row.appendChild(cb);
+
       const nm = document.createElement('span');
-      nm.textContent = it.name + (it.spec ? ' (' + it.spec + ')' : '') + ' × ' + it.qty;
+      nm.className = 'itnm';
+      nm.textContent = it.name + (it.spec ? ' (' + it.spec + ')' : '') + ' 주문 ' + it.qty;
       row.appendChild(nm);
-      if (it.deliveryStatus === '누락') {
+
+      const shortfall = document.createElement('span');
+      shortfall.className = 'shortfall-tag';
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.inputMode = 'numeric';
+      input.className = 'qty-input';
+      input.value = deliveries[it.name];
+
+      function updateShortfall() {
+        const delivered = Number(deliveries[it.name]) || 0;
+        const diff = it.qty - delivered;
+        shortfall.textContent = diff > 0 ? diff + '개 부족' : '';
+      }
+      input.addEventListener('input', () => {
+        const num = input.value.replace(/[^\d]/g, '');
+        deliveries[it.name] = num === '' ? 0 : Number(num);
+        input.value = num;
+        updateShortfall();
+      });
+      updateShortfall();
+
+      row.appendChild(input);
+      row.appendChild(shortfall);
+
+      if (order.deliveryStatus === '일부누락' && (it.deliveryStatus === '누락' || it.deliveryStatus === '부분누락')) {
         const st = document.createElement('span');
         st.className = 'cst';
-        st.textContent = '이전 배송마감 · 누락';
+        const missing = it.qty - (it.deliveredQty || 0);
+        st.textContent = '이전 배송마감 · ' + missing + '개 누락';
         row.appendChild(st);
       }
       sec.appendChild(row);
@@ -418,9 +458,10 @@
       msg.textContent = '저장 중...';
       msg.className = 'section-msg';
       try {
+        const deliveryList = order.items.map((it) => ({ name: it.name, qty: Number(deliveries[it.name]) || 0 }));
         const res = await fetch(ENDPOINT, {
           method: 'POST',
-          body: JSON.stringify({ action: 'save_delivery', orderId: order.orderId, deliveredNames: deliveredNames, finalize: finalize })
+          body: JSON.stringify({ action: 'save_delivery', orderId: order.orderId, deliveries: deliveryList, finalize: finalize })
         });
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || '저장하지 못했어요.');
@@ -436,7 +477,7 @@
 
     saveBtn.addEventListener('click', () => submitDelivery(false, saveBtn));
     finalizeBtn.addEventListener('click', () => {
-      if (!confirm('배송을 마감할까요? 체크 안 된 품목은 "누락"으로 처리돼요.')) return;
+      if (!confirm('배송을 마감할까요? 주문수량보다 적게 입력된 품목은 부족분이 누락으로 기록돼요.')) return;
       submitDelivery(true, finalizeBtn);
     });
 
