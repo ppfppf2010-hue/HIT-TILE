@@ -1186,8 +1186,22 @@
     }
 
     saveBtn.addEventListener('click', () => submitDelivery(false, saveBtn));
+
+    let finalizeArmed = false;
+    let finalizeTimer = null;
     finalizeBtn.addEventListener('click', () => {
-      if (!confirm('배송을 마감할까요? 주문수량보다 적게 입력된 품목은 부족분이 누락으로 기록돼요.')) return;
+      if (!finalizeArmed) {
+        finalizeArmed = true;
+        finalizeBtn.textContent = '한 번 더 누르면 마감돼요';
+        finalizeTimer = setTimeout(() => {
+          finalizeArmed = false;
+          finalizeBtn.textContent = '배송 마감';
+        }, 3000);
+        return;
+      }
+      clearTimeout(finalizeTimer);
+      finalizeArmed = false;
+      finalizeBtn.textContent = '배송 마감';
       submitDelivery(true, finalizeBtn);
     });
 
