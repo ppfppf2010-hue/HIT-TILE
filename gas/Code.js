@@ -24,7 +24,7 @@
  const SPREADSHEET_ID = '1XBzkR5oVC1kmRkT270FnbIm_IdRzzumpB48TGorKJSM';
  const VENDOR_SHEET = '거래처코드관리';
  const MASTER_SHEET = '품목등록마스터';
- const CLAUDE_MODEL = 'claude-sonnet-4-6';
+ const CLAUDE_MODEL = 'claude-sonnet-5';
 
  function doPost(e) {
  try {
