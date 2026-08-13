@@ -20,11 +20,23 @@
  function handlePurchaseExtract(body) {
  const fileBase64 = body.fileBase64;
  const mimeType = body.mimeType || 'application/pdf';
+ const targetMonth = String(body.targetMonth || '').trim(); // 'YYYY-MM', 선택 시 그 달 품목만 등록
  if (!fileBase64) throw new Error('파일이 없습니다.');
 
  const parsed = extractPurchaseWithClaude(fileBase64, mimeType);
  if (!parsed.vendorName) throw new Error('문서에서 거래처명을 인식하지 못했습니다.');
  if (!parsed.items || parsed.items.length === 0) throw new Error('문서에서 품목을 찾지 못했습니다.');
+
+ const totalExtracted = parsed.items.length;
+ if (targetMonth) {
+ parsed.items = parsed.items.filter(function (it) {
+ const d = String(it.date || parsed.docDate || '');
+ return d.indexOf(targetMonth) === 0;
+ });
+ if (!parsed.items.length) {
+ throw new Error('선택한 월(' + targetMonth + ')에 해당하는 품목을 찾지 못했어요. 문서의 날짜를 확인해주세요.');
+ }
+ }
 
  const vendorInfo = findVendor(parsed.vendorName);
  const finalVendorName = vendorInfo ? vendorInfo.storedName : parsed.vendorName;
@@ -36,7 +48,9 @@
  ok: true,
  vendorName: finalVendorName,
  vendorMatched: !!vendorInfo,
- rows: rows
+ rows: rows,
+ totalExtracted: totalExtracted,
+ filteredByMonth: !!targetMonth
  });
  }
 

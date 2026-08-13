@@ -481,6 +481,9 @@
     const autoCount = rows.filter(r => r.note && r.note.indexOf('자동등록') !== -1).length;
     const missCount = rows.filter(r => !r.itemCode).length;
     let summary = `${rows.length}개 품목이 구매입력 시트에 등록됐어요.`;
+    if (data.filteredByMonth && data.totalExtracted) {
+      summary = `문서에서 인식된 ${data.totalExtracted}개 품목 중 선택한 월 품목 ${rows.length}개만 구매입력 시트에 등록됐어요.`;
+    }
     if (autoCount) summary += ` 신규 자동등록 ${autoCount}건.`;
     if (missCount) summary += ` 미매칭 ${missCount}건.`;
     resultSummary.textContent = summary;
