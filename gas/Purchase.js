@@ -89,9 +89,12 @@
  unit: src.unit || 'EA'
  };
  });
- const newRows = assignCodesAndPrices(toRegister, vendorInfo.lastUsed + 1);
+ const sharedMax = getMaxLastUsedForPrefix(vendorInfo.prefix);
+ const startNumber = Math.max(vendorInfo.lastUsed, sharedMax) + 1;
+ const newRows = assignCodesAndPrices(toRegister, vendorInfo.prefix, startNumber);
  appendToMasterSheet(vendorName, newRows);
  newRows.forEach(function (r) { codeMap[r.name] = r.code; });
+ saveLastUsedByPrefix(vendorInfo.prefix, Math.max(startNumber + newRows.length - 1, sharedMax));
  }
 
  return parsed.items.map(function (it, i) {
