@@ -9,165 +9,316 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --porcelain:#f6f3ee;
-    --grout:#2c2a27;
-    --grout-soft:#4a453e;
-    --tile-a:#ffffff;
-    --tile-b:#eee7d9;
-    --brass:#b08d57;
-    --brass-deep:#8c6b3e;
-    --slate:#726d64;
-    --ok:#5c7a5e;
+    --bg:#ffffff;
+    --bg-sub:#f5f6f8;
+    --ink:#1a1a1a;
+    --muted:#6b7280;
+    --line:rgba(17,17,17,0.09);
+    --blue:#2563eb;
+    --blue-deep:#1d4ed8;
+    --blue-soft:#eef2ff;
+    --blue-pale:#f2f5ff;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
   body{
-    background:var(--porcelain);
-    color:var(--grout);
+    background:var(--bg-sub);
+    color:var(--ink);
     font-family:'Inter',sans-serif;
     -webkit-font-smoothing:antialiased;
   }
 
-  /* ---------- header ---------- */
-  header{
-    padding:64px 6vw 40px;
-    border-bottom:1px solid rgba(44,42,39,0.12);
-    position:relative;
-    overflow:hidden;
+  /* ---------- profile header (mypage style) ---------- */
+  .hub-header{
+    background:var(--blue-pale);
+    padding:20px 6vw 22px;
   }
-  .eyebrow{
-    font-family:'IBM Plex Mono',monospace;
-    font-size:12px;
-    letter-spacing:0.18em;
-    text-transform:uppercase;
-    color:var(--brass-deep);
+  .profile-row{
     display:flex;
     align-items:center;
-    gap:10px;
-    margin-bottom:18px;
+    gap:14px;
   }
-  .eyebrow::before{
-    content:"";
-    width:22px;height:1px;
-    background:var(--brass);
-    display:inline-block;
+  .avatar{
+    width:44px;height:44px;
+    border-radius:50%;
+    background:#dbe4fb;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:20px;
+    flex-shrink:0;
   }
-  h1{
+  .profile-text{ flex:1; min-width:0; }
+  .profile-text .brand{
     font-family:'Space Grotesk',sans-serif;
     font-weight:700;
-    font-size:clamp(34px,5vw,56px);
-    line-height:1.05;
-    margin:0 0 14px;
-    letter-spacing:-0.01em;
+    font-size:19px;
+    line-height:1.25;
   }
-  h1 span{color:var(--brass-deep);}
-  header p.sub{
-    font-size:15px;
-    color:var(--slate);
-    max-width:520px;
-    line-height:1.6;
+  .profile-text .sub{
+    font-size:12.5px;
+    color:var(--muted);
+    margin-top:2px;
+  }
+  .gear-btn{
+    width:38px;height:38px;
+    border-radius:50%;
+    border:none;
+    background:rgba(255,255,255,0.7);
+    color:var(--ink);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    flex-shrink:0;
+    transition:background .15s ease, color .15s ease, transform .15s ease;
+  }
+  .gear-btn:hover{ background:#fff; color:var(--blue); }
+  .gear-btn.active{ background:var(--blue); color:#fff; transform:rotate(20deg); }
+  .gear-btn svg{ width:19px; height:19px; }
+
+  /* ---------- banner ---------- */
+  .hub-banner{
+    margin-top:16px;
+    background:var(--bg);
+    border-radius:16px;
+    padding:16px 18px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    box-shadow:0 1px 3px rgba(17,17,17,0.06);
+  }
+  .hub-banner .txt{ font-size:13.5px; line-height:1.55; }
+  .hub-banner .txt b{ color:var(--blue); font-weight:700; }
+  .hub-banner .txt span{ display:block; color:var(--muted); margin-top:2px; font-size:12.5px; }
+  .hub-banner .go-btn{
+    flex-shrink:0;
+    font-family:inherit;
+    font-size:12.5px;
+    font-weight:600;
+    color:#fff;
+    background:var(--blue);
+    border:none;
+    border-radius:999px;
+    padding:9px 14px;
+    cursor:pointer;
+    text-decoration:none;
+    white-space:nowrap;
+    transition:background .15s ease;
+  }
+  .hub-banner .go-btn:hover{ background:var(--blue-deep); }
+
+  /* ---------- quick menu ---------- */
+  .quick-menu{
+    background:var(--bg);
+    padding:20px 4vw 18px;
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:6px;
+    border-bottom:8px solid var(--bg-sub);
+  }
+  .quick-menu a{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
+    text-decoration:none;
+    color:var(--ink);
+    padding:4px 2px;
+    border-radius:10px;
+    transition:background .12s ease;
+  }
+  .quick-menu a:hover{ background:var(--bg-sub); }
+  .quick-menu .qicon{
+    width:46px;height:46px;
+    border-radius:14px;
+    background:var(--blue);
+    color:#fff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .quick-menu .qicon svg{ width:22px; height:22px; }
+  .quick-menu .qlabel{
+    font-size:11.5px;
+    font-weight:500;
+    text-align:center;
+    line-height:1.3;
+  }
+
+  /* ---------- horizontal scroll: recent work ---------- */
+  .recent{
+    background:var(--bg);
+    padding:22px 6vw 26px;
+    border-bottom:8px solid var(--bg-sub);
+  }
+  .recent-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:14px;
+  }
+  .recent-head h2{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:17px;
+    font-weight:700;
     margin:0;
   }
-  .measure{
-    position:absolute;
-    right:6vw;top:50%;
-    transform:translateY(-50%);
-    width:min(300px,26vw);
-    height:44px;
-    display:none;
+  .recent-head a{
+    font-size:12.5px;
+    font-weight:600;
+    color:var(--blue);
+    text-decoration:none;
+    display:inline-flex;
+    align-items:center;
+    gap:3px;
   }
-  @media(min-width:860px){ .measure{display:block;} }
-  .measure svg{width:100%;height:100%;}
+  .recent-scroll{
+    display:flex;
+    gap:12px;
+    overflow-x:auto;
+    padding-bottom:4px;
+    scroll-snap-type:x proximity;
+    -webkit-overflow-scrolling:touch;
+  }
+  .recent-scroll::-webkit-scrollbar{ height:0; }
+  .recent-card{
+    flex:0 0 auto;
+    width:168px;
+    text-decoration:none;
+    color:var(--ink);
+    scroll-snap-align:start;
+  }
+  .recent-thumb{
+    width:168px;height:110px;
+    border-radius:14px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:34px;
+    margin-bottom:10px;
+  }
+  .recent-badge{
+    display:inline-block;
+    font-size:10.5px;
+    font-weight:700;
+    padding:3px 8px;
+    border-radius:999px;
+    margin-bottom:6px;
+    letter-spacing:0.02em;
+  }
+  .recent-badge.new{ background:var(--blue-soft); color:var(--blue); }
+  .recent-badge.update{ background:#eafaf0; color:#16803c; }
+  .recent-badge.fix{ background:#fff1ee; color:#c4432b; }
+  .recent-title{
+    font-size:13.5px;
+    font-weight:600;
+    line-height:1.4;
+  }
 
-  /* ---------- section ---------- */
-  main{padding:8px 6vw 90px;}
-  section{margin-top:52px;}
+  /* ---------- section (전체 메뉴 grid) ---------- */
+  main{ padding:8px 6vw 90px; }
+  .all-menu-label{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:17px;
+    font-weight:700;
+    margin:26px 0 4px;
+  }
+  .all-menu-sub{
+    font-size:12.5px;
+    color:var(--muted);
+    margin:0 0 20px;
+  }
+  section{margin-top:40px;}
+  section:first-of-type{ margin-top:0; scroll-margin-top:16px; }
   .section-head{
     display:flex;
     align-items:center;
     gap:14px;
-    margin-bottom:18px;
+    margin-bottom:16px;
     padding-bottom:10px;
-    border-bottom:1px dashed rgba(44,42,39,0.25);
+    border-bottom:1px solid var(--line);
   }
   .section-head h2{
     font-family:'Space Grotesk',sans-serif;
-    font-size:18px;
-    font-weight:600;
+    font-size:16.5px;
+    font-weight:700;
     margin:0;
   }
   .section-head .count{
     font-family:'IBM Plex Mono',monospace;
     font-size:11px;
-    color:var(--slate);
+    color:var(--muted);
     letter-spacing:0.05em;
   }
 
   /* ---------- tile grid ---------- */
   .grid{
     display:grid;
-    grid-template-columns:repeat(auto-fill,minmax(232px,1fr));
-    gap:18px;
+    grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+    gap:14px;
   }
   a.tile{
     position:relative;
-    background:var(--tile-a);
-    color:var(--grout);
+    background:var(--bg);
+    color:var(--ink);
     text-decoration:none;
-    padding:22px 20px 20px;
-    min-height:148px;
-    border-radius:14px;
-    border:1px solid rgba(44,42,39,0.10);
+    padding:20px 18px 18px;
+    min-height:142px;
+    border-radius:16px;
+    border:1px solid var(--line);
     display:flex;
     flex-direction:column;
     justify-content:space-between;
     transition:transform .16s ease, box-shadow .16s ease, border-color .16s ease;
   }
-  .grid a.tile:nth-child(even){ background:var(--tile-b); }
+  .grid a.tile:nth-child(even){ background:var(--bg-sub); }
   a.tile:hover{
     transform:translateY(-3px);
-    box-shadow:0 10px 24px rgba(44,42,39,0.14);
-    border-color:rgba(176,141,87,0.45);
+    box-shadow:0 10px 22px rgba(37,99,235,0.14);
+    border-color:rgba(37,99,235,0.35);
     z-index:1;
   }
   a.tile:active{ transform:translateY(-1px) scale(0.985); }
 
   .tile-title{
     font-family:'Space Grotesk',sans-serif;
-    font-weight:600;
-    font-size:18px;
-    margin:14px 0 6px;
+    font-weight:700;
+    font-size:17px;
+    margin:12px 0 6px;
     line-height:1.25;
   }
   .tile-desc{
-    font-size:13px;
-    color:var(--slate);
+    font-size:12.5px;
+    color:var(--muted);
     line-height:1.5;
     margin:0;
   }
   .tile-foot{
-    margin-top:16px;
+    margin-top:14px;
     display:flex;
     align-items:center;
     justify-content:space-between;
     font-family:'IBM Plex Mono',monospace;
     font-size:11px;
-    color:var(--grout-soft);
+    color:var(--muted);
   }
   .tile-foot .go{
     display:inline-flex;
     align-items:center;
     gap:6px;
-    transition:gap .16s ease, color .16s ease;
+    color:var(--blue);
+    font-weight:600;
+    transition:gap .16s ease;
   }
-  a.tile:hover .go{ gap:10px; color:var(--brass-deep); }
+  a.tile:hover .go{ gap:10px; }
   .tile-foot .status{
     display:inline-flex;
     align-items:center;
     gap:5px;
   }
-  .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);display:inline-block;}
-  .dot.warn{background:#b0824f;}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--blue);display:inline-block;}
 
   .copy-btn{
     position:absolute;
@@ -176,9 +327,9 @@
     width:28px;
     height:28px;
     border-radius:8px;
-    border:1px solid rgba(44,42,39,0.14);
-    background:rgba(255,255,255,0.7);
-    color:var(--slate);
+    border:1px solid var(--line);
+    background:rgba(255,255,255,0.8);
+    color:var(--muted);
     display:flex;
     align-items:center;
     justify-content:center;
@@ -186,15 +337,15 @@
     transition:background .15s ease, border-color .15s ease, color .15s ease;
   }
   .copy-btn:hover{
-    background:var(--tile-a);
-    border-color:var(--brass);
-    color:var(--brass-deep);
+    background:var(--bg);
+    border-color:var(--blue);
+    color:var(--blue);
   }
   .copy-btn svg{width:14px;height:14px;pointer-events:none;}
   .copy-btn.copied{
     color:#fff;
-    background:var(--brass-deep);
-    border-color:var(--brass-deep);
+    background:var(--blue);
+    border-color:var(--blue);
   }
   .copy-btn .tip{
     position:absolute;
@@ -203,7 +354,7 @@
     font-family:'IBM Plex Mono',monospace;
     font-size:10px;
     letter-spacing:0.03em;
-    background:var(--grout);
+    background:var(--ink);
     color:#fff;
     padding:4px 7px;
     border-radius:5px;
@@ -216,28 +367,8 @@
   .copy-btn.copied .tip{ opacity:1; transform:translateY(0); }
 
   /* ---------- edit mode ---------- */
-  .edit-toggle{
-    position:fixed;
-    top:20px;
-    right:20px;
-    z-index:50;
-    font-family:'IBM Plex Mono',monospace;
-    font-size:11px;
-    letter-spacing:0.05em;
-    padding:8px 16px;
-    border-radius:999px;
-    border:1px solid rgba(44,42,39,0.18);
-    background:rgba(246,243,238,0.9);
-    backdrop-filter:blur(6px);
-    color:var(--grout);
-    cursor:pointer;
-    transition:background .15s ease, border-color .15s ease, color .15s ease;
-  }
-  .edit-toggle:hover{ border-color:var(--brass); color:var(--brass-deep); }
-  .edit-toggle.active{ background:var(--grout); color:#fff; border-color:var(--grout); }
-
   body.edit-mode a.tile{
-    outline:1px dashed rgba(176,141,87,0.55);
+    outline:1px dashed rgba(37,99,235,0.55);
     outline-offset:2px;
   }
 
@@ -261,9 +392,9 @@
     width:24px;
     height:24px;
     border-radius:6px;
-    border:1px solid rgba(44,42,39,0.16);
-    background:rgba(255,255,255,0.85);
-    color:var(--grout-soft);
+    border:1px solid var(--line);
+    background:rgba(255,255,255,0.9);
+    color:var(--muted);
     font-size:10px;
     line-height:1;
     display:flex;
@@ -273,17 +404,17 @@
     transition:background .15s ease, border-color .15s ease, color .15s ease, opacity .15s ease;
   }
   .move-btn:hover:not(:disabled){
-    border-color:var(--brass);
-    color:var(--brass-deep);
-    background:var(--tile-a);
+    border-color:var(--blue);
+    color:var(--blue);
+    background:var(--bg);
   }
   .move-btn:disabled{ opacity:0.28; cursor:default; }
 
   footer{
-    padding:30px 6vw 60px;
-    border-top:1px solid rgba(44,42,39,0.12);
+    padding:26px 6vw 60px;
+    border-top:1px solid var(--line);
     font-size:12.5px;
-    color:var(--slate);
+    color:var(--muted);
     display:flex;
     flex-wrap:wrap;
     gap:8px 18px;
@@ -294,38 +425,100 @@
   @media (prefers-reduced-motion: reduce){
     a.tile{transition:none;}
   }
+
+  @media (max-width:520px){
+    .quick-menu{ grid-template-columns:repeat(5,1fr); gap:2px; padding:18px 2vw 16px; }
+    .quick-menu .qicon{ width:42px; height:42px; }
+    .quick-menu .qlabel{ font-size:10.5px; }
+    .hub-banner{ flex-direction:column; align-items:flex-start; }
+  }
 </style>
 </head>
 <body>
 
-<button id="editToggle" class="edit-toggle" type="button">편집</button>
-
-<header>
-  <div class="eyebrow">HEATTILE · INTERNAL OPS</div>
-  <h1>히트타일 <span>업무용 사이트</span></h1>
-  <p class="sub">대구 히트타일이 직접 만든 자재관리·상담·홍보 도구를 한 곳에 모았습니다. 타일을 고르듯, 필요한 곳을 눌러 들어가세요.</p>
-  <div class="measure" aria-hidden="true">
-    <svg viewBox="0 0 300 44" fill="none">
-      <line x1="0" y1="22" x2="300" y2="22" stroke="#b08d57" stroke-width="1"/>
-      <g stroke="#2c2a27" stroke-width="1">
-        <line x1="0" y1="14" x2="0" y2="30"/>
-        <line x1="30" y1="17" x2="30" y2="27"/>
-        <line x1="60" y1="14" x2="60" y2="30"/>
-        <line x1="90" y1="17" x2="90" y2="27"/>
-        <line x1="120" y1="14" x2="120" y2="30"/>
-        <line x1="150" y1="17" x2="150" y2="27"/>
-        <line x1="180" y1="14" x2="180" y2="30"/>
-        <line x1="210" y1="17" x2="210" y2="27"/>
-        <line x1="240" y1="14" x2="240" y2="30"/>
-        <line x1="270" y1="17" x2="270" y2="27"/>
-        <line x1="300" y1="14" x2="300" y2="30"/>
-      </g>
-    </svg>
+<div class="hub-header">
+  <div class="profile-row">
+    <div class="avatar">🧱</div>
+    <div class="profile-text">
+      <div class="brand">히트타일</div>
+      <div class="sub">업무용 허브</div>
+    </div>
+    <button id="editToggle" class="gear-btn" type="button" aria-label="편집 모드">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
   </div>
-</header>
+
+  <div class="hub-banner">
+    <div class="txt">
+      <b>오늘의 업데이트</b>
+      <span>배송기사 전용 페이지 · 배송 수량 부족분 기록 기능이 추가됐어요</span>
+    </div>
+    <a class="go-btn" href="https://ppfppf2010-hue.github.io/HIT-TILE/driver/" target="_blank" rel="noopener">보러가기 →</a>
+  </div>
+</div>
+
+<div class="quick-menu">
+  <a href="https://ppfppf2010-hue.github.io/HIT-TILE/checklist/" target="_blank" rel="noopener">
+    <span class="qicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V2.6a.6.6 0 0 1 .6-.6h4.8a.6.6 0 0 1 .6.6V4"/><path d="M9 12.5l2 2 4-4.5"/></svg></span>
+    <span class="qlabel">상담<br>체크리스트</span>
+  </a>
+  <a href="https://ppfppf2010-hue.github.io/HIT-TILE/delivery/" target="_blank" rel="noopener">
+    <span class="qicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="10" rx="1"/><path d="M14 10h4l3.5 3.5V17h-7.5z"/><circle cx="6" cy="19" r="1.6"/><circle cx="16.5" cy="19" r="1.6"/></svg></span>
+    <span class="qlabel">배송관리</span>
+  </a>
+  <a href="https://ppfppf2010-hue.github.io/HIT-TILE/purchase/" target="_blank" rel="noopener">
+    <span class="qicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2.5h12v19l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></span>
+    <span class="qlabel">구매등록</span>
+  </a>
+  <a href="https://ppfppf2010-hue.github.io/HIT-TILE/balance/" target="_blank" rel="noopener">
+    <span class="qicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="14" rx="2.5"/><path d="M2 10.5h20"/><circle cx="17" cy="15" r="1.3" fill="currentColor" stroke="none"/></svg></span>
+    <span class="qlabel">거래처 잔액</span>
+  </a>
+  <a href="#all-menu">
+    <span class="qicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.6"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.6"/></svg></span>
+    <span class="qlabel">전체보기</span>
+  </a>
+</div>
+
+<div class="recent">
+  <div class="recent-head">
+    <h2>최근 업데이트</h2>
+    <a href="#all-menu">전체 메뉴 →</a>
+  </div>
+  <div class="recent-scroll">
+
+    <a class="recent-card" href="https://ppfppf2010-hue.github.io/HIT-TILE/driver/" target="_blank" rel="noopener">
+      <div class="recent-thumb" style="background:linear-gradient(135deg,#dbe4ff,#eef2ff);">🚚</div>
+      <span class="recent-badge new">NEW</span>
+      <div class="recent-title">배송기사 페이지</div>
+    </a>
+
+    <a class="recent-card" href="https://ppfppf2010-hue.github.io/HIT-TILE/delivery/" target="_blank" rel="noopener">
+      <div class="recent-thumb" style="background:linear-gradient(135deg,#e3f4e8,#f2faf4);">📦</div>
+      <span class="recent-badge update">UPDATE</span>
+      <div class="recent-title">배송관리 · 수량 부족분 기록</div>
+    </a>
+
+    <a class="recent-card" href="https://ppfppf2010-hue.github.io/HIT-TILE/purchase/" target="_blank" rel="noopener">
+      <div class="recent-thumb" style="background:linear-gradient(135deg,#ffe9e3,#fff4f0);">🧾</div>
+      <span class="recent-badge fix">FIX</span>
+      <div class="recent-title">구매등록 · 월별 등록 버그 수정</div>
+    </a>
+
+    <a class="recent-card" href="https://ppfppf2010-hue.github.io/HIT-TILE/balance/" target="_blank" rel="noopener">
+      <div class="recent-thumb" style="background:linear-gradient(135deg,#e3edff,#f2f6ff);">💰</div>
+      <span class="recent-badge update">UPDATE</span>
+      <div class="recent-title">거래처 잔액 · 입금 자동차감</div>
+    </a>
+
+  </div>
+</div>
 
 <main>
-  <section>
+  <div class="all-menu-label">전체 메뉴</div>
+  <p class="all-menu-sub">카테고리별로 정리된 모든 업무 도구예요. ⚙ 아이콘을 누르면 순서를 바꿀 수 있어요.</p>
+
+  <section id="all-menu">
     <div class="section-head">
       <h2>고객 상담</h2>
       <span class="count">001 LINK</span>
@@ -699,8 +892,8 @@
     toggleBtn.addEventListener('click', function () {
       const on = !document.body.classList.contains('edit-mode');
       document.body.classList.toggle('edit-mode', on);
-      toggleBtn.textContent = on ? '완료' : '편집';
       toggleBtn.classList.toggle('active', on);
+      toggleBtn.setAttribute('aria-label', on ? '편집 완료' : '편집 모드');
     });
 
     applySavedOrder();
