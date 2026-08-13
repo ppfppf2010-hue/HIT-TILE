@@ -15,6 +15,7 @@
  */
 
  const PURCHASE_SHEET = '구매입력';
+ const DEFAULT_WAREHOUSE = '본사창고'; // 추후 변경될 수 있음
 
  // ---- 매입 문서 업로드 -> 거래처+품목 인식 + 구매입력/품목등록마스터에 자동 등록 ----
  function handlePurchaseExtract(body) {
@@ -108,9 +109,9 @@
  vendorCode: '',
  vendorName: vendorName,
  manager: '',
- warehouse: '',
+ warehouse: DEFAULT_WAREHOUSE,
  dealType: '',
- currency: 'KRW',
+ currency: '',
  rate: 1,
  itemCode: code,
  itemName: it.name,
