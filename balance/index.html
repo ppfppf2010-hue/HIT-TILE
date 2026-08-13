@@ -82,24 +82,23 @@
     color:var(--muted);
   }
 
-  .list-card{
+  .list-section{
     background:var(--card);
-    border:1px solid var(--line);
     border-radius:14px;
+    border:1px solid var(--line);
     overflow:hidden;
   }
 
   .list-head{
-    display:grid;
-    grid-template-columns:1fr auto;
-    padding:12px 18px;
-    background:#f5f6f8;
-    border-bottom:1px solid var(--line);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:14px 18px 10px;
   }
   .list-head span{
-    font-size:11.5px;
-    color:var(--muted);
-    font-weight:600;
+    font-size:13px;
+    color:var(--ink);
+    font-weight:700;
   }
   .amount-toggle{
     display:flex;
@@ -117,46 +116,48 @@
   .amount-toggle:hover{ color:var(--brass-deep); }
   .amount-toggle svg{ width:12px; height:12px; }
 
-  .row{
-    display:grid;
-    grid-template-columns:1fr auto auto;
+  .menu-row{
+    display:flex;
     align-items:center;
-    gap:10px;
-    padding:16px 18px;
-    border-bottom:1px solid var(--line);
-  }
-  .row:last-child{ border-bottom:none; }
-  .row .name{
-    font-size:15px;
-    font-weight:600;
-  }
-  .row .amount{
-    font-size:17px;
-    font-weight:700;
-    font-variant-numeric:tabular-nums;
-    text-align:right;
-  }
-  .row .amount.zero{ color:var(--muted); font-weight:500; }
-  .row .amount.positive{ color:var(--warn); }
-
-  .pay-btn{
-    font-family:inherit;
-    font-size:11.5px;
-    font-weight:600;
-    padding:6px 10px;
-    border-radius:8px;
-    border:1px solid rgba(92,122,94,0.35);
-    background:rgba(92,122,94,0.08);
-    color:#4d6a4f;
+    gap:13px;
+    padding:14px 18px;
+    border-top:1px solid var(--line);
     cursor:pointer;
-    white-space:nowrap;
+    transition:background .1s ease;
   }
-  .pay-btn:hover{ background:rgba(92,122,94,0.16); }
+  .menu-row:hover{ background:#f9fafb; }
+  .row-icon{
+    width:38px; height:38px;
+    border-radius:50%;
+    background:#eef2ff;
+    color:var(--brass);
+    display:flex; align-items:center; justify-content:center;
+    font-size:14px; font-weight:700;
+    flex-shrink:0;
+  }
+  .row-text{ flex:1; min-width:0; }
+  .row-text .row-title{
+    font-size:14.5px; font-weight:600;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .row-text .row-sub{
+    font-size:13px;
+    margin-top:3px;
+    font-variant-numeric:tabular-nums;
+  }
+  .row-text .row-sub.zero{ color:var(--muted); font-weight:500; }
+  .row-text .row-sub.positive{ color:var(--warn); font-weight:700; }
+  .row-chevron{ color:#c7cbd1; flex-shrink:0; display:flex; }
+  .row-chevron svg{ width:18px; height:18px; }
 
-  .row.pay-row{
-    grid-template-columns:1fr;
+  .pay-row{
+    display:flex;
+    flex-direction:column;
     gap:8px;
+    padding:14px 18px;
+    border-top:1px solid var(--line);
     background:#f5f6f8;
+    cursor:default;
   }
   .pay-form{
     display:flex;
@@ -197,11 +198,15 @@
     color:var(--muted);
   }
 
-  .row.edit-row{
+  .edit-row{
+    display:grid;
     grid-template-columns:1fr 130px 32px;
     gap:8px;
+    align-items:center;
+    padding:12px 18px;
+    border-top:1px solid var(--line);
   }
-  .row.edit-row input{
+  .edit-row input{
     font-family:inherit;
     border:1px solid var(--line);
     border-radius:8px;
@@ -210,11 +215,11 @@
     color:var(--ink);
     width:100%;
   }
-  .row.edit-row input.amount-input{
+  .edit-row input.amount-input{
     text-align:right;
     font-variant-numeric:tabular-nums;
   }
-  .row.edit-row input:focus{ outline:none; border-color:var(--brass); }
+  .edit-row input:focus{ outline:none; border-color:var(--brass); }
   .row-delete{
     width:32px;
     height:32px;
@@ -312,9 +317,9 @@
     <div class="updated" id="updatedAt"></div>
   </div>
 
-  <div class="list-card">
+  <div class="list-section">
     <div class="list-head" id="listHead">
-      <span>거래처명</span>
+      <span>거래처별 미수금</span>
       <button class="amount-toggle" id="sortToggle">
         미수금
         <svg id="sortIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
@@ -434,35 +439,45 @@
 
   function buildRow(r) {
     const row = document.createElement('div');
-    row.className = 'row';
+    row.className = 'menu-row';
 
-    const nameEl = document.createElement('div');
-    nameEl.className = 'name';
-    nameEl.textContent = r.name;
+    const icon = document.createElement('div');
+    icon.className = 'row-icon';
+    icon.textContent = (r.name || '?').trim().charAt(0) || '?';
 
-    const amountEl = document.createElement('div');
+    const text = document.createElement('div');
+    text.className = 'row-text';
+
+    const title = document.createElement('div');
+    title.className = 'row-title';
+    title.textContent = r.name;
+
     const bal = Number(r.balance) || 0;
-    amountEl.className = 'amount' + (bal === 0 ? ' zero' : ' positive');
-    amountEl.textContent = formatWon(bal);
+    const sub = document.createElement('div');
+    sub.className = 'row-sub' + (bal === 0 ? ' zero' : ' positive');
+    sub.textContent = formatWon(bal);
 
-    const payBtn = document.createElement('button');
-    payBtn.className = 'pay-btn';
-    payBtn.type = 'button';
-    payBtn.textContent = '입금';
-    payBtn.addEventListener('click', () => openPayForm(row, r));
+    text.appendChild(title);
+    text.appendChild(sub);
 
-    row.appendChild(nameEl);
-    row.appendChild(amountEl);
-    row.appendChild(payBtn);
+    const chevron = document.createElement('div');
+    chevron.className = 'row-chevron';
+    chevron.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>';
+
+    row.appendChild(icon);
+    row.appendChild(text);
+    row.appendChild(chevron);
+
+    row.addEventListener('click', () => openPayForm(row, r));
     return row;
   }
 
   function openPayForm(row, r) {
-    row.className = 'row pay-row';
+    row.className = 'pay-row';
     row.innerHTML = '';
 
     const label = document.createElement('div');
-    label.className = 'name';
+    label.style.cssText = 'font-size:14.5px;font-weight:600;';
     label.textContent = r.name + ' 입금 처리';
 
     const form = document.createElement('div');
@@ -531,7 +546,7 @@
     listBody.innerHTML = '';
     rows.forEach((r, idx) => {
       const row = document.createElement('div');
-      row.className = 'row edit-row';
+      row.className = 'edit-row';
 
       const nameInput = document.createElement('input');
       nameInput.type = 'text';
@@ -580,7 +595,7 @@
     editMode = on;
     editToggle.textContent = on ? '완료' : '편집';
     editToggle.classList.toggle('active', on);
-    listHead.style.display = on ? 'none' : 'grid';
+    listHead.style.display = on ? 'none' : 'flex';
     addRowBtn.style.display = on ? 'block' : 'none';
     saveBtn.style.display = on ? 'block' : 'none';
     refreshBtn.style.display = on ? 'none' : 'block';

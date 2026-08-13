@@ -72,23 +72,36 @@
   .order-card{
     background:var(--card);
     border:1px solid var(--line);
-    border-radius:12px;
+    border-radius:14px;
     overflow:hidden;
   }
-  .order-summary{
-    padding:14px 16px;
-    cursor:pointer;
+  .order-summary{ padding:16px; }
+
+  .status-line{ font-size:13.5px; margin-bottom:12px; }
+  .status-line .main{ font-weight:700; color:var(--ink); }
+  .status-line .sep{ color:var(--muted); margin:0 5px; }
+  .status-line .sub{ font-weight:600; }
+  .status-line .sub.ok{ color:var(--ok); }
+  .status-line .sub.warn{ color:var(--warn); }
+  .status-line .sub.err{ color:var(--err); }
+  .status-line .sub.muted{ color:var(--muted); }
+
+  .order-body{ display:flex; gap:12px; align-items:center; margin-bottom:14px; }
+  .order-thumb{
+    width:52px; height:52px;
+    border-radius:12px;
+    background:#eef2ff;
+    color:var(--brass);
+    display:flex; align-items:center; justify-content:center;
+    font-size:17px; font-weight:700;
+    flex-shrink:0;
   }
-  .order-top{
-    display:flex;
-    align-items:baseline;
-    justify-content:space-between;
-    gap:10px;
-  }
-  .order-top .vendor{ font-size:16px; font-weight:700; }
-  .order-top .site{ font-size:12.5px; color:var(--muted); margin-left:6px; font-weight:400; }
+  .order-info{ flex:1; min-width:0; }
+  .order-info .vendor{ font-size:16px; font-weight:700; }
+  .order-info .site{ font-size:12.5px; color:var(--muted); margin-left:6px; font-weight:400; }
   .phone{ font-size:12.5px; color:var(--muted); margin-top:4px; }
-  .badges{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+
+  .badges{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
   .badge{
     font-size:11px;
     font-weight:600;
@@ -96,10 +109,26 @@
     border-radius:999px;
     white-space:nowrap;
   }
-  .badge.ok{ background:rgba(92,122,94,0.12); color:var(--ok); }
+  .badge.ok{ background:rgba(22,128,60,0.10); color:var(--ok); }
   .badge.warn{ background:rgba(176,130,79,0.14); color:var(--warn); }
   .badge.err{ background:rgba(177,80,63,0.12); color:var(--err); }
   .badge.muted{ background:rgba(17,17,17,0.07); color:var(--muted); }
+
+  .order-actions{ display:flex; gap:8px; }
+  .oa-btn{
+    flex:1;
+    padding:10px;
+    border-radius:9px;
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+    font-family:inherit;
+    text-align:center;
+  }
+  .oa-outline{ border:1px solid var(--line); background:var(--card); color:var(--ink); }
+  .oa-outline:hover{ border-color:var(--brass); color:var(--brass-deep); }
+  .oa-primary{ border:1px solid rgba(37,99,235,0.3); background:#eef2ff; color:var(--brass); }
+  .oa-primary:hover{ background:#e0e7ff; }
 
   .order-detail{
     display:none;
@@ -303,6 +332,30 @@
     return statusBadge('배송대기', 'muted');
   }
 
+  function orderStageInfo(order) {
+    if (!order.invoiceRegistered) {
+      return { main: '전표 미등록', sub: '사무실 확인 필요', subClass: 'muted' };
+    }
+    const paymentConfirmed = order.paymentStatus === '완납' || order.paymentStatus === '추후입금';
+    if (!paymentConfirmed) {
+      return { main: '입금 확인 전', sub: '대기 중', subClass: 'muted' };
+    }
+    const ds = order.deliveryStatus || '대기';
+    if (ds === '완료') return { main: '배송완료', sub: order.paymentStatus, subClass: 'ok' };
+    if (ds === '일부누락') return { main: '일부누락', sub: '재배송 필요', subClass: 'err' };
+    if (ds === '진행중') return { main: '배송 진행중', sub: order.paymentStatus, subClass: 'warn' };
+    return { main: '배송대기', sub: order.paymentStatus, subClass: 'ok' };
+  }
+
+  function orderCtaLabel(order) {
+    if (!order.invoiceRegistered) return '상세보기';
+    const paymentConfirmed = order.paymentStatus === '완납' || order.paymentStatus === '추후입금';
+    if (!paymentConfirmed) return '상세보기';
+    const ds = order.deliveryStatus || '대기';
+    if (ds !== '완료') return '배송 체크하기';
+    return '상세보기';
+  }
+
   function renderOrders() {
     orderList.innerHTML = '';
     if (!dayOrders.length) {
@@ -321,8 +374,25 @@
     const summary = document.createElement('div');
     summary.className = 'order-summary';
 
-    const top = document.createElement('div');
-    top.className = 'order-top';
+    const stage = orderStageInfo(order);
+    const statusLine = document.createElement('div');
+    statusLine.className = 'status-line';
+    statusLine.innerHTML =
+      '<span class="main">' + stage.main + '</span>' +
+      '<span class="sep">·</span>' +
+      '<span class="sub ' + stage.subClass + '">' + stage.sub + '</span>';
+    summary.appendChild(statusLine);
+
+    const body = document.createElement('div');
+    body.className = 'order-body';
+
+    const thumb = document.createElement('div');
+    thumb.className = 'order-thumb';
+    thumb.textContent = (order.vendorName || '?').trim().charAt(0) || '?';
+    body.appendChild(thumb);
+
+    const info = document.createElement('div');
+    info.className = 'order-info';
     const nameWrap = document.createElement('div');
     const vendorEl = document.createElement('span');
     vendorEl.className = 'vendor';
@@ -334,15 +404,15 @@
       siteEl.textContent = order.siteName;
       nameWrap.appendChild(siteEl);
     }
-    top.appendChild(nameWrap);
-    summary.appendChild(top);
-
+    info.appendChild(nameWrap);
     if (order.phone) {
       const phoneEl = document.createElement('div');
       phoneEl.className = 'phone';
       phoneEl.textContent = order.phone;
-      summary.appendChild(phoneEl);
+      info.appendChild(phoneEl);
     }
+    body.appendChild(info);
+    summary.appendChild(body);
 
     const badges = document.createElement('div');
     badges.className = 'badges';
@@ -350,18 +420,33 @@
     badges.appendChild(deliveryBadge(order));
     summary.appendChild(badges);
 
+    const actions = document.createElement('div');
+    actions.className = 'order-actions';
+    const detailBtn = document.createElement('button');
+    detailBtn.type = 'button';
+    detailBtn.className = 'oa-btn oa-outline';
+    const isOpen = expandedOrderId === order.orderId;
+    detailBtn.textContent = isOpen ? '접기' : '상세보기';
+    const ctaBtn = document.createElement('button');
+    ctaBtn.type = 'button';
+    ctaBtn.className = 'oa-btn oa-primary';
+    ctaBtn.textContent = orderCtaLabel(order);
+    const toggle = () => {
+      expandedOrderId = (expandedOrderId === order.orderId) ? null : order.orderId;
+      renderOrders();
+    };
+    detailBtn.addEventListener('click', toggle);
+    ctaBtn.addEventListener('click', toggle);
+    actions.appendChild(detailBtn);
+    actions.appendChild(ctaBtn);
+    summary.appendChild(actions);
+
     const detail = document.createElement('div');
     detail.className = 'order-detail';
-    const isOpen = expandedOrderId === order.orderId;
     if (isOpen) {
       detail.classList.add('show');
       buildOrderDetail(detail, order);
     }
-
-    summary.addEventListener('click', () => {
-      expandedOrderId = (expandedOrderId === order.orderId) ? null : order.orderId;
-      renderOrders();
-    });
 
     card.appendChild(summary);
     card.appendChild(detail);
