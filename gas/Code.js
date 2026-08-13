@@ -35,6 +35,7 @@
  if (action === 'finalize') return handleFinalize(body);
  if (action === 'purchase_extract') return handlePurchaseExtract(body);
  if (action === 'create_order') return handleCreateOrder(body);
+ if (action === 'delivery_extract') return handleDeliveryExtract(body);
  if (action === 'save_invoice') return handleSaveInvoice(body);
  if (action === 'save_payment') return handleSavePayment(body);
  if (action === 'save_delivery') return handleSaveDelivery(body);

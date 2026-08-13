@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>히트타일 배송관리</title>
+<style>
+  :root{
+    --bg:#f6f3ee;
+    --ink:#2c2a27;
+    --muted:#726d64;
+    --line:rgba(44,42,39,0.14);
+    --brass:#b08d57;
+    --brass-deep:#8c6b3e;
+    --ok:#5c7a5e;
+    --warn:#b0824f;
+    --err:#b1503f;
+    --card:#ffffff;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Malgun Gothic',sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    padding:0 0 60px;
+  }
+  header{
+    padding:32px 6vw 20px;
+    border-bottom:1px solid var(--line);
+  }
+  header h1{ margin:0 0 6px; font-size:22px; }
+  header p{ margin:0; color:var(--muted); font-size:13px; }
+
+  main{ max-width:640px; margin:0 auto; padding:24px 6vw 0; }
+
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:18px 18px 20px;
+    margin-bottom:20px;
+  }
+
+  /* ---- calendar ---- */
+  .cal-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:14px;
+  }
+  .cal-head .title{ font-size:15px; font-weight:700; font-family:inherit; }
+  .cal-nav{
+    display:flex; gap:6px;
+  }
+  .cal-nav button{
+    width:30px; height:30px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:var(--card);
+    color:var(--ink);
+    cursor:pointer;
+    font-size:14px;
+  }
+  .cal-nav button:hover{ border-color:var(--brass); color:var(--brass-deep); }
+  .cal-nav button.today-btn{ width:auto; padding:0 10px; font-size:12px; }
+
+  .cal-grid{
+    display:grid;
+    grid-template-columns:repeat(7,1fr);
+    gap:4px;
+  }
+  .cal-dow{
+    text-align:center;
+    font-size:11px;
+    color:var(--muted);
+    font-weight:600;
+    padding:4px 0 8px;
+  }
+  .cal-day{
+    position:relative;
+    aspect-ratio:1/1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    border-radius:10px;
+    cursor:pointer;
+    font-size:13px;
+    border:1px solid transparent;
+    background:none;
+    color:var(--ink);
+    font-family:inherit;
+  }
+  .cal-day:hover{ background:#faf8f4; }
+  .cal-day.blank{ cursor:default; visibility:hidden; }
+  .cal-day.today{ border-color:var(--brass); font-weight:700; }
+  .cal-day.selected{ background:var(--ink); color:#fff; }
+  .cal-day.selected .cal-dot{ background:#fff; }
+  .cal-day .cal-dot{
+    width:5px; height:5px; border-radius:50%;
+    background:var(--brass);
+    margin-top:3px;
+  }
+
+  /* ---- day section ---- */
+  .day-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:14px;
+  }
+  .day-head h2{ margin:0; font-size:16px; }
+  .day-head .cnt{ color:var(--muted); font-size:12.5px; font-weight:500; margin-left:6px; }
+
+  .new-btn{
+    font-family:inherit;
+    font-size:12.5px;
+    font-weight:600;
+    padding:9px 14px;
+    border-radius:9px;
+    border:none;
+    background:var(--ink);
+    color:#fff;
+    cursor:pointer;
+  }
+  .new-btn:hover{ background:var(--brass-deep); }
+
+  .new-form{
+    display:none;
+    background:#faf8f4;
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:16px;
+    margin-bottom:16px;
+  }
+  .new-form.show{ display:block; }
+  .field{ margin-bottom:10px; }
+  .field label{ display:block; font-size:11.5px; color:var(--muted); margin-bottom:5px; }
+  .field input{
+    width:100%;
+    padding:9px 11px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    font-size:14px;
+    font-family:inherit;
+    background:var(--card);
+    color:var(--ink);
+  }
+  .field input:focus{ outline:none; border-color:var(--brass); }
+  .form-actions{ display:flex; gap:8px; margin-top:12px; }
+  .form-actions button{
+    font-family:inherit;
+    font-size:13px;
+    font-weight:600;
+    padding:9px 14px;
+    border-radius:8px;
+    cursor:pointer;
+  }
+  .btn-primary{ border:none; background:var(--ink); color:#fff; }
+  .btn-primary:hover{ background:var(--brass-deep); }
+  .btn-primary:disabled{ background:#ccc7bd; cursor:default; }
+  .btn-ghost{ border:1px solid var(--line); background:var(--card); color:var(--muted); }
+  .btn-ghost:hover{ border-color:var(--brass); color:var(--brass-deep); }
+  .form-msg{ font-size:12px; color:var(--err); margin-top:8px; min-height:14px; }
+
+  .order-list{ display:flex; flex-direction:column; gap:10px; }
+  .empty, .loading, .error-box{ padding:30px 10px; text-align:center; color:var(--muted); font-size:13.5px; }
+  .error-box{ color:var(--err); }
+
+  .order-card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:12px;
+    overflow:hidden;
+  }
+  .order-summary{
+    padding:14px 16px;
+    cursor:pointer;
+  }
+  .order-top{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .order-top .vendor{ font-size:15px; font-weight:700; }
+  .order-top .site{ font-size:12.5px; color:var(--muted); margin-left:6px; font-weight:400; }
+  .order-top .amount{ font-size:14px; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .badges{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .badge{
+    font-size:11px;
+    font-weight:600;
+    padding:3px 8px;
+    border-radius:999px;
+    white-space:nowrap;
+  }
+  .badge.ok{ background:rgba(92,122,94,0.12); color:var(--ok); }
+  .badge.warn{ background:rgba(176,130,79,0.14); color:var(--warn); }
+  .badge.err{ background:rgba(177,80,63,0.12); color:var(--err); }
+  .badge.muted{ background:rgba(44,42,39,0.07); color:var(--muted); }
+
+  .order-detail{
+    display:none;
+    border-top:1px solid var(--line);
+    padding:16px;
+    background:#faf8f4;
+  }
+  .order-detail.show{ display:block; }
+
+  .detail-section{ margin-bottom:18px; }
+  .detail-section:last-child{ margin-bottom:0; }
+  .detail-section h3{
+    font-size:12px;
+    color:var(--muted);
+    margin:0 0 10px;
+    font-weight:700;
+    letter-spacing:0.02em;
+    text-transform:uppercase;
+  }
+
+  .item-row{
+    display:grid;
+    grid-template-columns:1.4fr 0.9fr 60px 90px 28px;
+    gap:6px;
+    margin-bottom:6px;
+    align-items:center;
+  }
+  .item-row input{
+    width:100%;
+    padding:7px 8px;
+    border:1px solid var(--line);
+    border-radius:7px;
+    font-size:13px;
+    font-family:inherit;
+    background:var(--card);
+    color:var(--ink);
+  }
+  .item-row input:focus{ outline:none; border-color:var(--brass); }
+  .item-row input.qty, .item-row input.price{ text-align:right; font-variant-numeric:tabular-nums; }
+  .item-row .item-del{
+    width:26px; height:26px;
+    border-radius:7px;
+    border:1px solid var(--line);
+    background:var(--card);
+    color:var(--err);
+    cursor:pointer;
+    font-size:14px;
+  }
+  .item-row .item-del:hover{ border-color:var(--err); background:#fbeeeb; }
+  .item-add{
+    font-family:inherit;
+    font-size:12.5px;
+    color:var(--muted);
+    background:none;
+    border:1px dashed var(--line);
+    border-radius:8px;
+    padding:8px;
+    width:100%;
+    cursor:pointer;
+    margin-top:2px;
+  }
+  .item-add:hover{ color:var(--brass-deep); border-color:var(--brass); }
+
+  .item-view-row{
+    display:flex;
+    justify-content:space-between;
+    font-size:13px;
+    padding:6px 0;
+    border-bottom:1px dashed var(--line);
+  }
+  .item-view-row:last-of-type{ border-bottom:none; }
+  .item-view-row .nm{ display:flex; align-items:center; gap:6px; }
+  .item-view-row .st{ font-size:10.5px; padding:2px 6px; border-radius:5px; }
+  .item-view-row .st.done{ background:rgba(92,122,94,0.12); color:var(--ok); }
+  .item-view-row .st.miss{ background:rgba(177,80,63,0.12); color:var(--err); }
+  .item-view-row .st.wait{ background:rgba(44,42,39,0.07); color:var(--muted); }
+  .item-view-row .amt{ font-variant-numeric:tabular-nums; color:var(--muted); }
+
+  .total-line{
+    display:flex; justify-content:space-between;
+    font-size:13.5px; font-weight:700;
+    margin-top:8px; padding-top:8px;
+    border-top:1px solid var(--line);
+  }
+
+  .pay-options{ display:flex; gap:8px; margin-bottom:10px; }
+  .pay-opt{
+    flex:1;
+    text-align:center;
+    padding:9px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:var(--card);
+    font-size:13px;
+    cursor:pointer;
+  }
+  .pay-opt.active{ background:var(--ink); color:#fff; border-color:var(--ink); }
+  .pay-memo{
+    width:100%;
+    padding:9px 11px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    font-size:13px;
+    font-family:inherit;
+    background:var(--card);
+    color:var(--ink);
+    margin-bottom:10px;
+  }
+  .pay-memo:focus{ outline:none; border-color:var(--brass); }
+
+  .check-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:8px 0;
+    font-size:13.5px;
+    border-bottom:1px dashed var(--line);
+  }
+  .check-row:last-of-type{ border-bottom:none; }
+  .check-row input[type=checkbox]{ width:17px; height:17px; }
+  .check-row .cst{ margin-left:auto; font-size:10.5px; color:var(--muted); }
+
+  .return-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:6px 0;
+    font-size:13px;
+  }
+  .return-row .rname{ flex:1; }
+  .return-row input{
+    width:70px;
+    padding:6px 8px;
+    border:1px solid var(--line);
+    border-radius:7px;
+    font-size:13px;
+    text-align:right;
+    font-family:inherit;
+  }
+
+  .section-msg{ font-size:12px; margin-top:8px; min-height:14px; color:var(--muted); }
+  .section-msg.err{ color:var(--err); }
+  .section-msg.ok{ color:var(--ok); }
+
+  .drop{
+    border:2px dashed var(--line);
+    border-radius:12px;
+    padding:28px 16px;
+    text-align:center;
+    background:var(--card);
+    cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .drop.drag{ border-color:var(--brass); background:#fbf8f2; }
+  .drop p{ margin:4px 0; color:var(--muted); font-size:12.5px; }
+  .drop .big{ font-size:14px; color:var(--ink); font-weight:600; }
+  .drop input{ display:none; }
+  .upload-status{
+    display:none;
+    align-items:center;
+    gap:8px;
+    margin-top:10px;
+    font-size:12.5px;
+    color:var(--muted);
+  }
+  .upload-status.show{ display:flex; }
+  .spinner{
+    width:13px; height:13px;
+    border:2px solid var(--line);
+    border-top-color:var(--brass);
+    border-radius:50%;
+    animation:spin .7s linear infinite;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  .upload-err{ margin-top:8px; font-size:12px; color:var(--err); min-height:14px; }
+  .manual-link{
+    display:block;
+    text-align:center;
+    margin-top:10px;
+    font-size:12px;
+    color:var(--muted);
+    background:none;
+    border:none;
+    text-decoration:underline;
+    cursor:pointer;
+    font-family:inherit;
+    width:100%;
+    padding:4px;
+  }
+  .manual-link:hover{ color:var(--brass-deep); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>히트타일 배송관리</h1>
+  <p>날짜별 배송 건을 등록하고 전표 · 입금 · 배송 · 반품을 한 화면에서 처리해요.</p>
+</header>
+
+<main>
+
+  <div class="card">
+    <div class="cal-head">
+      <div class="cal-nav">
+        <button type="button" id="prevMonth" aria-label="이전 달">‹</button>
+        <button type="button" id="todayBtn" class="today-btn">오늘</button>
+      </div>
+      <div class="title" id="monthTitle"></div>
+      <div class="cal-nav">
+        <button type="button" id="nextMonth" aria-label="다음 달">›</button>
+      </div>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+  </div>
+
+  <div class="day-head">
+    <div>
+      <h2 id="dayTitle"></h2>
+      <span class="cnt" id="dayCount"></span>
+    </div>
+    <button class="new-btn" id="newOrderBtn" type="button">+ 새 배송 등록</button>
+  </div>
+
+  <div class="new-form" id="newForm">
+    <div class="field">
+      <label for="fVendor">업체명 *</label>
+      <input type="text" id="fVendor" list="vendorNameList" placeholder="예: 주식회사 베리굿타일앤스">
+    </div>
+    <div class="field">
+      <label for="fSite">현장명</label>
+      <input type="text" id="fSite" placeholder="예: 수성구 범어동 리모델링">
+    </div>
+    <div class="field">
+      <label for="fPhone">연락처</label>
+      <input type="text" id="fPhone" placeholder="010-0000-0000">
+    </div>
+    <div class="form-actions">
+      <button class="btn-primary" id="fSubmit" type="button">등록</button>
+      <button class="btn-ghost" id="fCancel" type="button">취소</button>
+    </div>
+    <div class="form-msg" id="fMsg"></div>
+  </div>
+
+  <datalist id="vendorNameList"></datalist>
+
+  <div class="order-list" id="orderList">
+    <div class="loading">불러오는 중...</div>
+  </div>
+
+</main>
+
+<script>
+  const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec';
+
+  function pad2(n){ return String(n).padStart(2, '0'); }
+  function toDateStr(d){ return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+  function toMonthStr(d){ return d.getFullYear() + '-' + pad2(d.getMonth() + 1); }
+  function formatWon(n){ return Number(n || 0).toLocaleString('ko-KR') + '원'; }
+
+  const today = new Date();
+  let viewMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  let selectedDate = toDateStr(today);
+  let monthCounts = {};
+  let dayOrders = [];
+  let expandedOrderId = null;
+  let orderDrafts = {}; // orderId -> { items: [...] } local edit state for invoice/return forms
+
+  const calGrid = document.getElementById('calGrid');
+  const monthTitle = document.getElementById('monthTitle');
+  const dayTitle = document.getElementById('dayTitle');
+  const dayCount = document.getElementById('dayCount');
+  const orderList = document.getElementById('orderList');
+  const newOrderBtn = document.getElementById('newOrderBtn');
+  const newForm = document.getElementById('newForm');
+  const fVendor = document.getElementById('fVendor');
+  const fSite = document.getElementById('fSite');
+  const fPhone = document.getElementById('fPhone');
+  const fSubmit = document.getElementById('fSubmit');
+  const fCancel = document.getElementById('fCancel');
+  const fMsg = document.getElementById('fMsg');
+
+  async function loadVendorNames() {
+    try {
+      const res = await fetch(ENDPOINT + '?action=vendor_names');
+      const data = await res.json();
+      if (data.ok) {
+        const list = document.getElementById('vendorNameList');
+        list.innerHTML = '';
+        (data.names || []).forEach((n) => {
+          const opt = document.createElement('option');
+          opt.value = n;
+          list.appendChild(opt);
+        });
+      }
+    } catch (err) { /* 자동완성 실패해도 조용히 무시 */ }
+  }
+
+  async function loadMonthCounts() {
+    try {
+      const res = await fetch(ENDPOINT + '?action=delivery_month&month=' + toMonthStr(viewMonth));
+      const data = await res.json();
+      monthCounts = (data.ok && data.counts) ? data.counts : {};
+    } catch (err) {
+      monthCounts = {};
+    }
+    renderCalendar();
+  }
+
+  function renderCalendar() {
+    monthTitle.textContent = viewMonth.getFullYear() + '년 ' + (viewMonth.getMonth() + 1) + '월';
+    calGrid.innerHTML = '';
+
+    ['일', '월', '화', '수', '목', '금', '토'].forEach((d) => {
+      const el = document.createElement('div');
+      el.className = 'cal-dow';
+      el.textContent = d;
+      calGrid.appendChild(el);
+    });
+
+    const firstDow = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1).getDay();
+    const daysInMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0).getDate();
+    const todayStr = toDateStr(today);
+
+    for (let i = 0; i < firstDow; i++) {
+      const el = document.createElement('div');
+      el.className = 'cal-day blank';
+      calGrid.appendChild(el);
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = viewMonth.getFullYear() + '-' + pad2(viewMonth.getMonth() + 1) + '-' + pad2(day);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'cal-day';
+      if (dateStr === todayStr) btn.classList.add('today');
+      if (dateStr === selectedDate) btn.classList.add('selected');
+
+      const numEl = document.createElement('span');
+      numEl.textContent = day;
+      btn.appendChild(numEl);
+
+      if (monthCounts[dateStr]) {
+        const dot = document.createElement('span');
+        dot.className = 'cal-dot';
+        btn.appendChild(dot);
+      }
+
+      btn.addEventListener('click', () => {
+        selectedDate = dateStr;
+        newForm.classList.remove('show');
+        renderCalendar();
+        loadDayOrders();
+      });
+
+      calGrid.appendChild(btn);
+    }
+  }
+
+  document.getElementById('prevMonth').addEventListener('click', () => {
+    viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1);
+    loadMonthCounts();
+  });
+  document.getElementById('nextMonth').addEventListener('click', () => {
+    viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1);
+    loadMonthCounts();
+  });
+  document.getElementById('todayBtn').addEventListener('click', () => {
+    viewMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    selectedDate = toDateStr(today);
+    newForm.classList.remove('show');
+    loadMonthCounts();
+    loadDayOrders();
+  });
+
+  function updateDayHeading() {
+    const parts = selectedDate.split('-').map(Number);
+    const d = new Date(parts[0], parts[1] - 1, parts[2]);
+    const dow = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
+    dayTitle.textContent = (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + dow + ')';
+    dayCount.textContent = dayOrders.length ? '배송 ' + dayOrders.length + '건' : '';
+  }
+
+  async function loadDayOrders() {
+    updateDayHeading();
+    orderList.innerHTML = '<div class="loading">불러오는 중...</div>';
+    expandedOrderId = null;
+    orderDrafts = {};
+    try {
+      const res = await fetch(ENDPOINT + '?action=delivery_by_date&date=' + selectedDate);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || '불러오지 못했어요.');
+      dayOrders = data.orders || [];
+      updateDayHeading();
+      renderOrders();
+    } catch (err) {
+      orderList.innerHTML = '<div class="error-box">' + (err.message || String(err)) + '</div>';
+    }
+  }
+
+  newOrderBtn.addEventListener('click', () => {
+    newForm.classList.toggle('show');
+    fMsg.textContent = '';
+    if (newForm.classList.contains('show')) fVendor.focus();
+  });
+  fCancel.addEventListener('click', () => {
+    newForm.classList.remove('show');
+    fVendor.value = ''; fSite.value = ''; fPhone.value = '';
+    fMsg.textContent = '';
+  });
+
+  fSubmit.addEventListener('click', async () => {
+    const vendorName = fVendor.value.trim();
+    if (!vendorName) { fMsg.textContent = '업체명을 입력해주세요.'; return; }
+    fSubmit.disabled = true;
+    fMsg.textContent = '';
+    try {
+      const res = await fetch(ENDPOINT, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'create_order',
+          date: selectedDate,
+          vendorName: vendorName,
+          siteName: fSite.value.trim(),
+          phone: fPhone.value.trim()
+        })
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || '등록하지 못했어요.');
+      fVendor.value = ''; fSite.value = ''; fPhone.value = '';
+      newForm.classList.remove('show');
+      await Promise.all([loadDayOrders(), loadMonthCounts()]);
+    } catch (err) {
+      fMsg.textContent = err.message || String(err);
+    } finally {
+      fSubmit.disabled = false;
+    }
+  });
+
+  function statusBadge(text, kind) {
+    const span = document.createElement('span');
+    span.className = 'badge ' + kind;
+    span.textContent = text;
+    return span;
+  }
+
+  function paymentBadge(order) {
+    if (order.paymentStatus === '완납') return statusBadge('입금완납', 'ok');
+    if (order.paymentStatus === '추후입금') return statusBadge('추후입금', 'warn');
+    return statusBadge('입금미확인', 'muted');
+  }
+
+  function deliveryBadge(order) {
+    const s = order.deliveryStatus || '대기';
+    if (s === '완료') return statusBadge('배송완료', 'ok');
+    if (s === '일부누락') return statusBadge('일부누락', 'err');
+    if (s === '진행중') return statusBadge('배송진행중', 'warn');
+    return statusBadge('배송대기', 'muted');
+  }
+
+  function renderOrders() {
+    orderList.innerHTML = '';
+    if (!dayOrders.length) {
+      orderList.innerHTML = '<div class="empty">이 날짜에 등록된 배송 건이 없어요.</div>';
+      return;
+    }
+    dayOrders.forEach((order) => {
+      orderList.appendChild(buildOrderCard(order));
+    });
+  }
+
+  function buildOrderCard(order) {
+    const card = document.createElement('div');
+    card.className = 'order-card';
+
+    const summary = document.createElement('div');
+    summary.className = 'order-summary';
+
+    const top = document.createElement('div');
+    top.className = 'order-top';
+
+    const nameWrap = document.createElement('div');
+    const vendorEl = document.createElement('span');
+    vendorEl.className = 'vendor';
+    vendorEl.textContent = order.vendorName || '(업체명 없음)';
+    nameWrap.appendChild(vendorEl);
+    if (order.siteName) {
+      const siteEl = document.createElement('span');
+      siteEl.className = 'site';
+      siteEl.textContent = order.siteName;
+      nameWrap.appendChild(siteEl);
+    }
+    top.appendChild(nameWrap);
+
+    const amountEl = document.createElement('div');
+    amountEl.className = 'amount';
+    amountEl.textContent = order.invoiceRegistered ? formatWon(order.totalAmount) : '';
+    top.appendChild(amountEl);
+
+    summary.appendChild(top);
+
+    const badges = document.createElement('div');
+    badges.className = 'badges';
+    badges.appendChild(order.invoiceRegistered ? statusBadge('전표등록', 'ok') : statusBadge('전표미등록', 'muted'));
+    badges.appendChild(paymentBadge(order));
+    badges.appendChild(deliveryBadge(order));
+    if (order.returned) badges.appendChild(statusBadge('반품있음', 'err'));
+    summary.appendChild(badges);
+
+    const detail = document.createElement('div');
+    detail.className = 'order-detail';
+    const isOpen = expandedOrderId === order.orderId;
+    if (isOpen) {
+      detail.classList.add('show');
+      buildOrderDetail(detail, order);
+    }
+
+    summary.addEventListener('click', () => {
+      expandedOrderId = (expandedOrderId === order.orderId) ? null : order.orderId;
+      renderOrders();
+    });
+
+    card.appendChild(summary);
+    card.appendChild(detail);
+    return card;
+  }
+
+  function getDraft(order) {
+    if (!orderDrafts[order.orderId]) {
+      orderDrafts[order.orderId] = {
+        entryMode: 'upload',
+        items: order.invoiceRegistered
+          ? order.items.map((it) => ({ name: it.name, spec: it.spec, qty: it.qty, price: it.price }))
+          : [],
+        paymentStatus: order.paymentStatus || '',
+        paymentMemo: order.paymentMemo || '',
+        deliveredNames: order.items.filter((it) => it.deliveryStatus === '완료').map((it) => it.name),
+        returns: {}
+      };
+      order.items.forEach((it) => { orderDrafts[order.orderId].returns[it.name] = it.returnQty || 0; });
+    }
+    return orderDrafts[order.orderId];
+  }
+
+  function buildOrderDetail(container, order) {
+    const draft = getDraft(order);
+
+    container.appendChild(buildInvoiceSection(order, draft));
+    if (order.invoiceRegistered) {
+      container.appendChild(buildPaymentSection(order, draft));
+      container.appendChild(buildDeliverySection(order, draft));
+      if (order.items.some((it) => it.deliveryStatus !== '대기')) {
+        container.appendChild(buildReturnSection(order, draft));
+      }
+    }
+  }
+
+  function buildInvoiceSection(order, draft) {
+    const sec = document.createElement('div');
+    sec.className = 'detail-section';
+    const h3 = document.createElement('h3');
+    h3.textContent = '품목 · 전표';
+    sec.appendChild(h3);
+
+    if (order.invoiceRegistered) {
+      order.items.forEach((it) => {
+        const row = document.createElement('div');
+        row.className = 'item-view-row';
+        const nm = document.createElement('span');
+        nm.className = 'nm';
+        nm.textContent = it.name + (it.spec ? ' (' + it.spec + ')' : '') + ' × ' + it.qty;
+        row.appendChild(nm);
+        const amt = document.createElement('span');
+        amt.className = 'amt';
+        amt.textContent = formatWon(it.qty * it.price);
+        row.appendChild(amt);
+        sec.appendChild(row);
+      });
+      const total = document.createElement('div');
+      total.className = 'total-line';
+      total.innerHTML = '<span>합계</span>';
+      const totalAmt = document.createElement('span');
+      totalAmt.textContent = formatWon(order.totalAmount);
+      total.appendChild(totalAmt);
+      sec.appendChild(total);
+      return sec;
+    }
+
+    if (draft.entryMode !== 'manual' && (!draft.items || draft.items.length === 0)) {
+      sec.appendChild(buildInvoiceUpload(order, draft));
+      return sec;
+    }
+
+    if (!draft.items.length) draft.items.push({ name: '', spec: '', qty: '', price: '' });
+
+    if (draft.entryMode !== 'manual') {
+      const resetBtn = document.createElement('button');
+      resetBtn.type = 'button';
+      resetBtn.className = 'manual-link';
+      resetBtn.style.marginBottom = '10px';
+      resetBtn.textContent = '다른 사진으로 다시 인식하기';
+      resetBtn.addEventListener('click', () => { draft.items = []; renderOrders(); });
+      sec.appendChild(resetBtn);
+    }
+
+    const rowsWrap = document.createElement('div');
+    draft.items.forEach((item, idx) => rowsWrap.appendChild(buildItemRow(order, draft, item, idx, rowsWrap)));
+    sec.appendChild(rowsWrap);
+
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'item-add';
+    addBtn.textContent = '+ 품목 추가';
+    addBtn.addEventListener('click', () => {
+      draft.items.push({ name: '', spec: '', qty: '', price: '' });
+      const row = buildItemRow(order, draft, draft.items[draft.items.length - 1], draft.items.length - 1, rowsWrap);
+      rowsWrap.appendChild(row);
+      row.querySelector('input').focus();
+    });
+    sec.appendChild(addBtn);
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn-primary';
+    saveBtn.style.marginTop = '10px';
+    saveBtn.style.width = '100%';
+    saveBtn.textContent = '전표 저장';
+
+    const msg = document.createElement('div');
+    msg.className = 'section-msg';
+
+    saveBtn.addEventListener('click', async () => {
+      const items = draft.items
+        .map((it) => ({ name: (it.name || '').trim(), spec: (it.spec || '').trim(), qty: Number(it.qty) || 0, price: Number(it.price) || 0 }))
+        .filter((it) => it.name && it.qty > 0);
+      if (!items.length) { msg.textContent = '품목명과 수량을 입력해주세요.'; msg.className = 'section-msg err'; return; }
+      saveBtn.disabled = true;
+      msg.textContent = '저장 중...';
+      msg.className = 'section-msg';
+      try {
+        const res = await fetch(ENDPOINT, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'save_invoice', orderId: order.orderId, items: items })
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || '저장하지 못했어요.');
+        delete orderDrafts[order.orderId];
+        await Promise.all([loadDayOrders(), loadMonthCounts()]);
+      } catch (err) {
+        msg.textContent = err.message || String(err);
+        msg.className = 'section-msg err';
+        saveBtn.disabled = false;
+      }
+    });
+
+    sec.appendChild(saveBtn);
+    sec.appendChild(msg);
+    return sec;
+  }
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function buildInvoiceUpload(order, draft) {
+    const wrap = document.createElement('div');
+
+    const drop = document.createElement('div');
+    drop.className = 'drop';
+
+    const big = document.createElement('div');
+    big.className = 'big';
+    big.textContent = '전표 사진 올리기';
+    const p1 = document.createElement('p');
+    p1.textContent = '클릭하거나 이 영역에 사진을 끌어다 놓으세요';
+    const p2 = document.createElement('p');
+    p2.textContent = '품목을 자동으로 인식해요';
+    drop.appendChild(big);
+    drop.appendChild(p1);
+    drop.appendChild(p2);
+
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'application/pdf,image/*';
+    drop.appendChild(fileInput);
+
+    const status = document.createElement('div');
+    status.className = 'upload-status';
+    const spin = document.createElement('span');
+    spin.className = 'spinner';
+    const statusText = document.createElement('span');
+    statusText.textContent = '사진에서 품목을 인식하는 중이에요...';
+    status.appendChild(spin);
+    status.appendChild(statusText);
+
+    const err = document.createElement('div');
+    err.className = 'upload-err';
+
+    const manualBtn = document.createElement('button');
+    manualBtn.type = 'button';
+    manualBtn.className = 'manual-link';
+    manualBtn.textContent = '사진 없이 수기로 작성할게요';
+    manualBtn.addEventListener('click', () => {
+      draft.entryMode = 'manual';
+      draft.items = [{ name: '', spec: '', qty: '', price: '' }];
+      renderOrders();
+    });
+
+    async function handleFile(file) {
+      if (!file) return;
+      err.textContent = '';
+      drop.style.display = 'none';
+      manualBtn.style.display = 'none';
+      status.classList.add('show');
+      try {
+        const base64 = await fileToBase64(file);
+        const res = await fetch(ENDPOINT, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'delivery_extract', fileBase64: base64, mimeType: file.type || 'image/jpeg' })
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || '인식하지 못했어요.');
+        draft.items = (data.items || []).map((it) => ({ name: it.name || '', spec: it.spec || '', qty: it.qty || '', price: it.price || '' }));
+        renderOrders();
+      } catch (e) {
+        status.classList.remove('show');
+        drop.style.display = '';
+        manualBtn.style.display = '';
+        err.textContent = e.message || String(e);
+      }
+    }
+
+    drop.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+    ['dragenter', 'dragover'].forEach((evt) => drop.addEventListener(evt, (e) => { e.preventDefault(); drop.classList.add('drag'); }));
+    ['dragleave', 'drop'].forEach((evt) => drop.addEventListener(evt, (e) => { e.preventDefault(); drop.classList.remove('drag'); }));
+    drop.addEventListener('drop', (e) => handleFile(e.dataTransfer.files[0]));
+
+    wrap.appendChild(drop);
+    wrap.appendChild(status);
+    wrap.appendChild(err);
+    wrap.appendChild(manualBtn);
+    return wrap;
+  }
+
+  function buildItemRow(order, draft, item, idx, rowsWrap) {
+    const row = document.createElement('div');
+    row.className = 'item-row';
+
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.placeholder = '품목명';
+    nameInput.value = item.name;
+    nameInput.addEventListener('input', () => { item.name = nameInput.value; });
+
+    const specInput = document.createElement('input');
+    specInput.type = 'text';
+    specInput.placeholder = '규격';
+    specInput.value = item.spec || '';
+    specInput.addEventListener('input', () => { item.spec = specInput.value; });
+
+    const qtyInput = document.createElement('input');
+    qtyInput.type = 'text';
+    qtyInput.inputMode = 'numeric';
+    qtyInput.className = 'qty';
+    qtyInput.placeholder = '수량';
+    qtyInput.value = item.qty || '';
+    qtyInput.addEventListener('input', () => { item.qty = qtyInput.value.replace(/[^\d]/g, ''); qtyInput.value = item.qty; });
+
+    const priceInput = document.createElement('input');
+    priceInput.type = 'text';
+    priceInput.inputMode = 'numeric';
+    priceInput.className = 'price';
+    priceInput.placeholder = '단가';
+    priceInput.value = item.price ? Number(item.price).toLocaleString('ko-KR') : '';
+    priceInput.addEventListener('input', () => {
+      const num = priceInput.value.replace(/[^\d]/g, '');
+      item.price = num;
+      priceInput.value = num ? Number(num).toLocaleString('ko-KR') : '';
+    });
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'item-del';
+    delBtn.textContent = '×';
+    delBtn.addEventListener('click', () => {
+      const i = draft.items.indexOf(item);
+      if (i !== -1) draft.items.splice(i, 1);
+      row.remove();
+    });
+
+    row.appendChild(nameInput);
+    row.appendChild(specInput);
+    row.appendChild(qtyInput);
+    row.appendChild(priceInput);
+    row.appendChild(delBtn);
+    return row;
+  }
+
+  function buildPaymentSection(order, draft) {
+    const sec = document.createElement('div');
+    sec.className = 'detail-section';
+    const h3 = document.createElement('h3');
+    h3.textContent = '입금';
+    sec.appendChild(h3);
+
+    const opts = document.createElement('div');
+    opts.className = 'pay-options';
+    ['완납', '추후입금'].forEach((label) => {
+      const opt = document.createElement('div');
+      opt.className = 'pay-opt' + (draft.paymentStatus === label ? ' active' : '');
+      opt.textContent = label;
+      opt.addEventListener('click', () => {
+        draft.paymentStatus = label;
+        opts.querySelectorAll('.pay-opt').forEach((o) => o.classList.remove('active'));
+        opt.classList.add('active');
+      });
+      opts.appendChild(opt);
+    });
+    sec.appendChild(opts);
+
+    const memo = document.createElement('input');
+    memo.type = 'text';
+    memo.className = 'pay-memo';
+    memo.placeholder = '메모 (예: 다음달 15일 입금 예정)';
+    memo.value = draft.paymentMemo || '';
+    memo.addEventListener('input', () => { draft.paymentMemo = memo.value; });
+    sec.appendChild(memo);
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn-primary';
+    saveBtn.style.width = '100%';
+    saveBtn.textContent = '입금상태 저장';
+
+    const msg = document.createElement('div');
+    msg.className = 'section-msg';
+
+    saveBtn.addEventListener('click', async () => {
+      if (!draft.paymentStatus) { msg.textContent = '입금 상태를 선택해주세요.'; msg.className = 'section-msg err'; return; }
+      saveBtn.disabled = true;
+      msg.textContent = '저장 중...';
+      msg.className = 'section-msg';
+      try {
+        const res = await fetch(ENDPOINT, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'save_payment', orderId: order.orderId, status: draft.paymentStatus, memo: draft.paymentMemo || '' })
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || '저장하지 못했어요.');
+        msg.textContent = '저장됐어요.';
+        msg.className = 'section-msg ok';
+        await loadDayOrders();
+      } catch (err) {
+        msg.textContent = err.message || String(err);
+        msg.className = 'section-msg err';
+        saveBtn.disabled = false;
+      }
+    });
+
+    sec.appendChild(saveBtn);
+    sec.appendChild(msg);
+    return sec;
+  }
+
+  function buildDeliverySection(order, draft) {
+    const sec = document.createElement('div');
+    sec.className = 'detail-section';
+    const h3 = document.createElement('h3');
+    h3.textContent = '배송 체크';
+    sec.appendChild(h3);
+
+    order.items.forEach((it) => {
+      const row = document.createElement('label');
+      row.className = 'check-row';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = draft.deliveredNames.indexOf(it.name) !== -1;
+      cb.addEventListener('change', () => {
+        const i = draft.deliveredNames.indexOf(it.name);
+        if (cb.checked && i === -1) draft.deliveredNames.push(it.name);
+        if (!cb.checked && i !== -1) draft.deliveredNames.splice(i, 1);
+      });
+      row.appendChild(cb);
+      const nm = document.createElement('span');
+      nm.textContent = it.name + ' × ' + it.qty;
+      row.appendChild(nm);
+      if (it.deliveryStatus === '누락') {
+        const st = document.createElement('span');
+        st.className = 'cst';
+        st.textContent = '이전 배송마감 · 누락';
+        row.appendChild(st);
+      }
+      sec.appendChild(row);
+    });
+
+    const actions = document.createElement('div');
+    actions.className = 'form-actions';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn-ghost';
+    saveBtn.textContent = '진행상태 저장';
+
+    const finalizeBtn = document.createElement('button');
+    finalizeBtn.type = 'button';
+    finalizeBtn.className = 'btn-primary';
+    finalizeBtn.textContent = '배송 마감';
+
+    const msg = document.createElement('div');
+    msg.className = 'section-msg';
+
+    async function submitDelivery(finalize, btn) {
+      btn.disabled = true;
+      msg.textContent = '저장 중...';
+      msg.className = 'section-msg';
+      try {
+        const res = await fetch(ENDPOINT, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'save_delivery', orderId: order.orderId, deliveredNames: draft.deliveredNames, finalize: finalize })
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || '저장하지 못했어요.');
+        msg.textContent = finalize ? '배송 마감했어요.' : '저장됐어요.';
+        msg.className = 'section-msg ok';
+        await loadDayOrders();
+      } catch (err) {
+        msg.textContent = err.message || String(err);
+        msg.className = 'section-msg err';
+        btn.disabled = false;
+      }
+    }
+
+    saveBtn.addEventListener('click', () => submitDelivery(false, saveBtn));
+    finalizeBtn.addEventListener('click', () => {
+      if (!confirm('배송을 마감할까요? 체크 안 된 품목은 "누락"으로 처리돼요.')) return;
+      submitDelivery(true, finalizeBtn);
+    });
+
+    actions.appendChild(saveBtn);
+    actions.appendChild(finalizeBtn);
+    sec.appendChild(actions);
+    sec.appendChild(msg);
+    return sec;
+  }
+
+  function buildReturnSection(order, draft) {
+    const sec = document.createElement('div');
+    sec.className = 'detail-section';
+    const h3 = document.createElement('h3');
+    h3.textContent = '반품';
+    sec.appendChild(h3);
+
+    order.items.filter((it) => it.deliveryStatus !== '대기').forEach((it) => {
+      const row = document.createElement('div');
+      row.className = 'return-row';
+      const nm = document.createElement('span');
+      nm.className = 'rname';
+      nm.textContent = it.name + ' (배송 ' + it.qty + '개)';
+      row.appendChild(nm);
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.inputMode = 'numeric';
+      input.value = draft.returns[it.name] || '';
+      input.placeholder = '0';
+      input.addEventListener('input', () => {
+        const num = input.value.replace(/[^\d]/g, '');
+        draft.returns[it.name] = num;
+        input.value = num;
+      });
+      row.appendChild(input);
+      sec.appendChild(row);
+    });
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn-primary';
+    saveBtn.style.width = '100%';
+    saveBtn.style.marginTop = '10px';
+    saveBtn.textContent = '반품 저장';
+
+    const msg = document.createElement('div');
+    msg.className = 'section-msg';
+
+    saveBtn.addEventListener('click', async () => {
+      const returns = Object.keys(draft.returns).map((name) => ({ name: name, qty: Number(draft.returns[name]) || 0 }));
+      saveBtn.disabled = true;
+      msg.textContent = '저장 중...';
+      msg.className = 'section-msg';
+      try {
+        const res = await fetch(ENDPOINT, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'save_return', orderId: order.orderId, returns: returns })
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || '저장하지 못했어요.');
+        msg.textContent = '저장됐어요.';
+        msg.className = 'section-msg ok';
+        await loadDayOrders();
+      } catch (err) {
+        msg.textContent = err.message || String(err);
+        msg.className = 'section-msg err';
+        saveBtn.disabled = false;
+      }
+    });
+
+    sec.appendChild(saveBtn);
+    sec.appendChild(msg);
+    return sec;
+  }
+
+  loadVendorNames();
+  loadMonthCounts();
+  loadDayOrders();
+</script>
+
+</body>
+</html>

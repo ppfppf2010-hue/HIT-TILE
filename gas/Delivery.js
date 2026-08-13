@@ -114,6 +114,73 @@ orderSheet.appendRow([orderId, date, vendorName, phone, siteName, 'N', 0, 0, 0, 
 return jsonOut({ ok: true, orderId: orderId });
 }
 
+// ---- 전표 사진 업로드 -> Claude로 품목(품목명/규격/수량/단가) 추출 ----
+function handleDeliveryExtract(body) {
+const fileBase64 = body.fileBase64;
+const mimeType = body.mimeType || 'image/jpeg';
+if (!fileBase64) throw new Error('파일이 없습니다.');
+
+const parsed = extractDeliveryItemsWithClaude(fileBase64, mimeType);
+if (!parsed.items || !parsed.items.length) throw new Error('사진에서 품목을 찾지 못했어요. 다시 촬영하거나 수기로 입력해주세요.');
+
+return jsonOut({ ok: true, items: parsed.items });
+}
+
+// ---- Claude API 호출: 배송 전표 사진에서 품목만 추출 ----
+function extractDeliveryItemsWithClaude(fileBase64, mimeType) {
+const apiKey = PropertiesService.getScriptProperties().getProperty('CLAUDE_API_KEY');
+if (!apiKey) throw new Error('CLAUDE_API_KEY 스크립트 속성이 설정되지 않았습니다.');
+
+const systemPrompt = [
+'당신은 타일/욕실자재 배송 전표(거래명세서, 납품서, 현장 메모 사진 등)에서 배송 품목을 추출하는 도우미입니다.',
+'',
+'[품목 추출 규칙]',
+'1. 품목명과 수량이 적힌 행만 실제 배송 품목으로 추출합니다. 규격(사이즈)이나 단가는 보이면 함께 추출하고, 안 보이면 비워둡니다.',
+'2. 합계, 소계, 부가세, 이월, 배송비, 메모성 문구 등은 품목이 아니므로 제외합니다.',
+'3. 같은 품목이 여러 번 적혀 있으면 하나로 합쳐서 수량을 더합니다.',
+'4. 아래 JSON 형식으로만 출력하세요. 다른 설명이나 코드블록 표시 없이 순수 JSON 객체 하나만 출력합니다.',
+'{"items":[{"name":"품목명","spec":"규격(없으면 빈 문자열)","qty":숫자,"price":단가숫자(모르면 0)}]}'
+].join('\n');
+
+const contentBlock = mimeType === 'application/pdf'
+? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: fileBase64 } }
+: { type: 'image', source: { type: 'base64', media_type: mimeType, data: fileBase64 } };
+
+const payload = {
+model: CLAUDE_MODEL,
+max_tokens: 4000,
+system: systemPrompt,
+messages: [{
+role: 'user',
+content: [
+contentBlock,
+{ type: 'text', text: '이 배송 전표 사진에서 품목을 규칙대로 추출해서 JSON 객체만 출력해줘.' }
+]
+}]
+};
+
+const res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+method: 'post',
+contentType: 'application/json',
+headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+payload: JSON.stringify(payload),
+muteHttpExceptions: true
+});
+
+const data = JSON.parse(res.getContentText());
+if (data.error) throw new Error('Claude API 오류: ' + data.error.message);
+
+const textBlock = (data.content || []).filter(function (c) { return c.type === 'text'; })[0];
+let jsonText = textBlock ? textBlock.text : '{}';
+jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
+
+try {
+return JSON.parse(jsonText);
+} catch (e) {
+throw new Error('Claude가 이 사진에서 품목을 추출하지 못했습니다: ' + jsonText.slice(0, 300));
+}
+}
+
 // ---- 전표(거래명세서) 등록: 품목 입력 -> 합계 계산 -> 거래처잔액 반영 ----
 function handleSaveInvoice(body) {
 const orderId = body.orderId;
