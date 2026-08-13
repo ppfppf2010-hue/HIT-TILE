@@ -270,6 +270,7 @@
     <div class="drop" id="dropZone">
       <div class="big">클릭해서 파일 선택</div>
       <p>또는 이 영역에 파일을 끌어다 놓으세요</p>
+      <p>캡쳐한 사진은 Ctrl+V로 붙여넣기도 가능해요</p>
       <p>PDF, JPG, PNG 지원</p>
       <input type="file" id="fileInput" accept="application/pdf,image/*">
     </div>
@@ -394,6 +395,17 @@
   dropZone.addEventListener('drop', (e) => {
     const file = e.dataTransfer.files[0];
     pickFile(file);
+  });
+
+  document.addEventListener('paste', (e) => {
+    const items = (e.clipboardData && e.clipboardData.items) || [];
+    for (const item of items) {
+      if (item.type.indexOf('image') !== -1) {
+        const file = item.getAsFile();
+        if (file) { pickFile(file); e.preventDefault(); }
+        break;
+      }
+    }
   });
 
   fileClear.addEventListener('click', (e) => {

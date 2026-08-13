@@ -480,6 +480,7 @@
   let dayOrders = [];
   let expandedOrderId = null;
   let orderDrafts = {}; // orderId -> { items: [...] } local edit state for invoice/return forms
+  let activePasteHandler = null; // set while an invoice photo drop-zone is on screen, so Ctrl+V works too
 
   const calGrid = document.getElementById('calGrid');
   const monthTitle = document.getElementById('monthTitle');
@@ -674,6 +675,7 @@
   }
 
   function renderOrders() {
+    activePasteHandler = null;
     orderList.innerHTML = '';
     if (!dayOrders.length) {
       orderList.innerHTML = '<div class="empty">이 날짜에 등록된 배송 건이 없어요.</div>';
@@ -899,10 +901,13 @@
     big.textContent = '전표 사진 올리기';
     const p1 = document.createElement('p');
     p1.textContent = '클릭하거나 이 영역에 사진을 끌어다 놓으세요';
+    const p1b = document.createElement('p');
+    p1b.textContent = '캡쳐한 사진은 Ctrl+V로 붙여넣기도 가능해요';
     const p2 = document.createElement('p');
     p2.textContent = '품목을 자동으로 인식해요';
     drop.appendChild(big);
     drop.appendChild(p1);
+    drop.appendChild(p1b);
     drop.appendChild(p2);
 
     const fileInput = document.createElement('input');
@@ -961,6 +966,8 @@
     ['dragenter', 'dragover'].forEach((evt) => drop.addEventListener(evt, (e) => { e.preventDefault(); drop.classList.add('drag'); }));
     ['dragleave', 'drop'].forEach((evt) => drop.addEventListener(evt, (e) => { e.preventDefault(); drop.classList.remove('drag'); }));
     drop.addEventListener('drop', (e) => handleFile(e.dataTransfer.files[0]));
+
+    activePasteHandler = handleFile;
 
     wrap.appendChild(drop);
     wrap.appendChild(status);
@@ -1255,6 +1262,18 @@
     sec.appendChild(msg);
     return sec;
   }
+
+  document.addEventListener('paste', (e) => {
+    if (!activePasteHandler) return;
+    const items = (e.clipboardData && e.clipboardData.items) || [];
+    for (const item of items) {
+      if (item.type.indexOf('image') !== -1) {
+        const file = item.getAsFile();
+        if (file) { activePasteHandler(file); e.preventDefault(); }
+        break;
+      }
+    }
+  });
 
   loadVendorNames();
   loadMonthCounts();
