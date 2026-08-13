@@ -22,13 +22,14 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
   :root{
-    --paper:#FAF8F3;
-    --paper-line:#DAD4C6;
-    --ink:#1C1B19;
-    --muted:#8A8474;
-    --red:#D4302B;
-    --red-dark:#A9231E;
-    --green:#2E7D32;
+    --paper:#F5F6F8;
+    --paper-line:#E5E7EB;
+    --ink:#1A1A1A;
+    --muted:#6B7280;
+    --red:#2563EB;
+    --red-dark:#1D4ED8;
+    --err:#DC2626;
+    --green:#16803C;
     --card:#FFFFFF;
     --radius:10px;
   }
@@ -36,9 +37,6 @@
   body{
     margin:0;
     background:var(--paper);
-    background-image:
-      linear-gradient(var(--paper-line) 1px, transparent 1px);
-    background-size: 100% 34px;
     font-family:'Noto Sans KR', sans-serif;
     color:var(--ink);
     padding-bottom:80px;
@@ -131,7 +129,7 @@
   input:focus, textarea:focus{
     outline:none;
     border-color:var(--red);
-    box-shadow:0 0 0 3px rgba(212,48,43,.12);
+    box-shadow:0 0 0 3px rgba(37,99,235,.12);
   }
   .field{margin-bottom:10px;}
 
@@ -141,7 +139,7 @@
     font-size:12.5px;
   }
   table.tile-table th{
-    background:#F4F1E9;
+    background:#F1F5F9;
     color:var(--muted);
     font-weight:700;
     padding:8px 6px;
@@ -154,7 +152,7 @@
     vertical-align:middle;
   }
   table.tile-table td.rowlabel{
-    background:#FBFAF6;
+    background:#F8FAFC;
     font-weight:700;
     font-size:12px;
     white-space:nowrap;
@@ -179,14 +177,14 @@
     vertical-align:middle;
   }
   .row-btn.add{ background:var(--red); color:#fff; }
-  .row-btn.remove{ background:#E3DED2; color:var(--muted); }
+  .row-btn.remove{ background:#E5E7EB; color:var(--muted); }
   table.tile-table input{
     border:none;
     padding:6px 4px;
     font-size:12.5px;
     background:transparent;
   }
-  table.tile-table input:focus{ box-shadow:none; background:#FFF7E8; }
+  table.tile-table input:focus{ box-shadow:none; background:#EFF6FF; }
 
   .size-cell{ padding:3px !important; }
   .size-cell select{
@@ -198,20 +196,20 @@
     font-family:'Noto Sans KR';
     color:var(--ink);
   }
-  .size-cell select:focus{ outline:none; background:#FFF7E8; }
+  .size-cell select:focus{ outline:none; background:#EFF6FF; }
   .size-cell .size-custom{
     display:none;
     border-top:1px solid var(--paper-line) !important;
   }
   table.tile-table input:read-only{
-    background:#F4F1E9 !important;
+    background:#F1F5F9 !important;
     color:var(--muted);
   }
 
   .fixture-block{margin-bottom:14px;}
   .fixture-block .label-row{
     display:flex; justify-content:space-between; align-items:center;
-    background:#F4F1E9; padding:6px 10px; border-radius:6px 6px 0 0;
+    background:#F1F5F9; padding:6px 10px; border-radius:6px 6px 0 0;
     font-size:12px; font-weight:700; color:var(--red-dark);
     border:1px solid var(--paper-line); border-bottom:none;
   }
@@ -221,14 +219,14 @@
   }
   .fixture-row:last-child{ border-radius:0 0 6px 6px; }
   .fixture-row .name{
-    background:#FBFAF6; padding:7px 8px; font-size:12px; font-weight:600;
+    background:#F8FAFC; padding:7px 8px; font-size:12px; font-weight:600;
     border-right:1px solid var(--paper-line);
     display:flex; align-items:center;
   }
   .fixture-row input{
     border:none; padding:7px 8px; font-size:12.5px; width:100%;
   }
-  .fixture-row input::placeholder{ color:#C6C0B2; }
+  .fixture-row input::placeholder{ color:#9CA3AF; }
   .fixture-row .value{
     padding:7px 8px; font-size:12.5px; display:flex; align-items:center;
   }
@@ -245,7 +243,7 @@
     cursor:pointer;
     font-family:'Noto Sans KR';
   }
-  button.primary:disabled{ background:#D8D3C8; cursor:default; }
+  button.primary:disabled{ background:#D1D5DB; cursor:default; }
   button.primary:active{ background:var(--red-dark); }
 
   button.secondary{
@@ -261,14 +259,14 @@
     font-family:'Noto Sans KR';
     margin-top:10px;
   }
-  button.secondary:active{ background:#F4F1E9; }
+  button.secondary:active{ background:#F1F5F9; }
   button.secondary:disabled{ opacity:.5; cursor:default; }
 
   .status-msg{
     text-align:center; font-size:13px; margin-top:10px; font-weight:600;
   }
   .status-msg.ok{ color:var(--green); }
-  .status-msg.err{ color:var(--red); }
+  .status-msg.err{ color:var(--err); }
 
   .success-banner{
     background:#EAF6EC; border:1px solid #BFE3C4; color:var(--green);
@@ -841,7 +839,7 @@ async function saveAsImage(){
   btn.textContent = '이미지 생성 중...';
 
   try {
-    const canvas = await html2canvas(node, { backgroundColor: '#FAF8F3', scale: 2 });
+    const canvas = await html2canvas(node, { backgroundColor: '#FFFFFF', scale: 2 });
     canvas.toBlob((blob) => {
       const company = (currentRecord && currentRecord['업체']) ? currentRecord['업체'].replace(/\s/g,'') : 'hittile';
       const fileName = `상담지_${company}.png`;

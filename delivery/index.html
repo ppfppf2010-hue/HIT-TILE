@@ -6,13 +6,13 @@
 <title>히트타일 배송관리</title>
 <style>
   :root{
-    --bg:#f6f3ee;
-    --ink:#2c2a27;
-    --muted:#726d64;
-    --line:rgba(44,42,39,0.14);
-    --brass:#b08d57;
-    --brass-deep:#8c6b3e;
-    --ok:#5c7a5e;
+    --bg:#f5f6f8;
+    --ink:#1a1a1a;
+    --muted:#6b7280;
+    --line:rgba(17,17,17,0.09);
+    --brass:#2563eb;
+    --brass-deep:#1d4ed8;
+    --ok:#16803c;
     --warn:#b0824f;
     --err:#b1503f;
     --card:#ffffff;
@@ -92,10 +92,10 @@
     color:var(--ink);
     font-family:inherit;
   }
-  .cal-day:hover{ background:#faf8f4; }
+  .cal-day:hover{ background:#f5f6f8; }
   .cal-day.blank{ cursor:default; visibility:hidden; }
   .cal-day.today{ border-color:var(--brass); font-weight:700; }
-  .cal-day.selected{ background:var(--ink); color:#fff; }
+  .cal-day.selected{ background:var(--brass); color:#fff; }
   .cal-day.selected .cal-dot{ background:#fff; }
   .cal-day .cal-dot{
     width:5px; height:5px; border-radius:50%;
@@ -120,7 +120,7 @@
     padding:9px 14px;
     border-radius:9px;
     border:none;
-    background:var(--ink);
+    background:var(--brass);
     color:#fff;
     cursor:pointer;
   }
@@ -128,7 +128,7 @@
 
   .new-form{
     display:none;
-    background:#faf8f4;
+    background:#f5f6f8;
     border:1px solid var(--line);
     border-radius:12px;
     padding:16px;
@@ -157,9 +157,9 @@
     border-radius:8px;
     cursor:pointer;
   }
-  .btn-primary{ border:none; background:var(--ink); color:#fff; }
+  .btn-primary{ border:none; background:var(--brass); color:#fff; }
   .btn-primary:hover{ background:var(--brass-deep); }
-  .btn-primary:disabled{ background:#ccc7bd; cursor:default; }
+  .btn-primary:disabled{ background:#d1d5db; cursor:default; }
   .btn-ghost{ border:1px solid var(--line); background:var(--card); color:var(--muted); }
   .btn-ghost:hover{ border-color:var(--brass); color:var(--brass-deep); }
   .form-msg{ font-size:12px; color:var(--err); margin-top:8px; min-height:14px; }
@@ -198,13 +198,13 @@
   .badge.ok{ background:rgba(92,122,94,0.12); color:var(--ok); }
   .badge.warn{ background:rgba(176,130,79,0.14); color:var(--warn); }
   .badge.err{ background:rgba(177,80,63,0.12); color:var(--err); }
-  .badge.muted{ background:rgba(44,42,39,0.07); color:var(--muted); }
+  .badge.muted{ background:rgba(17,17,17,0.07); color:var(--muted); }
 
   .order-detail{
     display:none;
     border-top:1px solid var(--line);
     padding:16px;
-    background:#faf8f4;
+    background:#f5f6f8;
   }
   .order-detail.show{ display:block; }
 
@@ -274,7 +274,7 @@
   .item-view-row .st{ font-size:10.5px; padding:2px 6px; border-radius:5px; }
   .item-view-row .st.done{ background:rgba(92,122,94,0.12); color:var(--ok); }
   .item-view-row .st.miss{ background:rgba(177,80,63,0.12); color:var(--err); }
-  .item-view-row .st.wait{ background:rgba(44,42,39,0.07); color:var(--muted); }
+  .item-view-row .st.wait{ background:rgba(17,17,17,0.07); color:var(--muted); }
   .item-view-row .amt{ font-variant-numeric:tabular-nums; color:var(--muted); }
 
   .total-line{
@@ -295,7 +295,7 @@
     font-size:13px;
     cursor:pointer;
   }
-  .pay-opt.active{ background:var(--ink); color:#fff; border-color:var(--ink); }
+  .pay-opt.active{ background:var(--brass); color:#fff; border-color:var(--brass); }
   .pay-memo{
     width:100%;
     padding:9px 11px;
@@ -367,7 +367,7 @@
     cursor:pointer;
     transition:border-color .15s ease, background .15s ease;
   }
-  .drop.drag{ border-color:var(--brass); background:#fbf8f2; }
+  .drop.drag{ border-color:var(--brass); background:#f2f5ff; }
   .drop p{ margin:4px 0; color:var(--muted); font-size:12.5px; }
   .drop .big{ font-size:14px; color:var(--ink); font-weight:600; }
   .drop input{ display:none; }

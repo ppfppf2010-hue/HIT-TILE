@@ -6,13 +6,13 @@
 <title>히트타일 구매등록</title>
 <style>
   :root{
-    --bg:#f6f3ee;
-    --ink:#2c2a27;
-    --muted:#726d64;
-    --line:rgba(44,42,39,0.14);
-    --brass:#b08d57;
-    --brass-deep:#8c6b3e;
-    --ok:#5c7a5e;
+    --bg:#f5f6f8;
+    --ink:#1a1a1a;
+    --muted:#6b7280;
+    --line:rgba(17,17,17,0.09);
+    --brass:#2563eb;
+    --brass-deep:#1d4ed8;
+    --ok:#16803c;
     --warn:#b0824f;
     --err:#b1503f;
     --card:#ffffff;
@@ -58,7 +58,7 @@
   }
   .drop.drag{
     border-color:var(--brass);
-    background:#fbf8f2;
+    background:#f2f5ff;
   }
   .drop p{ margin:6px 0; color:var(--muted); font-size:14px; }
   .drop .big{ font-size:16px; color:var(--ink); font-weight:600; }
@@ -118,7 +118,7 @@
     padding:14px;
     border:none;
     border-radius:10px;
-    background:var(--ink);
+    background:var(--brass);
     color:#fff;
     font-size:15px;
     font-weight:600;
@@ -126,7 +126,7 @@
     transition:background .15s ease;
   }
   button.submit:disabled{
-    background:#ccc7bd;
+    background:#d1d5db;
     cursor:default;
   }
   button.submit:not(:disabled):hover{ background:var(--brass-deep); }
@@ -185,7 +185,7 @@
   .badge.warn{ background:rgba(176,130,79,0.14); color:var(--warn); }
 
   .no-code{ color:var(--warn); font-size:11px; }
-  .blank-cell{ color:rgba(44,42,39,0.28); }
+  .blank-cell{ color:rgba(17,17,17,0.28); }
 
   .error-box{
     margin-top:18px;
@@ -235,7 +235,7 @@
   }
   .action-btn:hover{
     border-color:var(--brass);
-    background:#fbf8f2;
+    background:#f2f5ff;
   }
   .action-btn svg{ width:15px; height:15px; }
 

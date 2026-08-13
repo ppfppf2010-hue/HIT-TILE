@@ -6,13 +6,13 @@
 <title>히트타일 배송기사</title>
 <style>
   :root{
-    --bg:#f6f3ee;
-    --ink:#2c2a27;
-    --muted:#726d64;
-    --line:rgba(44,42,39,0.14);
-    --brass:#b08d57;
-    --brass-deep:#8c6b3e;
-    --ok:#5c7a5e;
+    --bg:#f5f6f8;
+    --ink:#1a1a1a;
+    --muted:#6b7280;
+    --line:rgba(17,17,17,0.09);
+    --brass:#2563eb;
+    --brass-deep:#1d4ed8;
+    --ok:#16803c;
     --warn:#b0824f;
     --err:#b1503f;
     --card:#ffffff;
@@ -99,13 +99,13 @@
   .badge.ok{ background:rgba(92,122,94,0.12); color:var(--ok); }
   .badge.warn{ background:rgba(176,130,79,0.14); color:var(--warn); }
   .badge.err{ background:rgba(177,80,63,0.12); color:var(--err); }
-  .badge.muted{ background:rgba(44,42,39,0.07); color:var(--muted); }
+  .badge.muted{ background:rgba(17,17,17,0.07); color:var(--muted); }
 
   .order-detail{
     display:none;
     border-top:1px solid var(--line);
     padding:16px;
-    background:#faf8f4;
+    background:#f5f6f8;
   }
   .order-detail.show{ display:block; }
 
@@ -152,7 +152,7 @@
     text-align:center;
     padding:7px 10px;
     border-radius:8px;
-    background:rgba(44,42,39,0.07);
+    background:rgba(17,17,17,0.07);
     color:var(--ink);
     font-weight:700;
     font-variant-numeric:tabular-nums;
@@ -184,9 +184,9 @@
     cursor:pointer;
     flex:1;
   }
-  .btn-primary{ border:none; background:var(--ink); color:#fff; }
+  .btn-primary{ border:none; background:var(--brass); color:#fff; }
   .btn-primary:hover{ background:var(--brass-deep); }
-  .btn-primary:disabled{ background:#ccc7bd; cursor:default; }
+  .btn-primary:disabled{ background:#d1d5db; cursor:default; }
   .btn-ghost{ border:1px solid var(--line); background:var(--card); color:var(--muted); }
   .btn-ghost:hover{ border-color:var(--brass); color:var(--brass-deep); }
 
