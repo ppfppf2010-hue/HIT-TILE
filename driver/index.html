@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>히트타일 배송기사</title>
+<style>
+  :root{
+    --bg:#f6f3ee;
+    --ink:#2c2a27;
+    --muted:#726d64;
+    --line:rgba(44,42,39,0.14);
+    --brass:#b08d57;
+    --brass-deep:#8c6b3e;
+    --ok:#5c7a5e;
+    --warn:#b0824f;
+    --err:#b1503f;
+    --card:#ffffff;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Malgun Gothic',sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    padding:0 0 60px;
+  }
+  header{
+    padding:32px 6vw 20px;
+    border-bottom:1px solid var(--line);
+  }
+  header h1{ margin:0 0 6px; font-size:22px; }
+  header p{ margin:0; color:var(--muted); font-size:13px; }
+
+  main{ max-width:560px; margin:0 auto; padding:24px 6vw 0; }
+
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:18px 18px 20px;
+    margin-bottom:20px;
+  }
+
+  /* ---- day nav ---- */
+  .day-nav{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .day-nav .title{ font-size:16px; font-weight:700; }
+  .day-nav-btns{ display:flex; gap:6px; }
+  .day-nav-btns button{
+    padding:0 12px;
+    height:32px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:var(--card);
+    color:var(--ink);
+    cursor:pointer;
+    font-size:13px;
+    font-family:inherit;
+  }
+  .day-nav-btns button:hover{ border-color:var(--brass); color:var(--brass-deep); }
+
+  .cnt{ color:var(--muted); font-size:12.5px; font-weight:500; margin-left:6px; }
+
+  .order-list{ display:flex; flex-direction:column; gap:10px; }
+  .empty, .loading, .error-box{ padding:30px 10px; text-align:center; color:var(--muted); font-size:13.5px; }
+  .error-box{ color:var(--err); }
+
+  .order-card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:12px;
+    overflow:hidden;
+  }
+  .order-summary{
+    padding:14px 16px;
+    cursor:pointer;
+  }
+  .order-top{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .order-top .vendor{ font-size:16px; font-weight:700; }
+  .order-top .site{ font-size:12.5px; color:var(--muted); margin-left:6px; font-weight:400; }
+  .phone{ font-size:12.5px; color:var(--muted); margin-top:4px; }
+  .badges{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .badge{
+    font-size:11px;
+    font-weight:600;
+    padding:3px 8px;
+    border-radius:999px;
+    white-space:nowrap;
+  }
+  .badge.ok{ background:rgba(92,122,94,0.12); color:var(--ok); }
+  .badge.warn{ background:rgba(176,130,79,0.14); color:var(--warn); }
+  .badge.err{ background:rgba(177,80,63,0.12); color:var(--err); }
+  .badge.muted{ background:rgba(44,42,39,0.07); color:var(--muted); }
+
+  .order-detail{
+    display:none;
+    border-top:1px solid var(--line);
+    padding:16px;
+    background:#faf8f4;
+  }
+  .order-detail.show{ display:block; }
+
+  .lock-box{
+    text-align:center;
+    padding:22px 10px;
+    color:var(--muted);
+    font-size:13.5px;
+    line-height:1.6;
+  }
+  .lock-box .icon{ font-size:22px; display:block; margin-bottom:8px; }
+
+  .detail-section h3{
+    font-size:12px;
+    color:var(--muted);
+    margin:0 0 10px;
+    font-weight:700;
+    letter-spacing:0.02em;
+    text-transform:uppercase;
+  }
+
+  .check-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:9px 0;
+    font-size:14px;
+    border-bottom:1px dashed var(--line);
+  }
+  .check-row:last-of-type{ border-bottom:none; }
+  .check-row input[type=checkbox]{ width:19px; height:19px; }
+  .check-row .cst{ margin-left:auto; font-size:10.5px; color:var(--muted); }
+
+  .form-actions{ display:flex; gap:8px; margin-top:14px; }
+  .form-actions button{
+    font-family:inherit;
+    font-size:13px;
+    font-weight:600;
+    padding:10px 14px;
+    border-radius:8px;
+    cursor:pointer;
+    flex:1;
+  }
+  .btn-primary{ border:none; background:var(--ink); color:#fff; }
+  .btn-primary:hover{ background:var(--brass-deep); }
+  .btn-primary:disabled{ background:#ccc7bd; cursor:default; }
+  .btn-ghost{ border:1px solid var(--line); background:var(--card); color:var(--muted); }
+  .btn-ghost:hover{ border-color:var(--brass); color:var(--brass-deep); }
+
+  .section-msg{ font-size:12px; margin-top:8px; min-height:14px; color:var(--muted); }
+  .section-msg.err{ color:var(--err); }
+  .section-msg.ok{ color:var(--ok); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>히트타일 배송기사</h1>
+  <p>오늘 배송할 현장을 확인하고, 전달한 품목을 체크해주세요.</p>
+</header>
+
+<main>
+
+  <div class="card">
+    <div class="day-nav">
+      <div>
+        <span class="title" id="dayTitle"></span>
+        <span class="cnt" id="dayCount"></span>
+      </div>
+      <div class="day-nav-btns">
+        <button type="button" id="prevDay" aria-label="전날">‹</button>
+        <button type="button" id="todayBtn">오늘</button>
+        <button type="button" id="nextDay" aria-label="다음날">›</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="order-list" id="orderList">
+    <div class="loading">불러오는 중...</div>
+  </div>
+
+</main>
+
+<script>
+  const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec';
+
+  function pad2(n){ return String(n).padStart(2, '0'); }
+  function toDateStr(d){ return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+
+  const today = new Date();
+  let selectedDate = toDateStr(today);
+  let dayOrders = [];
+  let expandedOrderId = null;
+  let checkDrafts = {}; // orderId -> deliveredNames[]
+
+  const dayTitle = document.getElementById('dayTitle');
+  const dayCount = document.getElementById('dayCount');
+  const orderList = document.getElementById('orderList');
+
+  function updateDayHeading() {
+    const parts = selectedDate.split('-').map(Number);
+    const d = new Date(parts[0], parts[1] - 1, parts[2]);
+    const dow = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
+    dayTitle.textContent = (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + dow + ')';
+    dayCount.textContent = dayOrders.length ? '배송 ' + dayOrders.length + '건' : '';
+  }
+
+  async function loadDayOrders() {
+    updateDayHeading();
+    orderList.innerHTML = '<div class="loading">불러오는 중...</div>';
+    expandedOrderId = null;
+    checkDrafts = {};
+    try {
+      const res = await fetch(ENDPOINT + '?action=delivery_by_date&date=' + selectedDate);
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || '불러오지 못했어요.');
+      dayOrders = data.orders || [];
+      updateDayHeading();
+      renderOrders();
+    } catch (err) {
+      orderList.innerHTML = '<div class="error-box">' + (err.message || String(err)) + '</div>';
+    }
+  }
+
+  document.getElementById('prevDay').addEventListener('click', () => {
+    const parts = selectedDate.split('-').map(Number);
+    const d = new Date(parts[0], parts[1] - 1, parts[2] - 1);
+    selectedDate = toDateStr(d);
+    loadDayOrders();
+  });
+  document.getElementById('nextDay').addEventListener('click', () => {
+    const parts = selectedDate.split('-').map(Number);
+    const d = new Date(parts[0], parts[1] - 1, parts[2] + 1);
+    selectedDate = toDateStr(d);
+    loadDayOrders();
+  });
+  document.getElementById('todayBtn').addEventListener('click', () => {
+    selectedDate = toDateStr(today);
+    loadDayOrders();
+  });
+
+  function statusBadge(text, kind) {
+    const span = document.createElement('span');
+    span.className = 'badge ' + kind;
+    span.textContent = text;
+    return span;
+  }
+
+  function paymentBadge(order) {
+    if (order.paymentStatus === '완납') return statusBadge('입금완납', 'ok');
+    if (order.paymentStatus === '추후입금') return statusBadge('추후입금', 'warn');
+    return statusBadge('입금확인전', 'muted');
+  }
+
+  function deliveryBadge(order) {
+    const s = order.deliveryStatus || '대기';
+    if (s === '완료') return statusBadge('배송완료', 'ok');
+    if (s === '일부누락') return statusBadge('일부누락', 'err');
+    if (s === '진행중') return statusBadge('배송진행중', 'warn');
+    return statusBadge('배송대기', 'muted');
+  }
+
+  function renderOrders() {
+    orderList.innerHTML = '';
+    if (!dayOrders.length) {
+      orderList.innerHTML = '<div class="empty">이 날짜에 등록된 배송 건이 없어요.</div>';
+      return;
+    }
+    dayOrders.forEach((order) => {
+      orderList.appendChild(buildOrderCard(order));
+    });
+  }
+
+  function buildOrderCard(order) {
+    const card = document.createElement('div');
+    card.className = 'order-card';
+
+    const summary = document.createElement('div');
+    summary.className = 'order-summary';
+
+    const top = document.createElement('div');
+    top.className = 'order-top';
+    const nameWrap = document.createElement('div');
+    const vendorEl = document.createElement('span');
+    vendorEl.className = 'vendor';
+    vendorEl.textContent = order.vendorName || '(업체명 없음)';
+    nameWrap.appendChild(vendorEl);
+    if (order.siteName) {
+      const siteEl = document.createElement('span');
+      siteEl.className = 'site';
+      siteEl.textContent = order.siteName;
+      nameWrap.appendChild(siteEl);
+    }
+    top.appendChild(nameWrap);
+    summary.appendChild(top);
+
+    if (order.phone) {
+      const phoneEl = document.createElement('div');
+      phoneEl.className = 'phone';
+      phoneEl.textContent = order.phone;
+      summary.appendChild(phoneEl);
+    }
+
+    const badges = document.createElement('div');
+    badges.className = 'badges';
+    badges.appendChild(paymentBadge(order));
+    badges.appendChild(deliveryBadge(order));
+    summary.appendChild(badges);
+
+    const detail = document.createElement('div');
+    detail.className = 'order-detail';
+    const isOpen = expandedOrderId === order.orderId;
+    if (isOpen) {
+      detail.classList.add('show');
+      buildOrderDetail(detail, order);
+    }
+
+    summary.addEventListener('click', () => {
+      expandedOrderId = (expandedOrderId === order.orderId) ? null : order.orderId;
+      renderOrders();
+    });
+
+    card.appendChild(summary);
+    card.appendChild(detail);
+    return card;
+  }
+
+  function buildOrderDetail(container, order) {
+    const paymentConfirmed = order.paymentStatus === '완납' || order.paymentStatus === '추후입금';
+
+    if (!order.invoiceRegistered) {
+      const lock = document.createElement('div');
+      lock.className = 'lock-box';
+      lock.innerHTML = '<span class="icon">🧾</span>아직 전표가 등록되지 않았어요.<br>사무실에 확인해주세요.';
+      container.appendChild(lock);
+      return;
+    }
+
+    if (!paymentConfirmed) {
+      const lock = document.createElement('div');
+      lock.className = 'lock-box';
+      lock.innerHTML = '<span class="icon">🔒</span>입금 확인 전이에요.<br>입금이 확인되면 배송 내용을 볼 수 있어요.';
+      container.appendChild(lock);
+      return;
+    }
+
+    container.appendChild(buildDeliverySection(order));
+  }
+
+  function getCheckDraft(order) {
+    if (!checkDrafts[order.orderId]) {
+      checkDrafts[order.orderId] = order.items
+        .filter((it) => it.deliveryStatus === '완료')
+        .map((it) => it.name);
+    }
+    return checkDrafts[order.orderId];
+  }
+
+  function buildDeliverySection(order) {
+    const sec = document.createElement('div');
+    sec.className = 'detail-section';
+    const h3 = document.createElement('h3');
+    h3.textContent = '배송 체크';
+    sec.appendChild(h3);
+
+    const deliveredNames = getCheckDraft(order);
+
+    order.items.forEach((it) => {
+      const row = document.createElement('label');
+      row.className = 'check-row';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = deliveredNames.indexOf(it.name) !== -1;
+      cb.addEventListener('change', () => {
+        const i = deliveredNames.indexOf(it.name);
+        if (cb.checked && i === -1) deliveredNames.push(it.name);
+        if (!cb.checked && i !== -1) deliveredNames.splice(i, 1);
+      });
+      row.appendChild(cb);
+      const nm = document.createElement('span');
+      nm.textContent = it.name + (it.spec ? ' (' + it.spec + ')' : '') + ' × ' + it.qty;
+      row.appendChild(nm);
+      if (it.deliveryStatus === '누락') {
+        const st = document.createElement('span');
+        st.className = 'cst';
+        st.textContent = '이전 배송마감 · 누락';
+        row.appendChild(st);
+      }
+      sec.appendChild(row);
+    });
+
+    const actions = document.createElement('div');
+    actions.className = 'form-actions';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn-ghost';
+    saveBtn.textContent = '진행상태 저장';
+
+    const finalizeBtn = document.createElement('button');
+    finalizeBtn.type = 'button';
+    finalizeBtn.className = 'btn-primary';
+    finalizeBtn.textContent = '배송 마감';
+
+    const msg = document.createElement('div');
+    msg.className = 'section-msg';
+
+    async function submitDelivery(finalize, btn) {
+      btn.disabled = true;
+      msg.textContent = '저장 중...';
+      msg.className = 'section-msg';
+      try {
+        const res = await fetch(ENDPOINT, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'save_delivery', orderId: order.orderId, deliveredNames: deliveredNames, finalize: finalize })
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || '저장하지 못했어요.');
+        msg.textContent = finalize ? '배송 마감했어요.' : '저장됐어요.';
+        msg.className = 'section-msg ok';
+        await loadDayOrders();
+      } catch (err) {
+        msg.textContent = err.message || String(err);
+        msg.className = 'section-msg err';
+        btn.disabled = false;
+      }
+    }
+
+    saveBtn.addEventListener('click', () => submitDelivery(false, saveBtn));
+    finalizeBtn.addEventListener('click', () => {
+      if (!confirm('배송을 마감할까요? 체크 안 된 품목은 "누락"으로 처리돼요.')) return;
+      submitDelivery(true, finalizeBtn);
+    });
+
+    actions.appendChild(saveBtn);
+    actions.appendChild(finalizeBtn);
+    sec.appendChild(actions);
+    sec.appendChild(msg);
+    return sec;
+  }
+
+  loadDayOrders();
+</script>
+
+</body>
+</html>
