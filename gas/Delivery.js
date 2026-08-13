@@ -1,0 +1,270 @@
+const ORDER_SHEET = '배송일정';
+const ORDER_ITEM_SHEET = '배송품목';
+const BANK_INFO = '국민은행 676301-04-294382 (예금주 이용광)';
+
+// ---- 배송일정/배송품목 탭 최초 1회 세팅 (Run 버튼으로 직접 실행) ----
+function setupDeliverySheets() {
+const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+let orderSheet = ss.getSheetByName(ORDER_SHEET);
+if (!orderSheet) orderSheet = ss.insertSheet(ORDER_SHEET);
+const orderHeader = ['주문ID', '날짜', '업체명', '연락처', '현장명', '전표등록여부', '합계금액', '미수금전잔', '미수금후잔', '입금상태', '입금메모', '배송상태', '반품여부', '등록시각'];
+orderSheet.getRange(1, 1, 1, orderHeader.length).setValues([orderHeader]);
+orderSheet.setFrozenRows(1);
+
+let itemSheet = ss.getSheetByName(ORDER_ITEM_SHEET);
+if (!itemSheet) itemSheet = ss.insertSheet(ORDER_ITEM_SHEET);
+const itemHeader = ['주문ID', '품목명', '규격', '수량', '단가', '공급가액', '부가세', '배송여부', '반품수량'];
+itemSheet.getRange(1, 1, 1, itemHeader.length).setValues([itemHeader]);
+itemSheet.setFrozenRows(1);
+
+return { ok: true, message: '배송일정/배송품목 탭 세팅 완료' };
+}
+
+
+// ---- 공통: 배송일정 시트에서 특정 주문ID의 행 번호 찾기 ----
+function findOrderRowIndex(sheet, orderId) {
+const data = sheet.getDataRange().getValues();
+for (let i = 1; i < data.length; i++) {
+if (String(data[i][0]) === String(orderId)) return i + 1;
+}
+return -1;
+}
+
+// ---- 날짜 비교용 정규화: 시트에서 Date 객체로 자동 변환된 값과 'yyyy-MM-dd' 문자열을 동일 포맷으로 맞춤 ----
+function toDateStr(val) {
+if (val instanceof Date) return Utilities.formatDate(val, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+return String(val || '').trim();
+}
+
+function orderRowToObj(row) {
+return {
+orderId: row[0], date: row[1], vendorName: row[2], phone: row[3], siteName: row[4],
+invoiceRegistered: row[5] === 'Y', totalAmount: Number(row[6]) || 0,
+balanceBefore: Number(row[7]) || 0, balanceAfter: Number(row[8]) || 0,
+paymentStatus: row[9] || '', paymentMemo: row[10] || '',
+deliveryStatus: row[11] || '대기', returned: row[12] === 'Y', createdAt: row[13]
+};
+}
+
+// ---- 특정 날짜의 주문 목록 + 각 주문의 품목 조회 ----
+function getDeliveryByDate(dateStr) {
+const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+const orderSheet = ss.getSheetByName(ORDER_SHEET);
+const itemSheet = ss.getSheetByName(ORDER_ITEM_SHEET);
+if (!orderSheet || !itemSheet) return { ok: false, error: '배송 시트를 찾을 수 없습니다.' };
+
+const orderData = orderSheet.getDataRange().getValues();
+const itemData = itemSheet.getDataRange().getValues();
+
+const orders = [];
+for (let i = 1; i < orderData.length; i++) {
+const row = orderData[i];
+if (toDateStr(row[1]) !== toDateStr(dateStr)) continue;
+const order = orderRowToObj(row);
+order.items = [];
+for (let j = 1; j < itemData.length; j++) {
+const ir = itemData[j];
+if (String(ir[0]) === String(order.orderId)) {
+order.items.push({
+name: ir[1], spec: ir[2], qty: Number(ir[3]) || 0, price: Number(ir[4]) || 0,
+supply: Number(ir[5]) || 0, vat: Number(ir[6]) || 0, deliveryStatus: ir[7] || '대기',
+returnQty: Number(ir[8]) || 0
+});
+}
+}
+orders.push(order);
+}
+return { ok: true, date: dateStr, orders: orders, bankInfo: BANK_INFO };
+}
+
+// ---- 특정 월의 날짜별 주문 건수 (달력 뱃지용) ----
+function getDeliveryMonthCounts(monthStr) {
+const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+const orderSheet = ss.getSheetByName(ORDER_SHEET);
+if (!orderSheet) return { ok: false, error: '배송 시트를 찾을 수 없습니다.' };
+const data = orderSheet.getDataRange().getValues();
+const counts = {};
+for (let i = 1; i < data.length; i++) {
+const d = toDateStr(data[i][1]);
+if (!d.startsWith(monthStr)) continue;
+counts[d] = (counts[d] || 0) + 1;
+}
+return { ok: true, month: monthStr, counts: counts };
+}
+
+// ---- 신규 배송 건 생성 (업체명/현장명/날짜) ----
+function handleCreateOrder(body) {
+const date = String(body.date || '').trim();
+const vendorName = String(body.vendorName || '').trim();
+const siteName = String(body.siteName || '').trim();
+const phone = String(body.phone || '').trim();
+if (!date || !vendorName) throw new Error('날짜와 업체명은 필수입니다.');
+
+const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+const orderSheet = ss.getSheetByName(ORDER_SHEET);
+const data = orderSheet.getDataRange().getValues();
+let countToday = 0;
+for (let i = 1; i < data.length; i++) {
+if (toDateStr(data[i][1]) === date) countToday++;
+}
+const orderId = date.replace(/-/g, '') + '-' + (countToday + 1);
+
+orderSheet.appendRow([orderId, date, vendorName, phone, siteName, 'N', 0, 0, 0, '', '', '대기', 'N', new Date()]);
+return jsonOut({ ok: true, orderId: orderId });
+}
+
+// ---- 전표(거래명세서) 등록: 품목 입력 -> 합계 계산 -> 거래처잔액 반영 ----
+function handleSaveInvoice(body) {
+const orderId = body.orderId;
+const items = body.items;
+if (!orderId) throw new Error('orderId가 없습니다.');
+if (!items || !items.length) throw new Error('품목이 없습니다.');
+
+const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+const orderSheet = ss.getSheetByName(ORDER_SHEET);
+const itemSheet = ss.getSheetByName(ORDER_ITEM_SHEET);
+
+const rowIdx = findOrderRowIndex(orderSheet, orderId);
+if (rowIdx === -1) throw new Error('해당 주문을 찾을 수 없습니다.');
+const vendorName = orderSheet.getRange(rowIdx, 3).getValue();
+
+// 기존에 등록된 품목 있으면 삭제 후 재등록
+const itemData = itemSheet.getDataRange().getValues();
+const rowsToDelete = [];
+for (let i = itemData.length - 1; i >= 1; i--) {
+if (String(itemData[i][0]) === String(orderId)) rowsToDelete.push(i + 1);
+}
+rowsToDelete.forEach(function (r) { itemSheet.deleteRow(r); });
+
+let total = 0;
+const newRows = items.map(function (it) {
+const qty = Number(it.qty) || 0;
+const price = Number(it.price) || 0;
+const lineTotal = Math.round(qty * price);
+const supply = Math.round(lineTotal / 1.1);
+const vat = lineTotal - supply;
+total += lineTotal;
+return [orderId, it.name || '', it.spec || '', qty, price, supply, vat, '대기', 0];
+});
+if (newRows.length) {
+itemSheet.getRange(itemSheet.getLastRow() + 1, 1, newRows.length, 9).setValues(newRows);
+}
+
+// 거래처잔액 반영: 전잔 조회 -> 후잔 계산 -> 거래처잔액 시트 갱신
+const balanceInfo = getBalances();
+let before = 0;
+let matchedName = vendorName;
+if (balanceInfo.ok) {
+const vi = findVendor(vendorName);
+const target = vi ? vi.storedName : vendorName;
+matchedName = target;
+const found = balanceInfo.rows.find(function (r) { return r.name === target; });
+if (found) before = Number(found.balance) || 0;
+}
+const after = before + total;
+upsertBalance(matchedName, after);
+
+orderSheet.getRange(rowIdx, 6, 1, 4).setValues([['Y', total, before, after]]);
+
+return jsonOut({ ok: true, orderId: orderId, total: total, balanceBefore: before, balanceAfter: after });
+}
+
+// ---- 거래처잔액 시트에 특정 거래처의 잔액을 반영(있으면 갱신, 없으면 추가) ----
+function upsertBalance(vendorName, newBalance) {
+const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+let sheet = ss.getSheetByName(BALANCE_SHEET);
+if (!sheet) sheet = ss.insertSheet(BALANCE_SHEET);
+const data = sheet.getDataRange().getValues();
+for (let i = 1; i < data.length; i++) {
+if (String(data[i][0]).trim() === String(vendorName).trim()) {
+sheet.getRange(i + 1, 2).setValue(newBalance);
+return;
+}
+}
+sheet.appendRow([vendorName, newBalance]);
+}
+
+// ---- 입금 처리: 완납 또는 추후입금(메모) -> 배송 단계 잠금 해제 ----
+function handleSavePayment(body) {
+const orderId = body.orderId;
+const status = String(body.status || '').trim();
+const memo = String(body.memo || '').trim();
+if (!orderId) throw new Error('orderId가 없습니다.');
+if (!status) throw new Error('입금 상태를 선택해주세요.');
+
+const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+const orderSheet = ss.getSheetByName(ORDER_SHEET);
+const rowIdx = findOrderRowIndex(orderSheet, orderId);
+if (rowIdx === -1) throw new Error('해당 주문을 찾을 수 없습니다.');
+
+orderSheet.getRange(rowIdx, 10, 1, 2).setValues([[status, memo]]);
+return jsonOut({ ok: true, orderId: orderId, status: status });
+}
+
+// ---- 배송 처리: 체크된 품목 완료, 배송마감 시 나머지는 누락 처리 ----
+function handleSaveDelivery(body) {
+const orderId = body.orderId;
+const deliveredNames = body.deliveredNames || [];
+const finalize = !!body.finalize;
+if (!orderId) throw new Error('orderId가 없습니다.');
+
+const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+const orderSheet = ss.getSheetByName(ORDER_SHEET);
+const itemSheet = ss.getSheetByName(ORDER_ITEM_SHEET);
+const itemData = itemSheet.getDataRange().getValues();
+
+let hasMissing = false;
+let allDone = true;
+for (let i = 1; i < itemData.length; i++) {
+if (String(itemData[i][0]) !== String(orderId)) continue;
+const name = itemData[i][1];
+const isDelivered = deliveredNames.indexOf(name) !== -1;
+if (isDelivered) {
+itemSheet.getRange(i + 1, 8).setValue('완료');
+} else if (finalize) {
+itemSheet.getRange(i + 1, 8).setValue('누락');
+hasMissing = true;
+} else {
+allDone = false;
+}
+}
+
+const rowIdx = findOrderRowIndex(orderSheet, orderId);
+if (rowIdx !== -1 && finalize) {
+orderSheet.getRange(rowIdx, 12).setValue(hasMissing ? '일부누락' : '완료');
+} else if (rowIdx !== -1) {
+orderSheet.getRange(rowIdx, 12).setValue('진행중');
+}
+
+return jsonOut({ ok: true, orderId: orderId, hasMissing: hasMissing });
+}
+
+// ---- 반품 처리: 배송된 품목 중 선택 + 수량 -> 반품수량 기록 ----
+function handleSaveReturn(body) {
+const orderId = body.orderId;
+const returns = body.returns || [];
+if (!orderId) throw new Error('orderId가 없습니다.');
+
+const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+const orderSheet = ss.getSheetByName(ORDER_SHEET);
+const itemSheet = ss.getSheetByName(ORDER_ITEM_SHEET);
+const itemData = itemSheet.getDataRange().getValues();
+
+returns.forEach(function (ret) {
+for (let i = 1; i < itemData.length; i++) {
+if (String(itemData[i][0]) === String(orderId) && String(itemData[i][1]) === String(ret.name)) {
+itemSheet.getRange(i + 1, 9).setValue(Number(ret.qty) || 0);
+break;
+}
+}
+});
+
+const rowIdx = findOrderRowIndex(orderSheet, orderId);
+if (rowIdx !== -1) {
+const anyReturn = returns.some(function (r) { return (Number(r.qty) || 0) > 0; });
+orderSheet.getRange(rowIdx, 13).setValue(anyReturn ? 'Y' : 'N');
+}
+
+return jsonOut({ ok: true, orderId: orderId });
+}
