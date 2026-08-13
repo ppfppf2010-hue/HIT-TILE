@@ -23,12 +23,14 @@
  const targetMonth = String(body.targetMonth || '').trim(); // 'YYYY-MM', 선택 시 그 달 품목만 등록
  if (!fileBase64) throw new Error('파일이 없습니다.');
 
- const parsed = extractPurchaseWithClaude(fileBase64, mimeType);
+ const parsed = extractPurchaseWithClaude(fileBase64, mimeType, targetMonth);
  if (!parsed.vendorName) throw new Error('문서에서 거래처명을 인식하지 못했습니다.');
  if (!parsed.items || parsed.items.length === 0) throw new Error('문서에서 품목을 찾지 못했습니다.');
 
  const totalExtracted = parsed.items.length;
  if (targetMonth) {
+ // Claude에게 이미 targetMonth로 범위를 좁혀 추출하도록 요청했지만,
+ // 혹시 다른 달 항목이 섞여 나오는 경우를 대비해 한 번 더 걸러낸다.
  parsed.items = parsed.items.filter(function (it) {
  const d = String(it.date || parsed.docDate || '');
  return d.indexOf(targetMonth) === 0;
@@ -169,7 +171,9 @@
  }
 
  // ---- Claude API 호출: 매입 거래명세서에서 거래처+품목 추출 ----
- function extractPurchaseWithClaude(fileBase64, mimeType) {
+ // targetMonth('YYYY-MM')가 있으면 그 달 품목만 뽑도록 프롬프트 단계에서부터 범위를 좁힌다.
+ // (거래처원장처럼 여러 달 수백 줄이 섞인 문서를 통째로 추출시키면 출력이 max_tokens를 넘어 통째로 실패하기 때문)
+ function extractPurchaseWithClaude(fileBase64, mimeType, targetMonth) {
  const apiKey = PropertiesService.getScriptProperties().getProperty('CLAUDE_API_KEY');
  if (!apiKey) throw new Error('CLAUDE_API_KEY 스크립트 속성이 설정되지 않았습니다.');
 
@@ -177,34 +181,41 @@
  '당신은 매입 거래명세서(세금계산서, 거래처원장 포함) PDF 또는 이미지에서 거래처명과 매입 품목을 추출하는 도우미입니다.',
  '',
  '[거래처명 인식]',
- '- 문서 안에 보통 "공급자:" 또는 "공급하는자:" 같은 라벨과 함께 회사명이 적혀 있습니다.',
- '- "거래처원장" 형식이면 문서 상단에 공급자(물건을 판 쪽) 상호명이 적혀 있고, 그 아래 표는 그 공급자가 히트타일에게 판매한 내역입니다.',
- '- 히트타일이 매입하는 입장이므로, 공급자(물건을 판 쪽) 상호명을 정확히 그대로 추출하세요.',
+ '- 문서 안에 보통 "공급자:", "공급자명 :", "공급하는자:", "공급처명 :" 같은 라벨과 함께 회사명이 적혀 있습니다. 예: 주식회사 베리굿타일앤스, 주식회사 대명세라믹스.',
+ '- "매출처별 거래원장"/"거래처원장" 형식이면 공급자(물건을 판 쪽, 이 문서를 발행한 회사)가 발행한 것이라, 문서 상단에 "거래처명 :"이라는 라벨이 있어도 그건 그 공급자 입장에서의 고객(=히트타일)을 가리키는 것입니다. 절대 vendorName으로 쓰지 마세요. 대신 "공급자명 :"/"공급처명 :" 라벨 옆의 회사명을 vendorName으로 쓰세요.',
+ '- 히트타일이 매입하는 입장이므로, 실제 물건을 판매한 공급자 상호명을 정확히 그대로 추출하세요. "히트타일"이라는 이름 자체(대구/서울 등 지점명이 붙은 형태 포함)는 절대 vendorName이 될 수 없습니다 — 그건 우리 회사입니다.',
  '',
  '[품목 추출 규칙]',
  '1. 일자, 품명, 규격, 단위, 수량, 단가, 공급가액, 세액 컬럼이 있는 표에서 실제 품목 거래행만 추출합니다.',
- '2. 소계/합계/부가세 합계 등 요약행은 무시하고 실제 품목행만 추출합니다.',
+ '2. 소계/합계/부가세 합계/월별집계 등 요약행은 무시하고 실제 품목행만 추출합니다.',
  '3. 단가는 부가세 포함 단가(vat포함) 기준으로 추출합니다. 문서에 공급가액과 세액이 따로 있으면 (공급가액+세액)/수량으로 계산해서 단가를 구하세요.',
  '4. 단위는 문서에 적힌 그대로(BOX, 포, SET, 통, EA, 봉지 등) 추출하세요. 단위가 없으면 "EA"로 둡니다.',
- '5. 문서에 날짜가 하나만 있으면 그 날짜를 docDate에 YYYY-MM-DD 형식으로 넣으세요. 거래처원장처럼 품목 행마다 날짜가 다르면(예 26.07.06, 26.07.13 등 여러 날짜가 섞여 있으면), 각 품목의 실제 거래일자를 그 품목 항목의 date 필드에 YYYY-MM-DD 형식으로 각각 넣으세요. 이 경우 docDate는 문서에 적힌 기준일자나 가장 이른 날짜로 채워도 됩니다.',
-'6. 이 문서가 매출/입금 방식(공급자 입장에서 매출로 기록된 방식)이거나 컬럼 구성이 다르더라도, 히트타일이 지불하는 금액에 해당하는 단가 컬럼을 찾아 최대한 추출을 시도하세요. 설명이 필요해 보여도 거절하지 말고 best-effort로 JSON을 출력하세요.','7. 전기이월, 대체, 대입, 입금, 카드, 통장결제, 계좌변경 안내 같은 결제/이월 행은 실제 매입 품목이 아니므로 items에서 제외하세요.',
- '8. 아래 JSON 형식으로만 출력하세요. 다른 설명이나 코드블록 표시 없이 순수 JSON 객체 하나만 출력합니다.',
- '{"vendorName":"거래처 상호명","docDate":"YYYY-MM-DD","items":[{"name":"품목명","spec":"규격(없으면 빈 문자열)","unit":"단위","qty":숫자,"price":단가숫,"date":"YYYY-MM-DD(해당 품목 행의 실제 날짜, 문서 전체가 한 날짜뿐이면 생략 가능)"자}]}'
+ '5. 문서에 날짜가 하나만 있으면 그 날짜를 docDate에 YYYY-MM-DD 형식으로 넣으세요. 거래처원장처럼 품목 행마다 날짜가 다르면(예 26.07.06, 26.07.13 등 여러 날짜가 섞여 있으면), 각 품목의 실제 거래일자를 그 품목 항목의 date 필드에 YYYY-MM-DD 형식으로 각각 넣으세요. 날짜에 연도가 없으면(예 "01.20"처럼 월.일만 있으면) 문서의 기준일자/출력일시나 이월 기준일 등 문맥으로 연도를 추론하세요. 이 경우 docDate는 문서에 적힌 기준일자나 가장 이른 날짜로 채워도 됩니다.',
+ '6. 이 문서가 매출/입금 방식(공급자 입장에서 매출로 기록된 방식)이거나 컬럼 구성이 다르더라도, 히트타일이 지불하는 금액에 해당하는 단가 컬럼을 찾아 최대한 추출을 시도하세요. 설명이 필요해 보여도 거절하지 말고 best-effort로 JSON을 출력하세요.',
+ '7. 이월, 전기이월, 수입, 대체, 대입, 입금, 카드, 통장결제, DC처리, 계좌변경 안내 같은 결제/이월/요약 행은 실제 매입 품목이 아니므로 items에서 제외하세요.',
+ '8. 반품/취소 행은 별도 품목이 아니라 원래 품목의 수량을 마이너스로 처리한 것입니다. 문서의 수량(qty) 컬럼에 마이너스가 적혀 있으면 그대로 마이너스로 추출하세요. 수량은 양수인데 금액(공급가액/합계금액) 컬럼만 마이너스라면, 그 경우엔 qty에도 마이너스 부호를 붙여서 추출하세요.',
+ '9. 아래 JSON 형식으로만 출력하세요. 다른 설명이나 코드블록 표시 없이 순수 JSON 객체 하나만 출력합니다.',
+ '{"vendorName":"거래처 상호명","docDate":"YYYY-MM-DD","items":[{"name":"품목명","spec":"규격(없으면 빈 문자열)","unit":"단위","qty":숫자,"price":단가숫,"date":"YYYY-MM-DD(해당 품목 행의 실제 날짜, 문서 전체가 한 날짜뿐이면 생략 가능)"}]}'
  ].join('\n');
 
  const contentBlock = mimeType === 'application/pdf'
  ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: fileBase64 } }
  : { type: 'image', source: { type: 'base64', media_type: mimeType, data: fileBase64 } };
 
+ let userText = '이 매입 거래명세서에서 거래처와 품목을 규칙대로 추출해서 JSON 객체만 출력해줘.';
+ if (targetMonth) {
+ userText += ' 이 문서는 여러 달의 거래가 섞여 있을 수 있는데, ' + targetMonth + ' 월(YYYY-MM)에 해당하는 거래일자의 품목 행만 추출하고 다른 달의 행은 절대 items에 포함하지 마세요. vendorName/docDate는 문서 전체 기준으로 정상적으로 채우세요.';
+ }
+
  const payload = {
  model: CLAUDE_MODEL,
- max_tokens: 8000,
+ max_tokens: 16000,
  system: systemPrompt,
  messages: [{
  role: 'user',
  content: [
  contentBlock,
- { type: 'text', text: '이 매입 거래명세서에서 거래처와 품목을 규칙대로 추출해서 JSON 객체만 출력해줘.' }
+ { type: 'text', text: userText }
  ]
  }]
  };
