@@ -246,10 +246,10 @@
   <div id="uploadPanel">
     <div class="drop" id="dropZone">
       <div class="big">클릭해서 파일 선택</div>
-      <p>또는 이 영역에 파일을 끌어다 놓으세요</p>
+      <p>또는 이 영역에 파일을 끌어다 놓으세요 (여러 장 한번에 가능)</p>
       <p>캡쳐한 사진은 Ctrl+V로 붙여넣기도 가능해요</p>
       <p>PDF, JPG, PNG 지원</p>
-      <input type="file" id="fileInput" accept="application/pdf,image/*">
+      <input type="file" id="fileInput" accept="application/pdf,image/*" multiple>
     </div>
 
     <div class="file-chip" id="fileChip">
@@ -295,6 +295,7 @@
   <div class="card" id="doneCard">
     <h2>등록 완료 <span class="badge ok" id="doneBadge"></span></h2>
     <p><span id="doneVendorName"></span> · <span id="doneCount"></span>개 품목이 품목등록마스터에 저장됐어요.</p>
+    <button class="submit" id="nextFileBtn" style="display:none;">다음 파일 계속하기</button>
   </div>
 
   <div class="again">
@@ -337,17 +338,22 @@
   const doneBadge = document.getElementById('doneBadge');
   const doneVendorName = document.getElementById('doneVendorName');
   const doneCount = document.getElementById('doneCount');
+  const nextFileBtn = document.getElementById('nextFileBtn');
 
   const againLink = document.getElementById('againLink');
 
   let selectedFile = null;
   let pendingVendorName = '';
   let pendingRawItems = null;
+  let fileQueue = [];
+  let queueIndex = 0;
 
   function resetAll() {
     selectedFile = null;
     pendingVendorName = '';
     pendingRawItems = null;
+    fileQueue = [];
+    queueIndex = 0;
     fileInput.value = '';
     fileChip.classList.remove('show');
     submitBtn.disabled = true;
@@ -357,13 +363,27 @@
     prefixCard.classList.remove('show');
     reviewCard.classList.remove('show');
     doneCard.classList.remove('show');
+    nextFileBtn.style.display = 'none';
     uploadPanel.style.display = '';
   }
 
-  function pickFile(file) {
+  // 여러 장을 한번에 고르면 큐에 담아두고, 한 장씩 순서대로 처리한다
+  // (검토중 시트는 한 번에 한 문서분만 담을 수 있어서, 앞 파일 확정 전에 다음 파일을 올리면 덮어써지기 때문)
+  function pickFiles(files) {
+    const arr = Array.from(files || []).filter((f) => f);
+    if (!arr.length) return;
+    fileQueue = arr;
+    queueIndex = 0;
+    showQueueFile();
+  }
+
+  function showQueueFile() {
+    const file = fileQueue[queueIndex];
     if (!file) return;
     selectedFile = file;
-    fileName.textContent = file.name;
+    fileName.textContent = fileQueue.length > 1
+      ? `${file.name} (${queueIndex + 1}/${fileQueue.length}번째)`
+      : file.name;
     fileChip.classList.add('show');
     submitBtn.disabled = false;
     errorBox.classList.remove('show');
@@ -371,7 +391,7 @@
   }
 
   dropZone.addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', (e) => pickFile(e.target.files[0]));
+  fileInput.addEventListener('change', (e) => pickFiles(e.target.files));
 
   ['dragenter', 'dragover'].forEach(evt => {
     dropZone.addEventListener(evt, (e) => { e.preventDefault(); dropZone.classList.add('drag'); });
@@ -379,7 +399,7 @@
   ['dragleave', 'drop'].forEach(evt => {
     dropZone.addEventListener(evt, (e) => { e.preventDefault(); dropZone.classList.remove('drag'); });
   });
-  dropZone.addEventListener('drop', (e) => pickFile(e.dataTransfer.files[0]));
+  dropZone.addEventListener('drop', (e) => pickFiles(e.dataTransfer.files));
 
   document.addEventListener('paste', (e) => {
     if (uploadPanel.style.display === 'none') return;
@@ -387,7 +407,7 @@
     for (const item of items) {
       if (item.type.indexOf('image') !== -1) {
         const file = item.getAsFile();
-        if (file) { pickFile(file); e.preventDefault(); }
+        if (file) { pickFiles([file]); e.preventDefault(); }
         break;
       }
     }
@@ -395,6 +415,16 @@
 
   fileClear.addEventListener('click', (e) => { e.stopPropagation(); resetAll(); });
   againLink.addEventListener('click', resetAll);
+
+  // 큐에 다음 파일이 남아있으면 업로드 화면으로 돌아가서 이어서 처리한다
+  function continueQueue() {
+    queueIndex++;
+    doneCard.classList.remove('show');
+    nextFileBtn.style.display = 'none';
+    uploadPanel.style.display = '';
+    showQueueFile();
+  }
+  nextFileBtn.addEventListener('click', continueQueue);
 
   function fileToBase64(file) {
     return new Promise((resolve, reject) => {
@@ -488,10 +518,17 @@
     try {
       const data = await callApi({ action: 'confirm' });
       if (!data.ok) throw new Error(data.error || '처리 중 오류가 발생했어요.');
+      uploadPanel.style.display = 'none';
       reviewCard.classList.remove('show');
       doneBadge.textContent = '저장됨';
       doneVendorName.textContent = data.vendorName;
       doneCount.textContent = data.savedCount;
+      if (queueIndex + 1 < fileQueue.length) {
+        nextFileBtn.textContent = `다음 파일 계속하기 (${queueIndex + 2}/${fileQueue.length})`;
+        nextFileBtn.style.display = 'block';
+      } else {
+        nextFileBtn.style.display = 'none';
+      }
       doneCard.classList.add('show');
     } catch (err) {
       alert(err.message || String(err));
