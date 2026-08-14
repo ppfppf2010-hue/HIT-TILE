@@ -530,6 +530,8 @@
   function showResult(data) {
     lastResult = data;
 
+    sheetLink.href = data.sheetGid !== undefined ? (SHEET_URL + '#gid=' + data.sheetGid) : SHEET_URL;
+
     resultVendor.textContent = data.vendorName;
     if (data.vendorMatched) {
       vendorBadge.textContent = '기존 거래처 매칭됨';

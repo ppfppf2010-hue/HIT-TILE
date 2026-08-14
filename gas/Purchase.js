@@ -45,7 +45,7 @@
  const finalVendorName = vendorInfo ? vendorInfo.storedName : parsed.vendorName;
 
  const rows = buildPurchaseRows(parsed, finalVendorName, vendorInfo);
- appendToPurchaseSheet(rows);
+ const sheetGid = appendToPurchaseSheet(rows);
 
  return jsonOut({
  ok: true,
@@ -53,7 +53,8 @@
  vendorMatched: !!vendorInfo,
  rows: rows,
  totalExtracted: totalExtracted,
- filteredByMonth: !!targetMonth
+ filteredByMonth: !!targetMonth,
+ sheetGid: sheetGid
  });
  }
 
@@ -143,6 +144,7 @@
  r.qty, r.unitPrice, r.foreignAmount, r.supply, r.vat, r.note
  ]);
  });
+ return sheet.getSheetId();
  }
 
  // ---- 구매입력 탭 헤더 최초 1회 세팅 (Run 버튼으로 직접 실행) ----
