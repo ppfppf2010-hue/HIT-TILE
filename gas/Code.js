@@ -311,6 +311,32 @@
  .toUpperCase();
  }
 
+ // ---- 타일 품목명 앞에 붙은 "가로*세로포셀린..." 규격 접두어를 규격/이름으로 분리 ----
+ // 예: "60*60포셀린_LC LC GH 힐릭스 샌드-600" -> {spec:"60*60포셀린_LC", name:"LC GH 힐릭스 샌드-600"}
+ // 사이즈 표기가 붙은 품목명은 전부 타일이고, 규격을 이름에서 떼어 spec에 두는 게 정식 표기다.
+ const TILE_SIZE_PREFIX_RE = /^(\d+\s*[*×xX]\s*\d+\s*포셀린(?:\([^)]*\))?[A-Za-z0-9_]*)\s+(.+)$/;
+ function splitTileSizePrefix(name) {
+ const m = String(name || '').match(TILE_SIZE_PREFIX_RE);
+ if (!m) return null;
+ return { spec: m[1].trim(), name: m[2].trim() };
+ }
+
+ // ---- 비교/저장용: 타일이면 사이즈 접두어를 뗀 핵심 이름만 반환 (구식/신식 표기를 같은 값으로 취급) ----
+ function tileCoreName(name) {
+ const split = splitTileSizePrefix(name);
+ return split ? split.name : String(name || '').trim();
+ }
+
+ // ---- 마스터에서 찾은 매칭 결과를 정식 표기(규격 분리)로 정리해서 반환 ----
+ function normalizeMasterMatch(row) {
+ let name = row[1], spec = row[3];
+ if (!spec) {
+ const split = splitTileSizePrefix(name);
+ if (split) { name = split.name; spec = split.spec; }
+ }
+ return { code: row[0], name: name, spec: spec };
+ }
+
  // ---- 편집거리(Levenshtein distance): 오타 몇 글자 차이 정도를 재기 위한 헬퍼 ----
  function levenshteinDistance(a, b) {
  a = String(a || ''); b = String(b || '');
@@ -338,7 +364,8 @@
  function findMasterItem(masterData, vendorName, itemName, price) {
  const targetVendor = normalizeVendorName(vendorName);
  const targetExact = String(itemName || '').trim();
- const targetNorm = normalizeItemName(itemName);
+ const targetCore = tileCoreName(itemName);
+ const targetNorm = normalizeItemName(targetCore);
  if (!targetExact) return null;
 
  const sameVendorRows = [];
@@ -349,11 +376,12 @@
 
  for (let i = 0; i < sameVendorRows.length; i++) {
  const row = sameVendorRows[i];
- if (String(row[1] || '').trim() === targetExact) return { code: row[0], name: row[1], spec: row[3] };
+ if (String(row[1] || '').trim() === targetExact) return normalizeMasterMatch(row);
  }
+ // 정규화일치: 공백/구두점 차이는 물론, 타일 사이즈 접두어가 이름/규격 중 어디 붙어있든(구식/신식 표기) 같은 값으로 본다.
  for (let i = 0; i < sameVendorRows.length; i++) {
  const row = sameVendorRows[i];
- if (normalizeItemName(row[1]) === targetNorm) return { code: row[0], name: row[1], spec: row[3] };
+ if (normalizeItemName(tileCoreName(row[1])) === targetNorm) return normalizeMasterMatch(row);
  }
 
  // 이름 길이의 20%(최소 1, 최대 4글자)까지만 차이를 허용 -> 진짜 다른 품목(예: "일체형변기" vs "일체형세면기")까지
@@ -362,7 +390,7 @@
  let best = null, bestDist = Infinity, bestPriceDiff = Infinity;
  for (let i = 0; i < sameVendorRows.length; i++) {
  const row = sameVendorRows[i];
- const rowNorm = normalizeItemName(row[1]);
+ const rowNorm = normalizeItemName(tileCoreName(row[1]));
  if (!rowNorm) continue;
  const dist = levenshteinDistance(targetNorm, rowNorm);
  if (dist > maxDist) continue;
@@ -371,12 +399,12 @@
  best = row; bestDist = dist; bestPriceDiff = priceDiff;
  }
  }
- if (best) return { code: best[0], name: best[1], spec: best[3] };
+ if (best) return normalizeMasterMatch(best);
 
  for (let i = 0; i < masterData.length; i++) {
  const row = masterData[i];
  if (String(row[1] || '').trim() === targetExact) {
- return { code: row[0], name: row[1], spec: row[3] };
+ return normalizeMasterMatch(row);
  }
  }
  return null;
