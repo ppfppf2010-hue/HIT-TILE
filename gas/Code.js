@@ -128,7 +128,7 @@
  const skipped = [];
  const seenInBatch = {};
  items.forEach(function (it) {
- const match = findMasterItem(masterData, vendorName, it.name, it.price);
+ const match = findMasterItem(masterData, vendorName, it.name, it.price, it.spec);
  if (match) {
  skipped.push({ name: it.name, matchedCode: match.code, matchedName: match.name, reason: '이미 등록됨' });
  return;
@@ -406,12 +406,23 @@
  return prevRow[n];
  }
 
- // ---- 품목등록마스터에서 거래처+품목명 매칭 ----
+ // ---- 같은 품목명이라도 규격이 서로 다르면 다른 품목으로 본다 ----
+ // 둘 중 하나라도 규격이 비어있으면(규격 구분이 없는 품목) 판단 보류하고 이름만으로 매칭을 허용한다.
+ function specsCompatible(targetSpec, rowSpec) {
+ const a = normalizeItemName(targetSpec);
+ const b = normalizeItemName(rowSpec);
+ if (!a || !b) return true;
+ return a === b;
+ }
+
+ // ---- 품목등록마스터에서 거래처+품목명(+규격) 매칭 ----
  // 순서: 완전일치 -> 같은 거래처 정규화(공백/구두점)일치 -> 같은 거래처 오타수준(편집거리) 유사매칭 -> 거래처무관 완전일치
  // 교정사전은 "예전에 정확히 이 오타를 본 적 있을 때"만 잡지만, 이건 마스터에 이미 등록된 진짜 품목명과
  // 한두 글자만 다른(예: "천정제(MS)평" vs "천정제(MS)병") 처음 보는 오인식도 그 자리에서 바로 잡아준다.
  // price가 주어지면, 편집거리가 같은 후보가 여럿일 때 가격이 더 가까운 쪽을 우선한다.
- function findMasterItem(masterData, vendorName, itemName, price) {
+ // spec이 주어지면, 이름이 같아도 규격이 서로 다르면(둘 다 값이 있을 때) 다른 품목으로 취급해서
+ // 같은 품명·다른 규격 품목이 같은 코드로 잘못 합쳐지는 걸 막는다.
+ function findMasterItem(masterData, vendorName, itemName, price, spec) {
  const targetVendor = normalizeVendorName(vendorName);
  const targetExact = String(itemName || '').trim();
  const targetCore = tileCoreName(itemName);
@@ -426,12 +437,12 @@
 
  for (let i = 0; i < sameVendorRows.length; i++) {
  const row = sameVendorRows[i];
- if (String(row[1] || '').trim() === targetExact) return normalizeMasterMatch(row);
+ if (String(row[1] || '').trim() === targetExact && specsCompatible(spec, row[3])) return normalizeMasterMatch(row);
  }
  // 정규화일치: 공백/구두점 차이는 물론, 타일 사이즈 접두어가 이름/규격 중 어디 붙어있든(구식/신식 표기) 같은 값으로 본다.
  for (let i = 0; i < sameVendorRows.length; i++) {
  const row = sameVendorRows[i];
- if (normalizeItemName(tileCoreName(row[1])) === targetNorm) return normalizeMasterMatch(row);
+ if (normalizeItemName(tileCoreName(row[1])) === targetNorm && specsCompatible(spec, row[3])) return normalizeMasterMatch(row);
  }
 
  // 이름 끝에 "(...)"로 규격/옵션이 붙어있는 경우(예: "EK-3001NBM 주방수전(4WAY)") - 괄호를 뗀 나머지가
@@ -459,6 +470,7 @@
  const row = sameVendorRows[i];
  const rowNorm = normalizeItemName(tileCoreName(row[1]));
  if (!rowNorm) continue;
+ if (!specsCompatible(spec, row[3])) continue;
  const dist = levenshteinDistance(targetNorm, rowNorm);
  if (dist > maxDist) continue;
  const priceDiff = price ? Math.abs((Number(row[4]) || 0) - Number(price)) : 0;
@@ -470,7 +482,7 @@
 
  for (let i = 0; i < masterData.length; i++) {
  const row = masterData[i];
- if (String(row[1] || '').trim() === targetExact) {
+ if (String(row[1] || '').trim() === targetExact && specsCompatible(spec, row[3])) {
  return normalizeMasterMatch(row);
  }
  }
@@ -487,7 +499,7 @@
  const masterData = masterSheet.getDataRange().getValues();
  items.forEach(function (it) {
  if (!it.name) { it.matched = false; it.code = ''; return; }
- const match = findMasterItem(masterData, vendorName, it.name, it.price);
+ const match = findMasterItem(masterData, vendorName, it.name, it.price, it.spec);
  if (match) {
  it.name = match.name;
  if (match.spec) it.spec = match.spec;

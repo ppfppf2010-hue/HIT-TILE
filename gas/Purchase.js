@@ -149,27 +149,30 @@
  const today = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyyMMdd');
  const docDate = normalizeDateYyyyMmDd(parsed.docDate) || today;
 
+ // 품명이 같아도 규격이 다르면 다른 품목이므로, 매칭/신규등록 모두 품명+규격을 묶은 키로 구분한다.
+ function itemKey(name, spec) { return String(name || '').trim() + '|||' + String(spec || '').trim(); }
+
  const codeMap = {};
- const missingNames = [];
+ const missingKeys = [];
 
  parsed.items.forEach(function (it) {
- const key = String(it.name || '').trim();
+ const key = itemKey(it.name, it.spec);
  if (codeMap[key] !== undefined) return;
- const match = findMasterItem(masterData, vendorName, it.name, it.price);
+ const match = findMasterItem(masterData, vendorName, it.name, it.price, it.spec);
  if (match) {
  codeMap[key] = match;
- } else if (missingNames.indexOf(key) === -1) {
- missingNames.push(key);
+ } else if (missingKeys.indexOf(key) === -1) {
+ missingKeys.push(key);
  }
  });
 
- if (vendorInfo && missingNames.length) {
- const toRegister = missingNames.map(function (name) {
- const src = parsed.items.filter(function (it) { return String(it.name || '').trim() === name; })[0];
+ if (vendorInfo && missingKeys.length) {
+ const toRegister = missingKeys.map(function (key) {
+ const src = parsed.items.filter(function (it) { return itemKey(it.name, it.spec) === key; })[0];
  // 타일(사이즈*사이즈포셀린... 접두어가 붙은 품목명)은 규격을 이름에서 떼어 spec에 두는 정식 표기로 등록한다.
- let finalName = name, finalSpec = src.spec || '';
+ let finalName = src.name, finalSpec = src.spec || '';
  if (!finalSpec) {
- const split = splitTileSizePrefix(name);
+ const split = splitTileSizePrefix(src.name);
  if (split) { finalName = split.name; finalSpec = split.spec; }
  }
  return {
@@ -183,19 +186,19 @@
  const startNumber = Math.max(vendorInfo.lastUsed, sharedMax) + 1;
  const newRows = assignCodesAndPrices(toRegister, vendorInfo.prefix, startNumber, vendorName);
  appendToMasterSheet(vendorName, newRows);
- // codeMap은 원본(추출된 그대로의) 품목명으로 조회하므로, 타일 표기 정리로 이름이 바뀌었어도
- // missingNames[i]<->newRows[i]는 순서가 그대로 대응되니 원본 이름을 키로 매핑해준다.
- newRows.forEach(function (r, i) { codeMap[missingNames[i]] = { code: r.code, name: r.name, spec: r.spec }; });
+ // codeMap은 원본(추출된 그대로의) 품명+규격 키로 조회하므로, 타일 표기 정리로 이름이 바뀌었어도
+ // missingKeys[i]<->newRows[i]는 순서가 그대로 대응되니 원본 키로 매핑해준다.
+ newRows.forEach(function (r, i) { codeMap[missingKeys[i]] = { code: r.code, name: r.name, spec: r.spec }; });
  saveLastUsedByPrefix(vendorInfo.prefix, Math.max(startNumber + newRows.length - 1, sharedMax));
  }
 
  return parsed.items.map(function (it, i) {
- const key = String(it.name || '').trim();
+ const key = itemKey(it.name, it.spec);
  const match = codeMap[key];
  const code = match ? match.code : '';
  const finalName = match ? match.name : it.name;
  const finalSpec = match && match.spec ? match.spec : (it.spec || '');
- const autoRegistered = !!(vendorInfo && missingNames.indexOf(key) !== -1);
+ const autoRegistered = !!(vendorInfo && missingKeys.indexOf(key) !== -1);
  const unitPrice = Math.round(Number(it.price) || 0);
  const qty = Number(it.qty) || 0;
  const supply = Math.round((unitPrice * qty) / 1.1);
