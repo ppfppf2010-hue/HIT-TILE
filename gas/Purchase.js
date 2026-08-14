@@ -181,7 +181,7 @@
  });
  const sharedMax = getMaxLastUsedForPrefix(vendorInfo.prefix);
  const startNumber = Math.max(vendorInfo.lastUsed, sharedMax) + 1;
- const newRows = assignCodesAndPrices(toRegister, vendorInfo.prefix, startNumber);
+ const newRows = assignCodesAndPrices(toRegister, vendorInfo.prefix, startNumber, vendorName);
  appendToMasterSheet(vendorName, newRows);
  // codeMap은 원본(추출된 그대로의) 품목명으로 조회하므로, 타일 표기 정리로 이름이 바뀌었어도
  // missingNames[i]<->newRows[i]는 순서가 그대로 대응되니 원본 이름을 키로 매핑해준다.

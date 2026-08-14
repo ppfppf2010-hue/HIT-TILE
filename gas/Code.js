@@ -104,7 +104,7 @@
  const sharedMax = getMaxLastUsedForPrefix(vendorInfo.prefix);
  const startNumber = Math.max(vendorInfo.lastUsed, sharedMax) + 1;
  // 시트에 저장된 원래 표기(storedName)를 사용해서 이후 저장되는 거래처명 표기를 통일시킨다.
- const previewRows = assignCodesAndPrices(dedup.newItems, vendorInfo.prefix, startNumber);
+ const previewRows = assignCodesAndPrices(dedup.newItems, vendorInfo.prefix, startNumber, vendorInfo.storedName);
  const reviewUrl = stageForReview(vendorInfo.storedName, previewRows);
  return jsonOut({ ok: true, isNewVendor: false, vendorName: vendorInfo.storedName, reviewUrl: reviewUrl, count: previewRows.length, skippedCount: dedup.skipped.length, skipped: dedup.skipped });
  }
@@ -168,7 +168,7 @@
  const sharedMax = getMaxLastUsedForPrefix(finalPrefix);
  const startNumber = Math.max(existing ? existing.lastUsed : 0, sharedMax) + 1;
 
- const previewRows = assignCodesAndPrices(dedup.newItems, finalPrefix, startNumber);
+ const previewRows = assignCodesAndPrices(dedup.newItems, finalPrefix, startNumber, finalVendorName);
  const reviewUrl = stageForReview(finalVendorName, previewRows);
  return jsonOut({ ok: true, count: previewRows.length, reviewUrl: reviewUrl, skippedCount: dedup.skipped.length, skipped: dedup.skipped });
  }
@@ -796,7 +796,9 @@
  }
  }
 
- function assignCodesAndPrices(items, prefix, startNumber) {
+ function assignCodesAndPrices(items, prefix, startNumber, vendorName) {
+ // 신양(상사) 제품 등록은 세트 상품이 없으므로 품목구분/세트여부를 1/0으로 고정한다.
+ const isSinyang = /신양/.test(String(vendorName || ''));
  return items.map(function (it, i) {
  const numberPart = startNumber + i;
  const code = prefix + String(numberPart).padStart(CODE_DIGITS, '0');
@@ -805,8 +807,8 @@
  return {
  code: code, name: it.name, specType: it.spec ? '사이즈' : '', spec: it.spec || '',
  inPrice: inPrice, inVat: 1, unit: it.unit,
- category: it.unit === 'SET' ? 'SET상품' : '자재',
- isSet: it.unit === 'SET' ? 'Y' : 'N', stockMgmt: 1,
+ category: isSinyang ? '1' : (it.unit === 'SET' ? 'SET상품' : '자재'),
+ isSet: isSinyang ? '0' : (it.unit === 'SET' ? 'Y' : 'N'), stockMgmt: 1,
  outPrice: outPrice, outVat: 1
  };
  });
