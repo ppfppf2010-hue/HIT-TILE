@@ -302,6 +302,62 @@
  return items;
  }
 
+ // ---- 품목명 정규화: 공백/구분기호/대소문자 차이를 무시하고 비교하기 위한 헬퍼 ----
+ function normalizeItemName(name) {
+ return String(name || '')
+ .replace(/\s+/g, '')
+ .replace(/[\/\-_.]/g, '')
+ .toUpperCase();
+ }
+
+ // ---- 품목등록마스터에서 거래처+품목명 매칭 (완전일치 -> 같은 거래처 정규화일치 -> 거래처무관 완전일치 순) ----
+ // 교정사전은 "예전에 정확히 이 오타를 본 적 있을 때"만 잡지만, 이건 마스터에 이미 등록된
+ // 진짜 품목명과 공백/표기 차이만 나는 처음 보는 오인식도 그 자리에서 바로 잡아준다.
+ function findMasterItem(masterData, vendorName, itemName) {
+ const targetVendor = normalizeVendorName(vendorName);
+ const targetExact = String(itemName || '').trim();
+ const targetNorm = normalizeItemName(itemName);
+ if (!targetExact) return null;
+
+ for (let i = 0; i < masterData.length; i++) {
+ const row = masterData[i];
+ if (normalizeVendorName(String(row[12] || '')) === targetVendor && String(row[1] || '').trim() === targetExact) {
+ return { code: row[0], name: row[1], spec: row[3] };
+ }
+ }
+ for (let i = 0; i < masterData.length; i++) {
+ const row = masterData[i];
+ if (normalizeVendorName(String(row[12] || '')) === targetVendor && normalizeItemName(row[1]) === targetNorm) {
+ return { code: row[0], name: row[1], spec: row[3] };
+ }
+ }
+ for (let i = 0; i < masterData.length; i++) {
+ const row = masterData[i];
+ if (String(row[1] || '').trim() === targetExact) {
+ return { code: row[0], name: row[1], spec: row[3] };
+ }
+ }
+ return null;
+ }
+
+ // ---- 추출된 품목명/규격을 해당 거래처의 마스터 등록 품목과 대조해서 이미 알려진 표기로 자동 보정 ----
+ function applyMasterCatalogMatch(items, vendorName) {
+ if (!items || !items.length || !vendorName) return items;
+ const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+ const masterSheet = ss.getSheetByName(MASTER_SHEET);
+ if (!masterSheet) return items;
+ const masterData = masterSheet.getDataRange().getValues();
+ items.forEach(function (it) {
+ if (!it.name) return;
+ const match = findMasterItem(masterData, vendorName, it.name);
+ if (match) {
+ it.name = match.name;
+ if (match.spec) it.spec = match.spec;
+ }
+ });
+ return items;
+ }
+
  // ==== 관리자용: 테스트로 쌓인 중복 품목 정리 ====
  // 기준: 품목코드가 아니라 (품목명 + 규격 + 단위 + 거래처명)이 같으면 중복으로 간주.
  // Apps Script 편집기에서 이 함수를 선택하고 [Run] 버튼으로 한 번 실행하면 됩니다.

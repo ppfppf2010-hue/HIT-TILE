@@ -119,10 +119,21 @@ return jsonOut({ ok: true, orderId: orderId });
 function handleDeliveryExtract(body) {
 const fileBase64 = body.fileBase64;
 const mimeType = body.mimeType || 'image/jpeg';
+const orderId = body.orderId || '';
 if (!fileBase64) throw new Error('파일이 없습니다.');
 
 const parsed = extractDeliveryItemsWithClaude(fileBase64, mimeType);
 if (!parsed.items || !parsed.items.length) throw new Error('사진에서 품목을 찾지 못했어요. 다시 촬영하거나 수기로 입력해주세요.');
+
+if (orderId) {
+const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+const orderSheet = ss.getSheetByName(ORDER_SHEET);
+const rowIdx = findOrderRowIndex(orderSheet, orderId);
+if (rowIdx !== -1) {
+const vendorName = orderSheet.getRange(rowIdx, 3).getValue();
+applyMasterCatalogMatch(parsed.items, vendorName);
+}
+}
 
 return jsonOut({ ok: true, items: parsed.items });
 }
@@ -196,6 +207,7 @@ throw new Error('Claude가 이 사진에서 품목을 추출하지 못했습니�
 function handleSaveInvoice(body) {
 const orderId = body.orderId;
 const items = body.items;
+const originalItems = body.originalItems || [];
 if (!orderId) throw new Error('orderId가 없습니다.');
 if (!items || !items.length) throw new Error('품목이 없습니다.');
 
@@ -206,6 +218,23 @@ const itemSheet = ss.getSheetByName(ORDER_ITEM_SHEET);
 const rowIdx = findOrderRowIndex(orderSheet, orderId);
 if (rowIdx === -1) throw new Error('해당 주문을 찾을 수 없습니다.');
 const vendorName = orderSheet.getRange(rowIdx, 3).getValue();
+
+// 사진 인식 결과(originalItems) vs 저장 직전 사람이 고친 값(items) 비교 -> 교정사전에 자동 기록.
+// 저장 중간에 품목을 추가/삭제해서 줄 수가 달라지면 자리 비교가 무의미해지므로, 개수가 같을 때만 비교한다.
+if (originalItems.length && originalItems.length === items.length) {
+const corrections = [];
+items.forEach(function (it, i) {
+const orig = originalItems[i];
+if (!orig) return;
+const editedName = String(it.name || '').trim();
+const originalName = String(orig.name || '').trim();
+if (originalName && editedName && originalName !== editedName) corrections.push([originalName, editedName]);
+const editedSpec = String(it.spec || '').trim();
+const originalSpec = String(orig.spec || '').trim();
+if (originalSpec && editedSpec && originalSpec !== editedSpec) corrections.push([originalSpec, editedSpec]);
+});
+if (corrections.length) saveCorrections(corrections);
+}
 
 // 기존에 등록된 품목 있으면 삭제 후 재등록
 const itemData = itemSheet.getDataRange().getValues();

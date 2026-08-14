@@ -911,7 +911,7 @@
       resetBtn.className = 'manual-link';
       resetBtn.style.marginBottom = '10px';
       resetBtn.textContent = '다른 사진으로 다시 인식하기';
-      resetBtn.addEventListener('click', () => { draft.items = []; renderOrders(); });
+      resetBtn.addEventListener('click', () => { draft.items = []; draft.originalItems = null; renderOrders(); });
       sec.appendChild(resetBtn);
     }
 
@@ -952,7 +952,7 @@
       try {
         const res = await fetch(ENDPOINT, {
           method: 'POST',
-          body: JSON.stringify({ action: 'save_invoice', orderId: order.orderId, items: items })
+          body: JSON.stringify({ action: 'save_invoice', orderId: order.orderId, items: items, originalItems: draft.originalItems || [] })
         });
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || '저장하지 못했어요.');
@@ -1023,6 +1023,7 @@
     manualBtn.addEventListener('click', () => {
       draft.entryMode = 'manual';
       draft.items = [{ name: '', spec: '', qty: '', price: '' }];
+      draft.originalItems = null;
       renderOrders();
     });
 
@@ -1036,11 +1037,13 @@
         const base64 = await fileToBase64(file);
         const res = await fetch(ENDPOINT, {
           method: 'POST',
-          body: JSON.stringify({ action: 'delivery_extract', fileBase64: base64, mimeType: file.type || 'image/jpeg' })
+          body: JSON.stringify({ action: 'delivery_extract', orderId: order.orderId, fileBase64: base64, mimeType: file.type || 'image/jpeg' })
         });
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || '인식하지 못했어요.');
         draft.items = (data.items || []).map((it) => ({ name: it.name || '', spec: it.spec || '', qty: it.qty || '', price: it.price || '' }));
+        // 인식 직후 원본을 따로 보관해뒀다가, 저장 시점에 사람이 고친 값과 비교해서 교정사전을 채우는 데 쓴다.
+        draft.originalItems = draft.items.map((it) => ({ name: it.name, spec: it.spec }));
         renderOrders();
       } catch (e) {
         status.classList.remove('show');

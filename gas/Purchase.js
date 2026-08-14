@@ -71,9 +71,9 @@
  parsed.items.forEach(function (it) {
  const key = String(it.name || '').trim();
  if (codeMap[key] !== undefined) return;
- const match = findItemCode(masterData, vendorName, it.name);
+ const match = findMasterItem(masterData, vendorName, it.name);
  if (match) {
- codeMap[key] = match.code;
+ codeMap[key] = match;
  } else if (missingNames.indexOf(key) === -1) {
  missingNames.push(key);
  }
@@ -93,13 +93,16 @@
  const startNumber = Math.max(vendorInfo.lastUsed, sharedMax) + 1;
  const newRows = assignCodesAndPrices(toRegister, vendorInfo.prefix, startNumber);
  appendToMasterSheet(vendorName, newRows);
- newRows.forEach(function (r) { codeMap[r.name] = r.code; });
+ newRows.forEach(function (r) { codeMap[r.name] = { code: r.code, name: r.name, spec: r.spec }; });
  saveLastUsedByPrefix(vendorInfo.prefix, Math.max(startNumber + newRows.length - 1, sharedMax));
  }
 
  return parsed.items.map(function (it, i) {
  const key = String(it.name || '').trim();
- const code = codeMap[key] || '';
+ const match = codeMap[key];
+ const code = match ? match.code : '';
+ const finalName = match ? match.name : it.name;
+ const finalSpec = match && match.spec ? match.spec : (it.spec || '');
  const autoRegistered = !!(vendorInfo && missingNames.indexOf(key) !== -1);
  const unitPrice = Math.round(Number(it.price) || 0);
  const qty = Number(it.qty) || 0;
@@ -117,8 +120,8 @@
  currency: '',
  rate: 1,
  itemCode: code,
- itemName: it.name,
- spec: it.spec || '',
+ itemName: finalName,
+ spec: finalSpec,
  qty: qty,
  unitPrice: unitPrice,
  foreignAmount: '',
@@ -127,29 +130,6 @@
  note: code ? (autoRegistered ? '신규 품목 자동등록됨' : '') : '품목코드 미매칭 - 거래처 미등록으로 자동등록 불가'
  };
  });
- }
-
- // ---- 품목등록마스터에서 거래처명+품목명 일치하는 품목코드 찾기 ----
- function findItemCode(masterData, vendorName, itemName) {
- const targetVendor = normalizeVendorName(vendorName);
- const targetName = String(itemName || '').trim();
-
- for (let i = 0; i < masterData.length; i++) {
- const row = masterData[i];
- const rowVendor = normalizeVendorName(String(row[12] || ''));
- const rowName = String(row[1] || '').trim();
- if (rowVendor === targetVendor && rowName === targetName) {
- return { code: row[0] };
- }
- }
- for (let i = 0; i < masterData.length; i++) {
- const row = masterData[i];
- const rowName = String(row[1] || '').trim();
- if (rowName === targetName) {
- return { code: row[0] };
- }
- }
- return null;
  }
 
  // ---- 구매입력 시트에 누적 저장 (Ecount 양식 컬럼 순서 그대로) ----
