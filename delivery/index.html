@@ -232,6 +232,13 @@
   .oa-outline:hover{ border-color:var(--brass); color:var(--brass-deep); }
   .oa-primary{ border:1px solid rgba(37,99,235,0.3); background:#eef2ff; color:var(--brass); }
   .oa-primary:hover{ background:#e0e7ff; }
+  .oa-danger{ flex:0 0 auto; border:1px solid rgba(177,80,63,0.3); background:#fbeeeb; color:var(--err); }
+  .oa-danger:hover{ background:#f6ddd6; }
+  .oa-danger:disabled{ opacity:0.6; cursor:default; }
+
+  .item-match-tag{ font-size:10.5px; margin:2px 2px 6px; }
+  .item-match-tag.ok{ color:var(--ok); }
+  .item-match-tag.warn{ color:var(--warn); }
 
   .order-detail{
     display:none;
@@ -826,6 +833,7 @@
     ctaBtn.addEventListener('click', toggle);
     actions.appendChild(detailBtn);
     actions.appendChild(ctaBtn);
+    actions.appendChild(buildDeleteOrderBtn(order));
     summary.appendChild(actions);
 
     const detail = document.createElement('div');
@@ -838,6 +846,42 @@
     card.appendChild(summary);
     card.appendChild(detail);
     return card;
+  }
+
+  function buildDeleteOrderBtn(order) {
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'oa-btn oa-danger';
+    delBtn.textContent = '삭제';
+    let armed = false;
+    let armTimer = null;
+    delBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!armed) {
+        armed = true;
+        delBtn.textContent = '한번더 누르면 삭제';
+        armTimer = setTimeout(() => { armed = false; delBtn.textContent = '삭제'; }, 3000);
+        return;
+      }
+      clearTimeout(armTimer);
+      armed = false;
+      delBtn.disabled = true;
+      delBtn.textContent = '삭제 중...';
+      try {
+        const res = await fetch(ENDPOINT, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'delete_order', orderId: order.orderId })
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || '삭제하지 못했어요.');
+        await Promise.all([loadDayOrders(), loadMonthCounts()]);
+      } catch (err) {
+        alert(err.message || String(err));
+        delBtn.disabled = false;
+        delBtn.textContent = '삭제';
+      }
+    });
+    return delBtn;
   }
 
   function getDraft(order) {
@@ -1055,7 +1099,7 @@
         });
         const data = await res.json();
         if (!data.ok) throw new Error(data.error || '인식하지 못했어요.');
-        draft.items = (data.items || []).map((it) => ({ name: it.name || '', spec: it.spec || '', qty: it.qty || '', price: it.price || '' }));
+        draft.items = (data.items || []).map((it) => ({ name: it.name || '', spec: it.spec || '', qty: it.qty || '', price: it.price || '', matched: it.matched, code: it.code || '' }));
         // 인식 직후 원본을 따로 보관해뒀다가, 저장 시점에 사람이 고친 값과 비교해서 교정사전을 채우는 데 쓴다.
         draft.originalItems = draft.items.map((it) => ({ name: it.name, spec: it.spec }));
         renderOrders();
@@ -1090,6 +1134,8 @@
   }
 
   function buildItemRow(order, draft, item, idx, rowsWrap) {
+    const wrap = document.createElement('div');
+
     const row = document.createElement('div');
     row.className = 'item-row';
 
@@ -1132,7 +1178,7 @@
     delBtn.addEventListener('click', () => {
       const i = draft.items.indexOf(item);
       if (i !== -1) draft.items.splice(i, 1);
-      row.remove();
+      wrap.remove();
     });
 
     row.appendChild(nameInput);
@@ -1140,7 +1186,18 @@
     row.appendChild(qtyInput);
     row.appendChild(priceInput);
     row.appendChild(delBtn);
-    return row;
+    wrap.appendChild(row);
+
+    if (typeof item.matched === 'boolean') {
+      const tag = document.createElement('div');
+      tag.className = 'item-match-tag ' + (item.matched ? 'ok' : 'warn');
+      tag.textContent = item.matched
+        ? '✓ 품목등록마스터에 있는 품목이에요' + (item.code ? ' · ' + item.code : '')
+        : '⚠ 마스터에 없는 신규 품목이에요 · 확인해주세요';
+      wrap.appendChild(tag);
+    }
+
+    return wrap;
   }
 
   function buildPaymentSection(order, draft) {

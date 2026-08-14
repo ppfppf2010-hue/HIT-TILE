@@ -63,6 +63,7 @@
  if (action === 'save_payment') return handleSavePayment(body);
  if (action === 'save_delivery') return handleSaveDelivery(body);
  if (action === 'save_return') return handleSaveReturn(body);
+ if (action === 'delete_order') return handleDeleteOrder(body);
  if (action === 'save_balances') return handleSaveBalances(body);
  throw new Error('알 수 없는 action: ' + action);
  } catch (err) {
@@ -475,6 +476,7 @@
  }
 
  // ---- 추출된 품목명/규격을 해당 거래처의 마스터 등록 품목과 대조해서 이미 알려진 표기로 자동 보정 ----
+ // 매칭 여부(matched)와 품목코드(code)도 함께 표시해서, 화면에서 품목등록마스터 시트와 대조 확인할 수 있게 한다.
  function applyMasterCatalogMatch(items, vendorName) {
  if (!items || !items.length || !vendorName) return items;
  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -482,11 +484,16 @@
  if (!masterSheet) return items;
  const masterData = masterSheet.getDataRange().getValues();
  items.forEach(function (it) {
- if (!it.name) return;
+ if (!it.name) { it.matched = false; it.code = ''; return; }
  const match = findMasterItem(masterData, vendorName, it.name, it.price);
  if (match) {
  it.name = match.name;
  if (match.spec) it.spec = match.spec;
+ it.matched = true;
+ it.code = match.code;
+ } else {
+ it.matched = false;
+ it.code = '';
  }
  });
  return items;

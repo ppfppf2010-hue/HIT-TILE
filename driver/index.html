@@ -48,7 +48,18 @@
     align-items:center;
     justify-content:space-between;
   }
-  .day-nav .title{ font-size:16px; font-weight:700; }
+  .day-nav .title{
+    font-size:16px; font-weight:700;
+    cursor:ns-resize;
+    -webkit-user-select:none; user-select:none;
+    touch-action:none;
+    padding:4px 6px;
+    margin:-4px -6px;
+    border-radius:6px;
+    display:inline-block;
+  }
+  .day-nav .title.dragging{ background:#eef2ff; color:var(--brass-deep); }
+  .day-nav .drag-hint{ display:block; font-size:10.5px; color:var(--muted); font-weight:400; margin-top:1px; }
   .day-nav-btns{ display:flex; gap:6px; }
   .day-nav-btns button{
     padding:0 12px;
@@ -238,6 +249,7 @@
       <div>
         <span class="title" id="dayTitle"></span>
         <span class="cnt" id="dayCount"></span>
+        <span class="drag-hint">날짜를 누른 채 위아래로 끌면 날짜가 바뀌어요</span>
       </div>
       <div class="day-nav-btns">
         <button type="button" id="prevDay" aria-label="전날">‹</button>
@@ -310,6 +322,50 @@
     selectedDate = toDateStr(today);
     loadDayOrders();
   });
+
+  // ---- 날짜 제목을 누른 채 위아래로 드래그하면 날짜가 바뀜 (일정 픽셀마다 하루씩) ----
+  const DRAG_STEP_PX = 36;
+  let dragStartY = null;
+  let dragBaseDate = null;
+  let dragSteps = 0;
+  let dragLoadTimer = null;
+
+  function scheduleDragLoad(immediate) {
+    clearTimeout(dragLoadTimer);
+    if (immediate) { loadDayOrders(); return; }
+    dragLoadTimer = setTimeout(loadDayOrders, 150);
+  }
+
+  dayTitle.addEventListener('pointerdown', (e) => {
+    dragStartY = e.clientY;
+    const parts = selectedDate.split('-').map(Number);
+    dragBaseDate = new Date(parts[0], parts[1] - 1, parts[2]);
+    dragSteps = 0;
+    dayTitle.classList.add('dragging');
+    dayTitle.setPointerCapture(e.pointerId);
+  });
+  dayTitle.addEventListener('pointermove', (e) => {
+    if (dragStartY === null) return;
+    const dy = dragStartY - e.clientY; // 위로 끌면 양수 -> 다음 날짜로
+    const steps = Math.trunc(dy / DRAG_STEP_PX);
+    if (steps === dragSteps) return;
+    dragSteps = steps;
+    const d = new Date(dragBaseDate.getFullYear(), dragBaseDate.getMonth(), dragBaseDate.getDate() + steps);
+    const newDateStr = toDateStr(d);
+    if (newDateStr === selectedDate) return;
+    selectedDate = newDateStr;
+    updateDayHeading();
+    scheduleDragLoad(false);
+  });
+  function endDrag() {
+    if (dragStartY === null) return;
+    dragStartY = null;
+    dayTitle.classList.remove('dragging');
+    clearTimeout(dragLoadTimer);
+    if (dragSteps !== 0) scheduleDragLoad(true);
+  }
+  dayTitle.addEventListener('pointerup', endDrag);
+  dayTitle.addEventListener('pointercancel', endDrag);
 
   function statusBadge(text, kind) {
     const span = document.createElement('span');

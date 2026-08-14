@@ -360,6 +360,40 @@ orderSheet.getRange(rowIdx, 12).setValue('진행중');
 return jsonOut({ ok: true, orderId: orderId, hasMissing: hasMissing });
 }
 
+// ---- 배송 건(전표) 삭제: 배송일정/배송품목에서 해당 주문 행 제거, 전표가 등록돼 있었으면 거래처잔액도 되돌림 ----
+function handleDeleteOrder(body) {
+const orderId = body.orderId;
+if (!orderId) throw new Error('orderId가 없습니다.');
+
+const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+const orderSheet = ss.getSheetByName(ORDER_SHEET);
+const itemSheet = ss.getSheetByName(ORDER_ITEM_SHEET);
+const rowIdx = findOrderRowIndex(orderSheet, orderId);
+if (rowIdx === -1) throw new Error('해당 주문을 찾을 수 없습니다.');
+
+const orderRow = orderSheet.getRange(rowIdx, 1, 1, 14).getValues()[0];
+const order = orderRowToObj(orderRow);
+
+if (order.invoiceRegistered && order.totalAmount) {
+const balanceInfo = getBalances();
+if (balanceInfo.ok) {
+const vi = findVendor(order.vendorName);
+const target = vi ? vi.storedName : order.vendorName;
+const found = balanceInfo.rows.find(function (r) { return r.name === target; });
+if (found) upsertBalance(target, (Number(found.balance) || 0) - order.totalAmount);
+}
+}
+
+const itemData = itemSheet.getDataRange().getValues();
+for (let i = itemData.length - 1; i >= 1; i--) {
+if (String(itemData[i][0]) === String(orderId)) itemSheet.deleteRow(i + 1);
+}
+
+orderSheet.deleteRow(rowIdx);
+
+return jsonOut({ ok: true, orderId: orderId });
+}
+
 // ---- 반품 처리: 배송된 품목 중 선택 + 수량 -> 반품수량 기록 ----
 function handleSaveReturn(body) {
 const orderId = body.orderId;
