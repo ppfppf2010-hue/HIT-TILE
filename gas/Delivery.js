@@ -177,6 +177,9 @@ const contentBlock = mimeType === 'application/pdf'
 const payload = {
 model: CLAUDE_MODEL,
 max_tokens: 4000,
+// 모델이 max_tokens를 보이지 않는 thinking에 다 써버려서 실제 출력이
+// 하나도 안 나오는 경우가 있어(다른 추출 API에서 발견) thinking을 끈다.
+thinking: { type: 'disabled' },
 system: systemPrompt,
 messages: [{
 role: 'user',

@@ -297,6 +297,10 @@
  const payload = {
  model: CLAUDE_MODEL,
  max_tokens: 16000,
+ // 문서가 크면(거래처원장 등) 모델이 max_tokens 대부분을 보이지 않는 thinking에
+ // 써버려서 실제 JSON 출력이 하나도 안 나오는 경우가 있었다(vendorName 인식 실패로 보였음).
+ // thinking을 꺼서 max_tokens 전체를 실제 출력에 쓰도록 한다.
+ thinking: { type: 'disabled' },
  system: systemPrompt,
  messages: [{
  role: 'user',

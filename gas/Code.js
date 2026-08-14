@@ -56,7 +56,6 @@
  if (action === 'previewNew') return handlePreviewNew(body);
  if (action === 'confirm') return handleConfirm(body);
  if (action === 'purchase_extract') return handlePurchaseExtract(body);
- if (action === 'purchase_extract_debug') return handlePurchaseExtractDebug(body);
  if (action === 'purchase_confirm') return handlePurchaseConfirm();
  if (action === 'create_order') return handleCreateOrder(body);
  if (action === 'delivery_extract') return handleDeliveryExtract(body);
@@ -701,6 +700,9 @@
  const payload = {
  model: CLAUDE_MODEL,
  max_tokens: 16000,
+ // 문서가 크면 모델이 max_tokens 대부분을 보이지 않는 thinking에 써버려서
+ // 실제 JSON 출력이 하나도 안 나오는 경우가 있어(거래처명 인식 실패로 보임) thinking을 끈다.
+ thinking: { type: 'disabled' },
  system: systemPrompt,
  messages: [{ role: 'user', content: [contentBlock, { type: 'text', text: '이 문서에서 거래처명과 품목을 규칙대로 추출해서 JSON 객체만 출력해줘.' }] }]
  };
