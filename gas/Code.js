@@ -431,6 +431,23 @@
  if (normalizeItemName(tileCoreName(row[1])) === targetNorm) return normalizeMasterMatch(row);
  }
 
+ // 이름 끝에 "(...)"로 규격/옵션이 붙어있는 경우(예: "EK-3001NBM 주방수전(4WAY)") - 괄호를 뗀 나머지가
+ // 기존 품목명과 완전히 같고, 괄호 안 내용이 그 품목의 기존 규격과 같거나 비슷하면 같은 품목으로 본다.
+ // (완전히 다른 옵션/색상 괄호까지 잘못 합치지 않도록, 나머지 이름은 정확히 일치해야만 후보로 인정)
+ const parenMatch = targetExact.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+ if (parenMatch) {
+ const baseNorm = normalizeItemName(parenMatch[1].trim());
+ const parenNorm = normalizeItemName(parenMatch[2].trim());
+ for (let i = 0; i < sameVendorRows.length; i++) {
+ const row = sameVendorRows[i];
+ if (normalizeItemName(tileCoreName(row[1])) !== baseNorm) continue;
+ const rowSpecNorm = normalizeItemName(row[3]);
+ if (!rowSpecNorm || rowSpecNorm === parenNorm || levenshteinDistance(rowSpecNorm, parenNorm) <= 2) {
+ return normalizeMasterMatch(row);
+ }
+ }
+ }
+
  // 이름 길이의 20%(최소 1, 최대 4글자)까지만 차이를 허용 -> 진짜 다른 품목(예: "일체형변기" vs "일체형세면기")까지
  // 잘못 합쳐지는 걸 막는다. 여러 후보가 남으면 편집거리가 가장 가깝고, 같으면 가격이 가장 가까운 쪽을 고른다.
  const maxDist = Math.max(1, Math.min(4, Math.ceil(targetNorm.length * 0.2)));
