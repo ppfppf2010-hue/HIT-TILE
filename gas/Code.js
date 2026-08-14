@@ -56,6 +56,7 @@
  if (action === 'previewNew') return handlePreviewNew(body);
  if (action === 'confirm') return handleConfirm(body);
  if (action === 'purchase_extract') return handlePurchaseExtract(body);
+ if (action === 'purchase_extract_debug') return handlePurchaseExtractDebug(body);
  if (action === 'purchase_confirm') return handlePurchaseConfirm();
  if (action === 'create_order') return handleCreateOrder(body);
  if (action === 'delivery_extract') return handleDeliveryExtract(body);
@@ -63,6 +64,7 @@
  if (action === 'save_payment') return handleSavePayment(body);
  if (action === 'save_delivery') return handleSaveDelivery(body);
  if (action === 'save_return') return handleSaveReturn(body);
+ if (action === 'save_return_schedule') return handleSaveReturnSchedule(body);
  if (action === 'delete_order') return handleDeleteOrder(body);
  if (action === 'save_balances') return handleSaveBalances(body);
  throw new Error('알 수 없는 action: ' + action);

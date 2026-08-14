@@ -48,18 +48,50 @@
     align-items:center;
     justify-content:space-between;
   }
+  .day-nav-left{ position:relative; }
   .day-nav .title{
     font-size:16px; font-weight:700;
-    cursor:ns-resize;
+    cursor:pointer;
     -webkit-user-select:none; user-select:none;
-    touch-action:none;
     padding:4px 6px;
     margin:-4px -6px;
     border-radius:6px;
     display:inline-block;
   }
-  .day-nav .title.dragging{ background:#eef2ff; color:var(--brass-deep); }
-  .day-nav .drag-hint{ display:block; font-size:10.5px; color:var(--muted); font-weight:400; margin-top:1px; }
+  .day-nav .title:hover{ background:#f5f6f8; }
+  .date-popup{
+    display:none;
+    position:absolute;
+    top:100%;
+    left:0;
+    margin-top:8px;
+    width:210px;
+    max-height:280px;
+    overflow-y:auto;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:12px;
+    box-shadow:0 8px 24px rgba(0,0,0,0.14);
+    z-index:10;
+    padding:6px;
+  }
+  .date-popup.show{ display:block; }
+  .date-popup .date-opt{
+    display:block;
+    width:100%;
+    text-align:left;
+    padding:9px 10px;
+    border:none;
+    background:none;
+    border-radius:8px;
+    font-size:13.5px;
+    font-family:inherit;
+    color:var(--ink);
+    cursor:pointer;
+  }
+  .date-popup .date-opt:hover{ background:#f5f6f8; }
+  .date-popup .date-opt.today{ font-weight:700; color:var(--brass-deep); }
+  .date-popup .date-opt.selected{ background:var(--brass); color:#fff; }
   .day-nav-btns{ display:flex; gap:6px; }
   .day-nav-btns button{
     padding:0 12px;
@@ -186,6 +218,15 @@
   .check-row:hover{ border-color:var(--brass); }
   .check-row:focus-visible{ outline:2px solid var(--brass); outline-offset:1px; }
   .check-row.done{ background:rgba(92,122,94,0.10); border-color:rgba(92,122,94,0.4); }
+  .check-row .check-mark{
+    font-size:15px;
+    font-weight:700;
+    color:var(--line);
+    width:16px;
+    text-align:center;
+    flex-shrink:0;
+  }
+  .check-row .check-mark.on{ color:var(--err); }
   .check-row .itnm{ flex:1; min-width:0; }
   .check-row .qty-display{
     min-width:38px;
@@ -246,10 +287,10 @@
 
   <div class="card">
     <div class="day-nav">
-      <div>
+      <div class="day-nav-left">
         <span class="title" id="dayTitle"></span>
         <span class="cnt" id="dayCount"></span>
-        <span class="drag-hint">날짜를 누른 채 위아래로 끌면 날짜가 바뀌어요</span>
+        <div class="date-popup" id="datePopup"></div>
       </div>
       <div class="day-nav-btns">
         <button type="button" id="prevDay" aria-label="전날">‹</button>
@@ -276,6 +317,7 @@
   let dayOrders = [];
   let expandedOrderId = null;
   let checkDrafts = {}; // orderId -> deliveredNames[]
+  let returnDrafts = {}; // orderId -> {itemName: returnQty}
 
   const dayTitle = document.getElementById('dayTitle');
   const dayCount = document.getElementById('dayCount');
@@ -294,6 +336,7 @@
     orderList.innerHTML = '<div class="loading">불러오는 중...</div>';
     expandedOrderId = null;
     checkDrafts = {};
+    returnDrafts = {};
     try {
       const res = await fetch(ENDPOINT + '?action=delivery_by_date&date=' + selectedDate);
       const data = await res.json();
@@ -323,49 +366,57 @@
     loadDayOrders();
   });
 
-  // ---- 날짜 제목을 누른 채 위아래로 드래그하면 날짜가 바뀜 (일정 픽셀마다 하루씩) ----
-  const DRAG_STEP_PX = 36;
-  let dragStartY = null;
-  let dragBaseDate = null;
-  let dragSteps = 0;
-  let dragLoadTimer = null;
+  // ---- 날짜 제목을 누르면 세로 목록 팝업이 뜨고, 그중에서 클릭으로 날짜를 골라요 ----
+  const datePopup = document.getElementById('datePopup');
+  let popupOpen = false;
 
-  function scheduleDragLoad(immediate) {
-    clearTimeout(dragLoadTimer);
-    if (immediate) { loadDayOrders(); return; }
-    dragLoadTimer = setTimeout(loadDayOrders, 150);
-  }
-
-  dayTitle.addEventListener('pointerdown', (e) => {
-    dragStartY = e.clientY;
+  function buildDatePopup() {
+    datePopup.innerHTML = '';
     const parts = selectedDate.split('-').map(Number);
-    dragBaseDate = new Date(parts[0], parts[1] - 1, parts[2]);
-    dragSteps = 0;
-    dayTitle.classList.add('dragging');
-    dayTitle.setPointerCapture(e.pointerId);
-  });
-  dayTitle.addEventListener('pointermove', (e) => {
-    if (dragStartY === null) return;
-    const dy = dragStartY - e.clientY; // 위로 끌면 양수 -> 다음 날짜로
-    const steps = Math.trunc(dy / DRAG_STEP_PX);
-    if (steps === dragSteps) return;
-    dragSteps = steps;
-    const d = new Date(dragBaseDate.getFullYear(), dragBaseDate.getMonth(), dragBaseDate.getDate() + steps);
-    const newDateStr = toDateStr(d);
-    if (newDateStr === selectedDate) return;
-    selectedDate = newDateStr;
-    updateDayHeading();
-    scheduleDragLoad(false);
-  });
-  function endDrag() {
-    if (dragStartY === null) return;
-    dragStartY = null;
-    dayTitle.classList.remove('dragging');
-    clearTimeout(dragLoadTimer);
-    if (dragSteps !== 0) scheduleDragLoad(true);
+    const center = new Date(parts[0], parts[1] - 1, parts[2]);
+    const todayStr = toDateStr(today);
+    for (let offset = -14; offset <= 30; offset++) {
+      const d = new Date(center.getFullYear(), center.getMonth(), center.getDate() + offset);
+      const dateStr = toDateStr(d);
+      const dow = ['일', '월', '화', '수', '목', '금', '토'][d.getDay()];
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'date-opt';
+      if (dateStr === todayStr) btn.classList.add('today');
+      if (dateStr === selectedDate) btn.classList.add('selected');
+      btn.textContent = (d.getMonth() + 1) + '월 ' + d.getDate() + '일 (' + dow + ')' + (dateStr === todayStr ? ' · 오늘' : '');
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectedDate = dateStr;
+        closeDatePopup();
+        loadDayOrders();
+      });
+      datePopup.appendChild(btn);
+    }
   }
-  dayTitle.addEventListener('pointerup', endDrag);
-  dayTitle.addEventListener('pointercancel', endDrag);
+
+  function onDocClickForPopup(e) {
+    if (!datePopup.contains(e.target) && e.target !== dayTitle) closeDatePopup();
+  }
+
+  function openDatePopup() {
+    buildDatePopup();
+    datePopup.classList.add('show');
+    popupOpen = true;
+    const sel = datePopup.querySelector('.date-opt.selected');
+    if (sel) sel.scrollIntoView({ block: 'center' });
+    document.addEventListener('click', onDocClickForPopup);
+  }
+  function closeDatePopup() {
+    datePopup.classList.remove('show');
+    popupOpen = false;
+    document.removeEventListener('click', onDocClickForPopup);
+  }
+
+  dayTitle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (popupOpen) closeDatePopup(); else openDatePopup();
+  });
 
   function statusBadge(text, kind) {
     const span = document.createElement('span');
@@ -529,6 +580,136 @@
     }
 
     container.appendChild(buildDeliverySection(order));
+    if (order.deliveryStatus === '완료' && order.returnScheduleDate) {
+      container.appendChild(buildReturnCheckSection(order));
+    }
+  }
+
+  function getReturnDraft(order) {
+    if (!returnDrafts[order.orderId]) {
+      const returns = {};
+      order.items.forEach((it) => { returns[it.name] = it.returnQty || 0; });
+      returnDrafts[order.orderId] = returns;
+    }
+    return returnDrafts[order.orderId];
+  }
+
+  function buildReturnCheckSection(order) {
+    const sec = document.createElement('div');
+    sec.className = 'detail-section';
+    const h3 = document.createElement('h3');
+    h3.textContent = '반품 체크 · 예정일 ' + order.returnScheduleDate;
+    sec.appendChild(h3);
+
+    const returns = getReturnDraft(order);
+
+    order.items.filter((it) => it.deliveryStatus !== '대기').forEach((it) => {
+      const row = document.createElement('div');
+      row.className = 'check-row';
+      row.setAttribute('role', 'button');
+      row.tabIndex = 0;
+
+      const mark = document.createElement('span');
+      mark.className = 'check-mark';
+      mark.textContent = '✓';
+      row.appendChild(mark);
+
+      const nm = document.createElement('span');
+      nm.className = 'itnm';
+      nm.textContent = it.name + (it.spec ? ' (' + it.spec + ')' : '') + ' 배송 ' + it.qty;
+      row.appendChild(nm);
+
+      const qtyDisplay = document.createElement('span');
+      qtyDisplay.className = 'qty-display';
+
+      const qtyInput = document.createElement('input');
+      qtyInput.type = 'text';
+      qtyInput.inputMode = 'numeric';
+      qtyInput.className = 'qty-input';
+      qtyInput.style.display = 'none';
+
+      function currentQty() { return Number(returns[it.name]) || 0; }
+
+      function refresh() {
+        const q = currentQty();
+        qtyDisplay.textContent = q;
+        const done = q > 0;
+        row.classList.toggle('done', done);
+        mark.classList.toggle('on', done);
+      }
+
+      function setQty(q) {
+        returns[it.name] = Math.max(0, Math.min(it.qty, Number(q) || 0));
+        refresh();
+      }
+
+      function enterEditMode() {
+        qtyInput.value = currentQty();
+        qtyDisplay.style.display = 'none';
+        qtyInput.style.display = '';
+        qtyInput.focus();
+        qtyInput.select();
+      }
+      function exitEditMode() {
+        setQty(qtyInput.value);
+        qtyInput.style.display = 'none';
+        qtyDisplay.style.display = '';
+      }
+
+      qtyDisplay.addEventListener('click', (e) => { e.stopPropagation(); enterEditMode(); });
+      qtyInput.addEventListener('click', (e) => e.stopPropagation());
+      qtyInput.addEventListener('input', () => { qtyInput.value = qtyInput.value.replace(/[^\d]/g, ''); });
+      qtyInput.addEventListener('blur', exitEditMode);
+      qtyInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); qtyInput.blur(); }
+      });
+
+      row.addEventListener('click', () => { setQty(currentQty() > 0 ? 0 : it.qty); });
+      row.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setQty(currentQty() > 0 ? 0 : it.qty); }
+      });
+
+      refresh();
+      row.appendChild(qtyDisplay);
+      row.appendChild(qtyInput);
+      sec.appendChild(row);
+    });
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn-primary';
+    saveBtn.style.width = '100%';
+    saveBtn.style.marginTop = '10px';
+    saveBtn.textContent = '반품 완료';
+
+    const msg = document.createElement('div');
+    msg.className = 'section-msg';
+
+    saveBtn.addEventListener('click', async () => {
+      const returnList = Object.keys(returns).map((name) => ({ name: name, qty: Number(returns[name]) || 0 }));
+      saveBtn.disabled = true;
+      msg.textContent = '저장 중...';
+      msg.className = 'section-msg';
+      try {
+        const res = await fetch(ENDPOINT, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'save_return', orderId: order.orderId, returns: returnList })
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || '저장하지 못했어요.');
+        msg.textContent = '반품 처리했어요.';
+        msg.className = 'section-msg ok';
+        await loadDayOrders();
+      } catch (err) {
+        msg.textContent = err.message || String(err);
+        msg.className = 'section-msg err';
+        saveBtn.disabled = false;
+      }
+    });
+
+    sec.appendChild(saveBtn);
+    sec.appendChild(msg);
+    return sec;
   }
 
   function getCheckDraft(order) {
@@ -560,6 +741,11 @@
       row.setAttribute('role', 'button');
       row.tabIndex = 0;
 
+      const mark = document.createElement('span');
+      mark.className = 'check-mark';
+      mark.textContent = '✓';
+      row.appendChild(mark);
+
       const nm = document.createElement('span');
       nm.className = 'itnm';
       nm.textContent = it.name + (it.spec ? ' (' + it.spec + ')' : '') + ' 주문 ' + it.qty;
@@ -582,7 +768,9 @@
       function refresh() {
         const q = currentQty();
         qtyDisplay.textContent = q;
-        row.classList.toggle('done', it.qty > 0 && q >= it.qty);
+        const done = it.qty > 0 && q >= it.qty;
+        row.classList.toggle('done', done);
+        mark.classList.toggle('on', done);
         const diff = it.qty - q;
         shortfall.textContent = diff > 0 ? diff + '개 부족' : '';
       }

@@ -39,12 +39,20 @@ return String(val || '').trim();
 
 function orderRowToObj(row) {
 return {
-orderId: row[0], date: row[1], vendorName: row[2], phone: row[3], siteName: row[4],
+orderId: row[0], date: toDateStr(row[1]), vendorName: row[2], phone: row[3], siteName: row[4],
 invoiceRegistered: row[5] === 'Y', totalAmount: Number(row[6]) || 0,
 balanceBefore: Number(row[7]) || 0, balanceAfter: Number(row[8]) || 0,
 paymentStatus: row[9] || '', paymentMemo: row[10] || '',
-deliveryStatus: row[11] || '대기', returned: row[12] === 'Y', createdAt: row[13]
+deliveryStatus: row[11] || '대기', returned: row[12] === 'Y', createdAt: row[13],
+returnScheduleDate: toDateStr(row[14])
 };
+}
+
+// ---- 반품일정 열이 아직 없으면 헤더 채워둠 ----
+function ensureReturnScheduleHeader(orderSheet) {
+if (orderSheet.getRange(1, 15).getValue() !== '반품일정') {
+orderSheet.getRange(1, 15).setValue('반품일정');
+}
 }
 
 // ---- 특정 날짜의 주문 목록 + 각 주문의 품목 조회 ----
@@ -392,6 +400,22 @@ if (String(itemData[i][0]) === String(orderId)) itemSheet.deleteRow(i + 1);
 orderSheet.deleteRow(rowIdx);
 
 return jsonOut({ ok: true, orderId: orderId });
+}
+
+// ---- 반품일정 설정: 배송완료된 건에 반품 예정일을 올려두면 배송기사 앱에서 반품 체크가 열림 ----
+function handleSaveReturnSchedule(body) {
+const orderId = body.orderId;
+const date = String(body.date || '').trim();
+if (!orderId) throw new Error('orderId가 없습니다.');
+
+const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+const orderSheet = ss.getSheetByName(ORDER_SHEET);
+ensureReturnScheduleHeader(orderSheet);
+const rowIdx = findOrderRowIndex(orderSheet, orderId);
+if (rowIdx === -1) throw new Error('해당 주문을 찾을 수 없습니다.');
+
+orderSheet.getRange(rowIdx, 15).setValue(date);
+return jsonOut({ ok: true, orderId: orderId, returnScheduleDate: date });
 }
 
 // ---- 반품 처리: 배송된 품목 중 선택 + 수량 -> 반품수량 기록 ----
