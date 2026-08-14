@@ -311,14 +311,26 @@
  .toUpperCase();
  }
 
- // ---- 타일 품목명 앞에 붙은 "가로*세로포셀린..." 규격 접두어를 규격/이름으로 분리 ----
- // 예: "60*60포셀린_LC LC GH 힐릭스 샌드-600" -> {spec:"60*60포셀린_LC", name:"LC GH 힐릭스 샌드-600"}
+ // ---- 타일 품목명 앞에 붙은 규격 접두어를 규격/이름으로 분리 ----
+ // 1) "60*60포셀린_LC LC GH 힐릭스 샌드-600" -> {spec:"60*60포셀린_LC", name:"LC GH 힐릭스 샌드-600"} (포셀린 표기는 그대로 규격에 둠)
+ // 2) "30*60CH(FG) HS 비비드 아이보리" -> {spec:"300*600", name:"HS 비비드 아이보리"} (CH(FG)/바닥/CTM/폴리/MULIA 같은 접두어는 떼어내고, cm 표기(30*60)를 mm(300*600)로 환산)
  // 사이즈 표기가 붙은 품목명은 전부 타일이고, 규격을 이름에서 떼어 spec에 두는 게 정식 표기다.
  const TILE_SIZE_PREFIX_RE = /^(\d+\s*[*×xX]\s*\d+\s*포셀린(?:\([^)]*\))?[A-Za-z0-9_]*)\s+(.+)$/;
+ const TILE_TYPE_SUFFIX_RE = /^(\d{2,3})\s*[*×xX]\s*(\d{2,3})\s*[A-Za-z가-힣()]*\s+(.+)$/;
  function splitTileSizePrefix(name) {
- const m = String(name || '').match(TILE_SIZE_PREFIX_RE);
- if (!m) return null;
- return { spec: m[1].trim(), name: m[2].trim() };
+ const s = String(name || '');
+ const m1 = s.match(TILE_SIZE_PREFIX_RE);
+ if (m1) return { spec: m1[1].trim(), name: m1[2].trim() };
+
+ // cm 단위 타일 사이즈만 인정(15~130) - 46파이 유가/트랩 같은 mm 단위 부속품(600*70 등)을 오인하지 않도록 범위를 제한
+ const m2 = s.match(TILE_TYPE_SUFFIX_RE);
+ if (m2) {
+ const w = parseInt(m2[1], 10), h = parseInt(m2[2], 10);
+ if (w >= 15 && w <= 130 && h >= 15 && h <= 130 && m2[3].trim()) {
+ return { spec: (w * 10) + '*' + (h * 10), name: m2[3].trim() };
+ }
+ }
+ return null;
  }
 
  // ---- 비교/저장용: 타일이면 사이즈 접두어를 뗀 핵심 이름만 반환 (구식/신식 표기를 같은 값으로 취급) ----
