@@ -307,7 +307,7 @@
 
 <header>
   <h1>히트타일 구매등록</h1>
-  <p>매입 거래명세서·세금계산서(PDF 또는 사진)를 올리면 거래처와 품목을 자동으로 인식해서 구매입력 시트에 등록합니다.</p>
+  <p>매입 거래명세서·세금계산서(PDF 또는 사진)를 올리면 거래처와 품목을 자동으로 인식해서 "구매확인중" 시트에 미리 채워둡니다. 시트에서 확인/수정한 뒤 확정하면 구매입력 시트에 등록돼요.</p>
 </header>
 
 <main>
@@ -331,7 +331,7 @@
       <input type="month" id="monthInput">
     </div>
 
-    <button class="submit" id="submitBtn" disabled>업로드해서 등록하기</button>
+    <button class="submit" id="submitBtn" disabled>업로드해서 분석하기</button>
 
     <div class="status" id="statusBox">
       <span class="spinner"></span>
@@ -341,7 +341,7 @@
     <div class="error-box" id="errorBox"></div>
   </div>
 
-  <div class="result" id="resultBox">
+  <div class="result" id="reviewBox">
     <div class="result-head">
       <span class="vendor" id="resultVendor"></span>
       <span class="badge" id="vendorBadge"></span>
@@ -359,13 +359,38 @@
     </div>
 
     <div class="result-actions">
+      <a class="action-btn" id="reviewSheetLink" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+        구매확인중 시트에서 확인·수정
+      </a>
+    </div>
+
+    <button class="submit" id="confirmBtn" style="margin-top:14px;">확인 끝났어요 · 구매입력에 등록하기</button>
+    <div class="status" id="confirmStatusBox">
+      <span class="spinner"></span>
+      <span>구매입력 시트에 저장하는 중이에요...</span>
+    </div>
+
+    <div class="again">
+      <a id="againLinkReview">다른 파일 업로드하기</a>
+    </div>
+  </div>
+
+  <div class="result" id="doneBox">
+    <div class="result-head">
+      <span class="vendor" id="doneVendorName"></span>
+      <span class="badge ok">등록 완료</span>
+      <p class="summary" id="doneSummary"></p>
+    </div>
+
+    <div class="result-actions">
       <a class="action-btn" id="sheetLink" href="#" target="_blank" rel="noopener">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
         구글시트에서 확인
       </a>
       <button type="button" class="action-btn" id="excelBtn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        이상 없음 · 엑셀로 저장
+        엑셀로 저장
       </button>
     </div>
 
@@ -375,7 +400,7 @@
   </div>
 
   <p class="note">
-    거래처코드(Ecount)·담당자·거래유형은 자동으로 채워지지 않아요. 입고창고는 "본사창고"로 통일 등록됩니다. 구글시트에서 확인하시고, Ecount에 업로드하기 전에 나머지 항목을 채워주세요.
+    거래처코드(Ecount)·담당자·거래유형은 자동으로 채워지지 않아요. 입고창고는 "본사창고"로 통일 등록됩니다. "구매확인중" 시트에서 품목명·규격·단가 등을 확인/수정한 뒤 등록하기를 눌러주세요 — 고친 내용은 다음 인식부터 자동으로 참고합니다.
   </p>
 
 </main>
@@ -398,7 +423,7 @@
   const statusBox = document.getElementById('statusBox');
   const statusText = document.getElementById('statusText');
   const errorBox = document.getElementById('errorBox');
-  const resultBox = document.getElementById('resultBox');
+  const reviewBox = document.getElementById('reviewBox');
   const resultVendor = document.getElementById('resultVendor');
   const vendorBadge = document.getElementById('vendorBadge');
   const resultSummary = document.getElementById('resultSummary');
@@ -406,11 +431,17 @@
   const newList = document.getElementById('newList');
   const missSection = document.getElementById('missSection');
   const missList = document.getElementById('missList');
+  const reviewSheetLink = document.getElementById('reviewSheetLink');
+  const confirmBtn = document.getElementById('confirmBtn');
+  const confirmStatusBox = document.getElementById('confirmStatusBox');
+  const againLinkReview = document.getElementById('againLinkReview');
+
+  const doneBox = document.getElementById('doneBox');
+  const doneVendorName = document.getElementById('doneVendorName');
+  const doneSummary = document.getElementById('doneSummary');
   const againLink = document.getElementById('againLink');
   const sheetLink = document.getElementById('sheetLink');
   const excelBtn = document.getElementById('excelBtn');
-
-  sheetLink.href = SHEET_URL;
 
   let selectedFile = null;
 
@@ -423,7 +454,8 @@
     submitBtn.disabled = true;
     statusBox.classList.remove('show');
     errorBox.classList.remove('show');
-    resultBox.classList.remove('show');
+    reviewBox.classList.remove('show');
+    doneBox.classList.remove('show');
     newSection.classList.remove('show');
     missSection.classList.remove('show');
   }
@@ -436,7 +468,8 @@
     monthField.classList.add('show');
     submitBtn.disabled = false;
     errorBox.classList.remove('show');
-    resultBox.classList.remove('show');
+    reviewBox.classList.remove('show');
+    doneBox.classList.remove('show');
   }
 
   dropZone.addEventListener('click', () => fileInput.click());
@@ -476,6 +509,7 @@
   });
 
   againLink.addEventListener('click', resetAll);
+  againLinkReview.addEventListener('click', resetAll);
 
   function fileToBase64(file) {
     return new Promise((resolve, reject) => {
@@ -492,14 +526,15 @@
     submitBtn.disabled = true;
     statusBox.classList.add('show');
     errorBox.classList.remove('show');
-    resultBox.classList.remove('show');
+    reviewBox.classList.remove('show');
+    doneBox.classList.remove('show');
     statusText.textContent = '문서를 분석하는 중이에요...';
 
     try {
       const base64 = await fileToBase64(selectedFile);
       const mimeType = selectedFile.type || 'application/pdf';
 
-      statusText.textContent = '거래처·품목을 인식하고 시트에 등록하는 중이에요...';
+      statusText.textContent = '거래처·품목을 인식해서 구매확인중 시트에 준비하는 중이에요...';
 
       const res = await fetch(ENDPOINT, {
         method: 'POST',
@@ -517,7 +552,7 @@
         throw new Error(data.error || '처리 중 오류가 발생했어요.');
       }
 
-      showResult(data);
+      showReview(data);
     } catch (err) {
       errorBox.textContent = err.message || String(err);
       errorBox.classList.add('show');
@@ -527,10 +562,10 @@
     }
   });
 
-  function showResult(data) {
+  function showReview(data) {
     lastResult = data;
 
-    sheetLink.href = data.sheetGid !== undefined ? (SHEET_URL + '#gid=' + data.sheetGid) : SHEET_URL;
+    reviewSheetLink.href = data.reviewUrl || SHEET_URL;
 
     resultVendor.textContent = data.vendorName;
     if (data.vendorMatched) {
@@ -544,9 +579,9 @@
     const rows = data.rows || [];
     const autoCount = rows.filter(r => r.note && r.note.indexOf('자동등록됨') !== -1).length;
     const missCount = rows.filter(r => !r.itemCode).length;
-    let summary = `${rows.length}개 품목이 구매입력 시트에 등록됐어요.`;
+    let summary = `${rows.length}개 품목이 구매확인중 시트에 준비됐어요. 확인/수정 후 등록해주세요.`;
     if (data.filteredByMonth && data.totalExtracted) {
-      summary = `문서에서 인식된 ${data.totalExtracted}개 품목 중 선택한 월 품목 ${rows.length}개만 구매입력 시트에 등록됐어요.`;
+      summary = `문서에서 인식된 ${data.totalExtracted}개 품목 중 선택한 월 품목 ${rows.length}개가 구매확인중 시트에 준비됐어요.`;
     }
     if (autoCount) summary += ` 신규 자동등록 ${autoCount}건.`;
     if (missCount) summary += ` 미매칭 ${missCount}건.`;
@@ -555,8 +590,31 @@
     renderFlagList(newList, newSection, rows.filter(r => r.note && r.note.indexOf('자동등록됨') !== -1), (r) => `단가 ${Number(r.unitPrice).toLocaleString()}원 · 코드 ${r.itemCode}`);
     renderFlagList(missList, missSection, rows.filter(r => !r.itemCode), (r) => `수량 ${r.qty}${r.spec ? '' : ''}`);
 
-    resultBox.classList.add('show');
+    reviewBox.classList.add('show');
+    if (data.reviewUrl) window.open(data.reviewUrl, '_blank', 'noopener');
   }
+
+  confirmBtn.addEventListener('click', async () => {
+    confirmBtn.disabled = true;
+    confirmStatusBox.classList.add('show');
+    try {
+      const res = await fetch(ENDPOINT, { method: 'POST', body: JSON.stringify({ action: 'purchase_confirm' }) });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || '처리 중 오류가 발생했어요.');
+
+      lastResult = data;
+      reviewBox.classList.remove('show');
+      doneVendorName.textContent = data.vendorName;
+      doneSummary.textContent = `${data.savedCount}개 품목이 구매입력 시트에 등록됐어요.`;
+      sheetLink.href = data.sheetGid !== undefined ? (SHEET_URL + '#gid=' + data.sheetGid) : SHEET_URL;
+      doneBox.classList.add('show');
+    } catch (err) {
+      alert(err.message || String(err));
+    } finally {
+      confirmBtn.disabled = false;
+      confirmStatusBox.classList.remove('show');
+    }
+  });
 
   function renderFlagList(listEl, sectionEl, items, metaFn) {
     listEl.innerHTML = '';

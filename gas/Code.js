@@ -56,6 +56,7 @@
  if (action === 'previewNew') return handlePreviewNew(body);
  if (action === 'confirm') return handleConfirm(body);
  if (action === 'purchase_extract') return handlePurchaseExtract(body);
+ if (action === 'purchase_confirm') return handlePurchaseConfirm();
  if (action === 'create_order') return handleCreateOrder(body);
  if (action === 'delivery_extract') return handleDeliveryExtract(body);
  if (action === 'save_invoice') return handleSaveInvoice(body);

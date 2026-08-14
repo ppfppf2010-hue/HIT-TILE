@@ -15,9 +15,14 @@
  */
 
  const PURCHASE_SHEET = '구매입력';
+ const PURCHASE_REVIEW_SHEET = '구매확인중';
  const DEFAULT_WAREHOUSE = '본사창고'; // 추후 변경될 수 있음
 
- // ---- 매입 문서 업로드 -> 거래처+품목 인식 + 구매입력/품목등록마스터에 자동 등록 ----
+ const PURCHASE_REVIEW_HEADERS = ['일자', '순번', '거래처코드', '거래처명', '담당자', '입고창고', '거래유형', '통화', '환율',
+ '품목코드', '품목명', '규격명', '수량', '단가(vat포함)', '외화금액', '공급가액', '부가세', '적요',
+ '원본품목명(자동,수정금지)', '원본규격(자동,수정금지)'];
+
+ // ---- 매입 문서 업로드 -> 거래처+품목 인식 + "구매확인중" 시트에 미리보기로 채워둠 ----
  function handlePurchaseExtract(body) {
  const fileBase64 = body.fileBase64;
  const mimeType = body.mimeType || 'application/pdf';
@@ -45,7 +50,7 @@
  const finalVendorName = vendorInfo ? vendorInfo.storedName : parsed.vendorName;
 
  const rows = buildPurchaseRows(parsed, finalVendorName, vendorInfo);
- const sheetGid = appendToPurchaseSheet(rows);
+ const reviewUrl = stageForPurchaseReview(rows);
 
  return jsonOut({
  ok: true,
@@ -54,8 +59,78 @@
  rows: rows,
  totalExtracted: totalExtracted,
  filteredByMonth: !!targetMonth,
- sheetGid: sheetGid
+ reviewUrl: reviewUrl
  });
+ }
+
+ // ---- "구매확인중" 탭에 미리보기 기록 (원본 품목명/규격은 숨김열에 보관 -> 확정 시 수정본과 비교해 교정사전에 반영) ----
+ function stageForPurchaseReview(rows) {
+ const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+ let sheet = ss.getSheetByName(PURCHASE_REVIEW_SHEET);
+ if (!sheet) sheet = ss.insertSheet(PURCHASE_REVIEW_SHEET);
+ sheet.clear();
+
+ sheet.appendRow(PURCHASE_REVIEW_HEADERS);
+ rows.forEach(function (r) {
+ sheet.appendRow([
+ r.date, r.seq, r.vendorCode, r.vendorName, r.manager, r.warehouse,
+ r.dealType, r.currency, r.rate, r.itemCode, r.itemName, r.spec,
+ r.qty, r.unitPrice, r.foreignAmount, r.supply, r.vat, r.note,
+ r.itemName, r.spec // 원본값 (수정 여부 비교용, 숨김열)
+ ]);
+ });
+
+ sheet.setFrozenRows(1);
+ try { sheet.autoResizeColumns(1, 18); } catch (e) { /* ignore */ }
+ try { sheet.hideColumns(19, 2); } catch (e) { /* ignore */ }
+ const headerRange = sheet.getRange(1, 1, 1, PURCHASE_REVIEW_HEADERS.length);
+ headerRange.setFontWeight('bold').setBackground('#eef4ff');
+
+ SpreadsheetApp.flush();
+ return ss.getUrl() + '#gid=' + sheet.getSheetId();
+ }
+
+ // ---- "구매확인중" 시트 내용을 그대로 읽어와 "구매입력"에 확정 저장 ----
+ function handlePurchaseConfirm() {
+ const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+ const sheet = ss.getSheetByName(PURCHASE_REVIEW_SHEET);
+ if (!sheet) throw new Error('구매확인중 시트를 찾을 수 없습니다.');
+
+ const data = sheet.getDataRange().getValues();
+ if (data.length <= 1) throw new Error('구매확인중 시트에 저장할 품목이 없습니다. (다 지우신 건 아닌지 확인해주세요)');
+
+ const rows = data.slice(1).filter(function (r) { return String(r[10]).trim() !== ''; });
+ if (!rows.length) throw new Error('구매확인중 시트에 저장할 품목이 없습니다.');
+
+ // 원본(자동인식값) vs 수정본 비교 -> 교정사전에 자동 기록
+ const corrections = [];
+ rows.forEach(function (r) {
+ const editedName = String(r[10] || '').trim();
+ const originalName = String(r[18] || '').trim();
+ if (originalName && editedName && originalName !== editedName) corrections.push([originalName, editedName]);
+ const editedSpec = String(r[11] || '').trim();
+ const originalSpec = String(r[19] || '').trim();
+ if (originalSpec && editedSpec && originalSpec !== editedSpec) corrections.push([originalSpec, editedSpec]);
+ });
+ if (corrections.length) saveCorrections(corrections);
+
+ const finalRows = rows.map(function (r) {
+ return {
+ date: r[0], seq: r[1], vendorCode: r[2], vendorName: r[3], manager: r[4], warehouse: r[5],
+ dealType: r[6], currency: r[7], rate: r[8], itemCode: r[9], itemName: r[10], spec: r[11],
+ qty: r[12], unitPrice: r[13], foreignAmount: r[14], supply: r[15], vat: r[16], note: r[17]
+ };
+ });
+
+ const vendorName = String(rows[0][3] || '').trim();
+ const sheetGid = appendToPurchaseSheet(finalRows);
+
+ // 구매확인중 시트는 헤더만 남기고 비움
+ sheet.clear();
+ sheet.appendRow(PURCHASE_REVIEW_HEADERS);
+ sheet.setFrozenRows(1);
+
+ return jsonOut({ ok: true, vendorName: vendorName, savedCount: finalRows.length, rows: finalRows, sheetGid: sheetGid });
  }
 
  // ---- 품목코드 매칭 + 미매칭 품목 자동 채번/등록 + 공급가액/부가세 계산해서 행 조립 ----
