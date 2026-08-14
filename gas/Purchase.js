@@ -296,10 +296,9 @@
 
  const payload = {
  model: CLAUDE_MODEL,
- max_tokens: 16000,
- // 문서가 크면(거래처원장 등) 모델이 max_tokens 대부분을 보이지 않는 thinking에
- // 써버려서 실제 JSON 출력이 하나도 안 나오는 경우가 있었다(vendorName 인식 실패로 보였음).
- // thinking을 꺼서 max_tokens 전체를 실제 출력에 쓰도록 한다.
+ // 24페이지 7개월치 거래처원장도 thinking을 끄고 32000이면 한 번에 끝까지 추출됨(실측 확인).
+ // 예전엔 16000 + thinking 켜짐 조합이라 큰 문서에서 출력이 잘리거나(비어서) 실패했음.
+ max_tokens: 32000,
  thinking: { type: 'disabled' },
  system: systemPrompt,
  messages: [{
