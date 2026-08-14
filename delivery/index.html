@@ -422,6 +422,15 @@
   }
   @keyframes spin{ to{ transform:rotate(360deg); } }
   .upload-err{ margin-top:8px; font-size:12px; color:var(--err); min-height:14px; }
+  .upload-err.credit-warn{
+    font-weight:700;
+    font-size:13px;
+    color:#8a5a1f;
+    background:#fff4e5;
+    border:1px solid rgba(176,130,79,0.5);
+    border-radius:8px;
+    padding:10px 12px;
+  }
   .manual-link{
     display:block;
     text-align:center;
@@ -970,6 +979,10 @@
     return sec;
   }
 
+  function isCreditError(msg) {
+    return /credit balance is too low|insufficient_quota/i.test(String(msg || ''));
+  }
+
   function fileToBase64(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -1030,6 +1043,7 @@
     async function handleFile(file) {
       if (!file) return;
       err.textContent = '';
+      err.classList.remove('credit-warn');
       drop.style.display = 'none';
       manualBtn.style.display = 'none';
       status.classList.add('show');
@@ -1049,7 +1063,14 @@
         status.classList.remove('show');
         drop.style.display = '';
         manualBtn.style.display = '';
-        err.textContent = e.message || String(e);
+        const msg = e.message || String(e);
+        if (isCreditError(msg)) {
+          err.textContent = '⚠️ Claude API 크레딧이 부족해요. console.anthropic.com에서 충전한 뒤 다시 시도해주세요.';
+          err.classList.add('credit-warn');
+        } else {
+          err.textContent = msg;
+          err.classList.remove('credit-warn');
+        }
       }
     }
 

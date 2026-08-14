@@ -199,6 +199,13 @@
     line-height:1.5;
   }
   .error-box.show{ display:block; }
+  .error-box.credit-warn{
+    background:#fff4e5;
+    border-color:rgba(176,130,79,0.5);
+    color:#8a5a1f;
+    font-weight:700;
+    font-size:14px;
+  }
 
   .again{
     margin-top:16px;
@@ -454,6 +461,7 @@
     submitBtn.disabled = true;
     statusBox.classList.remove('show');
     errorBox.classList.remove('show');
+    errorBox.classList.remove('credit-warn');
     reviewBox.classList.remove('show');
     doneBox.classList.remove('show');
     newSection.classList.remove('show');
@@ -468,6 +476,7 @@
     monthField.classList.add('show');
     submitBtn.disabled = false;
     errorBox.classList.remove('show');
+    errorBox.classList.remove('credit-warn');
     reviewBox.classList.remove('show');
     doneBox.classList.remove('show');
   }
@@ -511,6 +520,10 @@
   againLink.addEventListener('click', resetAll);
   againLinkReview.addEventListener('click', resetAll);
 
+  function isCreditError(msg) {
+    return /credit balance is too low|insufficient_quota/i.test(String(msg || ''));
+  }
+
   function fileToBase64(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -526,6 +539,7 @@
     submitBtn.disabled = true;
     statusBox.classList.add('show');
     errorBox.classList.remove('show');
+    errorBox.classList.remove('credit-warn');
     reviewBox.classList.remove('show');
     doneBox.classList.remove('show');
     statusText.textContent = '문서를 분석하는 중이에요...';
@@ -554,7 +568,14 @@
 
       showReview(data);
     } catch (err) {
-      errorBox.textContent = err.message || String(err);
+      const msg = err.message || String(err);
+      if (isCreditError(msg)) {
+        errorBox.textContent = '⚠️ Claude API 크레딧이 부족해요. console.anthropic.com에서 충전한 뒤 다시 시도해주세요.';
+        errorBox.classList.add('credit-warn');
+      } else {
+        errorBox.textContent = msg;
+        errorBox.classList.remove('credit-warn');
+      }
       errorBox.classList.add('show');
     } finally {
       statusBox.classList.remove('show');
