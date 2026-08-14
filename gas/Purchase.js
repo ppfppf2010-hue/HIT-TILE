@@ -147,7 +147,7 @@
  parsed.items.forEach(function (it) {
  const key = String(it.name || '').trim();
  if (codeMap[key] !== undefined) return;
- const match = findMasterItem(masterData, vendorName, it.name);
+ const match = findMasterItem(masterData, vendorName, it.name, it.price);
  if (match) {
  codeMap[key] = match;
  } else if (missingNames.indexOf(key) === -1) {

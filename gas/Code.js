@@ -311,27 +311,68 @@
  .toUpperCase();
  }
 
- // ---- 품목등록마스터에서 거래처+품목명 매칭 (완전일치 -> 같은 거래처 정규화일치 -> 거래처무관 완전일치 순) ----
- // 교정사전은 "예전에 정확히 이 오타를 본 적 있을 때"만 잡지만, 이건 마스터에 이미 등록된
- // 진짜 품목명과 공백/표기 차이만 나는 처음 보는 오인식도 그 자리에서 바로 잡아준다.
- function findMasterItem(masterData, vendorName, itemName) {
+ // ---- 편집거리(Levenshtein distance): 오타 몇 글자 차이 정도를 재기 위한 헬퍼 ----
+ function levenshteinDistance(a, b) {
+ a = String(a || ''); b = String(b || '');
+ const m = a.length, n = b.length;
+ if (m === 0) return n;
+ if (n === 0) return m;
+ let prevRow = [];
+ for (let j = 0; j <= n; j++) prevRow[j] = j;
+ for (let i = 1; i <= m; i++) {
+ const currRow = [i];
+ for (let j = 1; j <= n; j++) {
+ const cost = a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1;
+ currRow[j] = Math.min(currRow[j - 1] + 1, prevRow[j] + 1, prevRow[j - 1] + cost);
+ }
+ prevRow = currRow;
+ }
+ return prevRow[n];
+ }
+
+ // ---- 품목등록마스터에서 거래처+품목명 매칭 ----
+ // 순서: 완전일치 -> 같은 거래처 정규화(공백/구두점)일치 -> 같은 거래처 오타수준(편집거리) 유사매칭 -> 거래처무관 완전일치
+ // 교정사전은 "예전에 정확히 이 오타를 본 적 있을 때"만 잡지만, 이건 마스터에 이미 등록된 진짜 품목명과
+ // 한두 글자만 다른(예: "천정제(MS)평" vs "천정제(MS)병") 처음 보는 오인식도 그 자리에서 바로 잡아준다.
+ // price가 주어지면, 편집거리가 같은 후보가 여럿일 때 가격이 더 가까운 쪽을 우선한다.
+ function findMasterItem(masterData, vendorName, itemName, price) {
  const targetVendor = normalizeVendorName(vendorName);
  const targetExact = String(itemName || '').trim();
  const targetNorm = normalizeItemName(itemName);
  if (!targetExact) return null;
 
+ const sameVendorRows = [];
  for (let i = 0; i < masterData.length; i++) {
  const row = masterData[i];
- if (normalizeVendorName(String(row[12] || '')) === targetVendor && String(row[1] || '').trim() === targetExact) {
- return { code: row[0], name: row[1], spec: row[3] };
+ if (normalizeVendorName(String(row[12] || '')) === targetVendor) sameVendorRows.push(row);
+ }
+
+ for (let i = 0; i < sameVendorRows.length; i++) {
+ const row = sameVendorRows[i];
+ if (String(row[1] || '').trim() === targetExact) return { code: row[0], name: row[1], spec: row[3] };
+ }
+ for (let i = 0; i < sameVendorRows.length; i++) {
+ const row = sameVendorRows[i];
+ if (normalizeItemName(row[1]) === targetNorm) return { code: row[0], name: row[1], spec: row[3] };
+ }
+
+ // 이름 길이의 20%(최소 1, 최대 4글자)까지만 차이를 허용 -> 진짜 다른 품목(예: "일체형변기" vs "일체형세면기")까지
+ // 잘못 합쳐지는 걸 막는다. 여러 후보가 남으면 편집거리가 가장 가깝고, 같으면 가격이 가장 가까운 쪽을 고른다.
+ const maxDist = Math.max(1, Math.min(4, Math.ceil(targetNorm.length * 0.2)));
+ let best = null, bestDist = Infinity, bestPriceDiff = Infinity;
+ for (let i = 0; i < sameVendorRows.length; i++) {
+ const row = sameVendorRows[i];
+ const rowNorm = normalizeItemName(row[1]);
+ if (!rowNorm) continue;
+ const dist = levenshteinDistance(targetNorm, rowNorm);
+ if (dist > maxDist) continue;
+ const priceDiff = price ? Math.abs((Number(row[4]) || 0) - Number(price)) : 0;
+ if (dist < bestDist || (dist === bestDist && priceDiff < bestPriceDiff)) {
+ best = row; bestDist = dist; bestPriceDiff = priceDiff;
  }
  }
- for (let i = 0; i < masterData.length; i++) {
- const row = masterData[i];
- if (normalizeVendorName(String(row[12] || '')) === targetVendor && normalizeItemName(row[1]) === targetNorm) {
- return { code: row[0], name: row[1], spec: row[3] };
- }
- }
+ if (best) return { code: best[0], name: best[1], spec: best[3] };
+
  for (let i = 0; i < masterData.length; i++) {
  const row = masterData[i];
  if (String(row[1] || '').trim() === targetExact) {
@@ -350,7 +391,7 @@
  const masterData = masterSheet.getDataRange().getValues();
  items.forEach(function (it) {
  if (!it.name) return;
- const match = findMasterItem(masterData, vendorName, it.name);
+ const match = findMasterItem(masterData, vendorName, it.name, it.price);
  if (match) {
  it.name = match.name;
  if (match.spec) it.spec = match.spec;
