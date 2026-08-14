@@ -181,9 +181,17 @@
  const apiKey = PropertiesService.getScriptProperties().getProperty('CLAUDE_API_KEY');
  if (!apiKey) throw new Error('CLAUDE_API_KEY 스크립트 속성이 설정되지 않았습니다.');
 
+ const correctionText = getCorrectionListText();
+ const correctionBlock = correctionText
+ ? ['', '[과거 교정 이력 - 우선 참고]',
+ '아래는 과거에 사람이 직접 오타를 고친 이력입니다. 문서에서 이와 비슷하게 애매하게 보이는 품목명이 나오면, 아래 정정표현을 우선적으로 사용하세요.',
+ correctionText, '']
+ : [''];
+
  const systemPrompt = [
  '당신은 매입 거래명세서(세금계산서, 거래처원장 포함) PDF 또는 이미지에서 거래처명과 매입 품목을 추출하는 도우미입니다.',
- '',
+ ''
+ ].concat(correctionBlock).concat([
  '[거래처명 인식]',
  '- 문서 안에 보통 "공급자:", "공급자명 :", "공급하는자:", "공급처명 :" 같은 라벨과 함께 회사명이 적혀 있습니다. 예: 주식회사 베리굿타일앤스, 주식회사 대명세라믹스.',
  '- "매출처별 거래원장"/"거래처원장" 형식이면 공급자(물건을 판 쪽, 이 문서를 발행한 회사)가 발행한 것이라, 문서 상단에 "거래처명 :"이라는 라벨이 있어도 그건 그 공급자 입장에서의 고객(=히트타일)을 가리키는 것입니다. 절대 vendorName으로 쓰지 마세요. 대신 "공급자명 :"/"공급처명 :" 라벨 옆의 회사명을 vendorName으로 쓰세요.',
@@ -200,7 +208,7 @@
  '8. 반품/취소 행은 별도 품목이 아니라 원래 품목의 수량을 마이너스로 처리한 것입니다. 문서의 수량(qty) 컬럼에 마이너스가 적혀 있으면 그대로 마이너스로 추출하세요. 수량은 양수인데 금액(공급가액/합계금액) 컬럼만 마이너스라면, 그 경우엔 qty에도 마이너스 부호를 붙여서 추출하세요.',
  '9. 아래 JSON 형식으로만 출력하세요. 다른 설명이나 코드블록 표시 없이 순수 JSON 객체 하나만 출력합니다.',
  '{"vendorName":"거래처 상호명","docDate":"YYYY-MM-DD","items":[{"name":"품목명","spec":"규격(없으면 빈 문자열)","unit":"단위","qty":숫자,"price":단가숫,"date":"YYYY-MM-DD(해당 품목 행의 실제 날짜, 문서 전체가 한 날짜뿐이면 생략 가능)"}]}'
- ].join('\n');
+ ]).join('\n');
 
  const contentBlock = mimeType === 'application/pdf'
  ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: fileBase64 } }
@@ -240,7 +248,9 @@
  jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
 
  try {
- return JSON.parse(jsonText);
+ const parsed = JSON.parse(jsonText);
+ applyCorrectionDictionary(parsed.items);
+ return parsed;
  } catch (e) {
  throw new Error('Claude가 이 문서에서 매입 정보를 추출하지 못했습니다: ' + jsonText.slice(0, 300));
  }

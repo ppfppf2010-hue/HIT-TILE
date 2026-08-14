@@ -267,6 +267,41 @@
  return lines.join('\n');
  }
 
+ // ---- 교정사전을 {오인식표현: 정정표현} 맵으로 반환 (품목등록/구매등록/배송관리 공용) ----
+ function getCorrectionMap() {
+ const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+ const sheet = ss.getSheetByName(CORRECTION_SHEET);
+ const map = {};
+ if (!sheet) return map;
+ const data = sheet.getDataRange().getValues();
+ for (let i = 1; i < data.length; i++) {
+ const wrong = String(data[i][0] || '').trim();
+ const right = String(data[i][1] || '').trim();
+ if (wrong && right) map[wrong] = right;
+ }
+ return map;
+ }
+
+ // ---- Claude가 추출한 품목명/규격에 교정사전을 결정적으로 적용 ----
+ // 프롬프트에 교정 이력을 알려줘도 Claude가 항상 그대로 따르진 않으므로,
+ // 정확히 일치하는 과거 오인식 표현은 이 단계에서 무조건 치환해 신뢰도를 보장한다.
+ function applyCorrectionDictionary(items) {
+ if (!items || !items.length) return items;
+ const map = getCorrectionMap();
+ if (!Object.keys(map).length) return items;
+ items.forEach(function (it) {
+ if (it.name) {
+ const key = String(it.name).trim();
+ if (map[key]) it.name = map[key];
+ }
+ if (it.spec) {
+ const key = String(it.spec).trim();
+ if (map[key]) it.spec = map[key];
+ }
+ });
+ return items;
+ }
+
  // ==== 관리자용: 테스트로 쌓인 중복 품목 정리 ====
  // 기준: 품목코드가 아니라 (품목명 + 규격 + 단위 + 거래처명)이 같으면 중복으로 간주.
  // Apps Script 편집기에서 이 함수를 선택하고 [Run] 버튼으로 한 번 실행하면 됩니다.
@@ -492,7 +527,9 @@
  jsonText = jsonText.substring(firstBrace, lastBrace + 1);
 
  try {
- return JSON.parse(jsonText);
+ const parsed = JSON.parse(jsonText);
+ applyCorrectionDictionary(parsed.items);
+ return parsed;
  } catch (e) {
  if (!isRetry) {
  // JSON이 깨졌을 때 한 번만 자동으로 다시 시도

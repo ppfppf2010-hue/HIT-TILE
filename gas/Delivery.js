@@ -132,16 +132,24 @@ function extractDeliveryItemsWithClaude(fileBase64, mimeType) {
 const apiKey = PropertiesService.getScriptProperties().getProperty('CLAUDE_API_KEY');
 if (!apiKey) throw new Error('CLAUDE_API_KEY 스크립트 속성이 설정되지 않았습니다.');
 
+const correctionText = getCorrectionListText();
+const correctionBlock = correctionText
+? ['', '[과거 교정 이력 - 우선 참고]',
+   '아래는 과거에 사람이 직접 오타를 고친 이력입니다. 사진에서 이와 비슷하게 애매하게 보이는 품목명이 나오면, 아래 정정표현을 우선적으로 사용하세요.',
+   correctionText, '']
+: [''];
+
 const systemPrompt = [
 '당신은 타일/욕실자재 배송 전표(거래명세서, 납품서, 현장 메모 사진 등)에서 배송 품목을 추출하는 도우미입니다.',
-'',
+''
+].concat(correctionBlock).concat([
 '[품목 추출 규칙]',
 '1. 품목명과 수량이 적힌 행만 실제 배송 품목으로 추출합니다. 규격(사이즈)이나 단가는 보이면 함께 추출하고, 안 보이면 비워둡니다.',
 '2. 합계, 소계, 부가세, 이월, 배송비, 메모성 문구 등은 품목이 아니므로 제외합니다.',
 '3. 같은 품목이 여러 번 적혀 있으면 하나로 합쳐서 수량을 더합니다.',
 '4. 아래 JSON 형식으로만 출력하세요. 다른 설명이나 코드블록 표시 없이 순수 JSON 객체 하나만 출력합니다.',
 '{"items":[{"name":"품목명","spec":"규격(없으면 빈 문자열)","qty":숫자,"price":단가숫자(모르면 0)}]}'
-].join('\n');
+]).join('\n');
 
 const contentBlock = mimeType === 'application/pdf'
 ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: fileBase64 } }
@@ -176,7 +184,9 @@ let jsonText = textBlock ? textBlock.text : '{}';
 jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
 
 try {
-return JSON.parse(jsonText);
+const parsed = JSON.parse(jsonText);
+applyCorrectionDictionary(parsed.items);
+return parsed;
 } catch (e) {
 throw new Error('Claude가 이 사진에서 품목을 추출하지 못했습니다: ' + jsonText.slice(0, 300));
 }
