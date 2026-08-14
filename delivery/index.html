@@ -31,6 +31,21 @@
   }
   header h1{ margin:0 0 6px; font-size:22px; }
   header p{ margin:0; color:var(--muted); font-size:13px; }
+  .cal-sync-row{ display:flex; align-items:center; gap:10px; margin-top:12px; flex-wrap:wrap; }
+  .cal-sync-btn{
+    font-family:inherit;
+    font-size:12px;
+    font-weight:600;
+    padding:7px 12px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:var(--card);
+    color:var(--ink);
+    cursor:pointer;
+  }
+  .cal-sync-btn:hover{ border-color:var(--brass); color:var(--brass-deep); }
+  .cal-sync-btn:disabled{ opacity:0.6; cursor:default; }
+  .cal-sync-status{ font-size:11.5px; color:var(--muted); }
 
   main{ max-width:640px; margin:0 auto; padding:24px 6vw 0; }
 
@@ -505,6 +520,10 @@
 <header>
   <h1>히트타일 배송관리</h1>
   <p>날짜별 배송 건을 등록하고 전표 · 입금 · 배송 · 반품을 한 화면에서 처리해요.</p>
+  <div class="cal-sync-row">
+    <button type="button" id="calSyncBtn" class="cal-sync-btn">📅 캘린더에서 배송일정 가져오기</button>
+    <span class="cal-sync-status" id="calSyncStatus"></span>
+  </div>
 </header>
 
 <main>
@@ -589,6 +608,25 @@
   const fSubmit = document.getElementById('fSubmit');
   const fCancel = document.getElementById('fCancel');
   const fMsg = document.getElementById('fMsg');
+  const calSyncBtn = document.getElementById('calSyncBtn');
+  const calSyncStatus = document.getElementById('calSyncStatus');
+
+  async function syncCalendarDeliveries(silent) {
+    calSyncBtn.disabled = true;
+    if (!silent) calSyncStatus.textContent = '동기화 중...';
+    try {
+      const res = await fetch(ENDPOINT, { method: 'POST', body: JSON.stringify({ action: 'sync_calendar_deliveries' }) });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || '동기화하지 못했어요.');
+      calSyncStatus.textContent = data.created > 0 ? '새 배송일정 ' + data.created + '건 가져왔어요.' : '새로 가져올 일정이 없어요.';
+      if (data.created > 0) await Promise.all([loadDayOrders(), loadMonthCounts()]);
+    } catch (err) {
+      calSyncStatus.textContent = err.message || String(err);
+    } finally {
+      calSyncBtn.disabled = false;
+    }
+  }
+  calSyncBtn.addEventListener('click', () => syncCalendarDeliveries(false));
 
   async function loadVendorNames() {
     try {
@@ -1615,6 +1653,7 @@
   loadVendorNames();
   loadMonthCounts();
   loadDayOrders();
+  syncCalendarDeliveries(true);
 </script>
 
 </body>

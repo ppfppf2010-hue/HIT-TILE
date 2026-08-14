@@ -1,6 +1,8 @@
 const ORDER_SHEET = '배송일정';
 const ORDER_ITEM_SHEET = '배송품목';
 const BANK_INFO = '국민은행 676301-04-294382 (예금주 이용광)';
+const CALENDAR_NAME_DELIVERY = '히트타일 배송일정';
+const CALENDAR_NAME_RETURN = '히트타일 반품일정';
 
 // ---- 배송일정/배송품목 탭 최초 1회 세팅 (Run 버튼으로 직접 실행) ----
 function setupDeliverySheets() {
@@ -53,6 +55,66 @@ function ensureReturnScheduleHeader(orderSheet) {
 if (orderSheet.getRange(1, 15).getValue() !== '반품일정') {
 orderSheet.getRange(1, 15).setValue('반품일정');
 }
+}
+
+// ---- 반품캘린더이벤트ID 열이 아직 없으면 헤더 채워둠 (반품일정을 구글캘린더 이벤트와 연결해두는 열) ----
+function ensureReturnCalendarEventIdHeader(orderSheet) {
+if (orderSheet.getRange(1, 16).getValue() !== '반품캘린더이벤트ID') {
+orderSheet.getRange(1, 16).setValue('반품캘린더이벤트ID');
+}
+}
+
+// ---- 이름으로 캘린더 조회, 없으면 새로 생성 ----
+function getOrCreateCalendar(name) {
+const cals = CalendarApp.getCalendarsByName(name);
+if (cals && cals.length) return cals[0];
+return CalendarApp.createCalendar(name);
+}
+
+// ---- "히트타일 배송일정" 캘린더에 등록된 일정을 배송관리 주문으로 가져옴 ----
+// 이벤트 제목 = 업체명, 설명 첫 줄(있으면) = 현장명. 이미 가져온 이벤트는 태그를 남겨서 다시 돌려도 중복 생성되지 않는다.
+function syncDeliveryFromCalendar() {
+const calendar = getOrCreateCalendar(CALENDAR_NAME_DELIVERY);
+const start = new Date();
+start.setDate(start.getDate() - 3);
+const end = new Date();
+end.setDate(end.getDate() + 45);
+
+const events = calendar.getEvents(start, end);
+const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+const orderSheet = ss.getSheetByName(ORDER_SHEET);
+
+let createdCount = 0;
+events.forEach(function (event) {
+if (event.getTag('hitTileOrderId')) return; // 이미 가져온 일정은 건너뜀
+
+const vendorName = String(event.getTitle() || '').trim();
+if (!vendorName) return;
+
+const desc = String(event.getDescription() || '').trim();
+const siteName = desc ? desc.split('\n')[0].trim() : '';
+
+const dateStr = Utilities.formatDate(event.getStartTime(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+
+const data = orderSheet.getDataRange().getValues();
+let countToday = 0;
+for (let i = 1; i < data.length; i++) {
+if (toDateStr(data[i][1]) === dateStr) countToday++;
+}
+const orderId = dateStr.replace(/-/g, '') + '-' + (countToday + 1);
+
+orderSheet.appendRow([orderId, dateStr, vendorName, '', siteName, 'N', 0, 0, 0, '', '', '대기', 'N', new Date()]);
+event.setTag('hitTileOrderId', orderId);
+createdCount++;
+});
+
+return { created: createdCount };
+}
+
+// ---- (프론트에서 호출) 배송관리 페이지 로드 시 캘린더 동기화 ----
+function handleSyncCalendarDeliveries() {
+const result = syncDeliveryFromCalendar();
+return jsonOut({ ok: true, created: result.created });
 }
 
 // ---- 특정 날짜의 주문 목록 + 각 주문의 품목 조회 ----
@@ -176,9 +238,8 @@ const contentBlock = mimeType === 'application/pdf'
 
 const payload = {
 model: CLAUDE_MODEL,
-max_tokens: 4000,
-// 모델이 max_tokens를 보이지 않는 thinking에 다 써버려서 실제 출력이
-// 하나도 안 나오는 경우가 있어(다른 추출 API에서 발견) thinking을 끈다.
+// thinking을 끄고 여유 있게 잡아서 큰 전표에서도 출력이 안 잘리게 함(Purchase.js에서 실측 확인한 패턴).
+max_tokens: 8000,
 thinking: { type: 'disabled' },
 system: systemPrompt,
 messages: [{
@@ -405,7 +466,8 @@ orderSheet.deleteRow(rowIdx);
 return jsonOut({ ok: true, orderId: orderId });
 }
 
-// ---- 반품일정 설정: 배송완료된 건에 반품 예정일을 올려두면 배송기사 앱에서 반품 체크가 열림 ----
+// ---- 반품일정 설정: 배송완료된 건에 반품 예정일을 올려두면 배송기사 앱에서 반품 체크가 열리고,
+// "히트타일 반품일정" 구글캘린더에도 같은 날짜로 이벤트가 생성/갱신된다. 날짜를 지우면 이벤트도 삭제. ----
 function handleSaveReturnSchedule(body) {
 const orderId = body.orderId;
 const date = String(body.date || '').trim();
@@ -414,10 +476,44 @@ if (!orderId) throw new Error('orderId가 없습니다.');
 const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 const orderSheet = ss.getSheetByName(ORDER_SHEET);
 ensureReturnScheduleHeader(orderSheet);
+ensureReturnCalendarEventIdHeader(orderSheet);
 const rowIdx = findOrderRowIndex(orderSheet, orderId);
 if (rowIdx === -1) throw new Error('해당 주문을 찾을 수 없습니다.');
 
 orderSheet.getRange(rowIdx, 15).setValue(date);
+
+const vendorName = String(orderSheet.getRange(rowIdx, 3).getValue() || '').trim();
+const siteName = String(orderSheet.getRange(rowIdx, 5).getValue() || '').trim();
+const existingEventId = String(orderSheet.getRange(rowIdx, 16).getValue() || '').trim();
+const calendar = getOrCreateCalendar(CALENDAR_NAME_RETURN);
+
+if (!date) {
+if (existingEventId) {
+try {
+const ev = calendar.getEventById(existingEventId);
+if (ev) ev.deleteEvent();
+} catch (e) { /* 이미 지워졌으면 무시 */ }
+orderSheet.getRange(rowIdx, 16).setValue('');
+}
+return jsonOut({ ok: true, orderId: orderId, returnScheduleDate: '' });
+}
+
+const title = vendorName + ' 반품' + (siteName ? ' · ' + siteName : '');
+const parts = date.split('-').map(Number);
+const eventDate = new Date(parts[0], parts[1] - 1, parts[2]);
+
+let event = null;
+if (existingEventId) {
+try { event = calendar.getEventById(existingEventId); } catch (e) { event = null; }
+}
+if (event) {
+event.setTitle(title);
+event.setAllDayDate(eventDate);
+} else {
+event = calendar.createAllDayEvent(title, eventDate);
+orderSheet.getRange(rowIdx, 16).setValue(event.getId());
+}
+
 return jsonOut({ ok: true, orderId: orderId, returnScheduleDate: date });
 }
 

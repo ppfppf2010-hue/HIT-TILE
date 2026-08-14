@@ -64,6 +64,7 @@
  if (action === 'save_delivery') return handleSaveDelivery(body);
  if (action === 'save_return') return handleSaveReturn(body);
  if (action === 'save_return_schedule') return handleSaveReturnSchedule(body);
+ if (action === 'sync_calendar_deliveries') return handleSyncCalendarDeliveries();
  if (action === 'delete_order') return handleDeleteOrder(body);
  if (action === 'save_balances') return handleSaveBalances(body);
  throw new Error('알 수 없는 action: ' + action);
@@ -699,9 +700,8 @@
 
  const payload = {
  model: CLAUDE_MODEL,
- max_tokens: 16000,
- // 문서가 크면 모델이 max_tokens 대부분을 보이지 않는 thinking에 써버려서
- // 실제 JSON 출력이 하나도 안 나오는 경우가 있어(거래처명 인식 실패로 보임) thinking을 끈다.
+ // thinking을 끄고 32000이면 큰 문서(24페이지급)도 한 번에 끝까지 추출됨(Purchase.js에서 실측 확인).
+ max_tokens: 32000,
  thinking: { type: 'disabled' },
  system: systemPrompt,
  messages: [{ role: 'user', content: [contentBlock, { type: 'text', text: '이 문서에서 거래처명과 품목을 규칙대로 추출해서 JSON 객체만 출력해줘.' }] }]
