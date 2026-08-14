@@ -18,6 +18,14 @@
  const PURCHASE_REVIEW_SHEET = '구매확인중';
  const DEFAULT_WAREHOUSE = '본사창고'; // 추후 변경될 수 있음
 
+ // Ecount 웹자료올리기 일자 입력 형식(YYYYMMDD, 하이픈 없는 8자리)에 맞춘다.
+ // 하이픈 섞인 문자열("2026-07-08")을 그대로 올리면 Ecount 쪽에서 Date로 잘못 파싱해
+ // 타임존이 꼬인 ISO 타임스탬프로 표시되는 문제가 있었다.
+ function normalizeDateYyyyMmDd(s) {
+ const digits = String(s || '').replace(/\D/g, '');
+ return digits.length === 8 ? digits : '';
+ }
+
  const PURCHASE_REVIEW_HEADERS = ['일자', '순번', '거래처코드', '거래처명', '담당자', '입고창고', '거래유형', '통화', '환율',
  '품목코드', '품목명', '규격명', '수량', '단가(vat포함)', '외화금액', '공급가액', '부가세', '적요',
  '원본품목명(자동,수정금지)', '원본규격(자동,수정금지)'];
@@ -138,8 +146,8 @@
  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
  const masterSheet = ss.getSheetByName(MASTER_SHEET);
  const masterData = masterSheet.getDataRange().getValues();
- const today = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd');
- const docDate = parsed.docDate || today;
+ const today = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyyMMdd');
+ const docDate = normalizeDateYyyyMmDd(parsed.docDate) || today;
 
  const codeMap = {};
  const missingNames = [];
@@ -194,7 +202,7 @@
  const vat = Math.round(unitPrice * qty) - supply;
 
  return {
- date: (it.date || docDate),
+ date: normalizeDateYyyyMmDd(it.date) || docDate,
  seq: i + 1,
  vendorCode: '',
  vendorName: vendorName,
