@@ -91,14 +91,19 @@
  const vendorInfo = findVendor(parsed.vendorName);
 
  if (vendorInfo) {
+ // 이미 마스터에 있는 품목(이름/규격이 같거나 오타 수준으로 비슷한 것 포함)은 다시 등록하지 않고 걸러낸다.
+ const dedup = dedupeAgainstMaster(parsed.items, vendorInfo.storedName);
+ if (!dedup.newItems.length) {
+ return jsonOut({ ok: true, isNewVendor: false, vendorName: vendorInfo.storedName, count: 0, allExisting: true, skippedCount: dedup.skipped.length, skipped: dedup.skipped });
+ }
  // 같은 접두어를 쓰는 다른 거래처명 행(예: 같은 회사의 다른 사업자)이 더 앞서있을 수 있으므로
  // 그 접두어 전체의 최대번호와 비교해서 더 큰 쪽을 시작번호로 사용한다.
  const sharedMax = getMaxLastUsedForPrefix(vendorInfo.prefix);
  const startNumber = Math.max(vendorInfo.lastUsed, sharedMax) + 1;
  // 시트에 저장된 원래 표기(storedName)를 사용해서 이후 저장되는 거래처명 표기를 통일시킨다.
- const previewRows = assignCodesAndPrices(parsed.items, vendorInfo.prefix, startNumber);
+ const previewRows = assignCodesAndPrices(dedup.newItems, vendorInfo.prefix, startNumber);
  const reviewUrl = stageForReview(vendorInfo.storedName, previewRows);
- return jsonOut({ ok: true, isNewVendor: false, vendorName: vendorInfo.storedName, reviewUrl: reviewUrl, count: previewRows.length });
+ return jsonOut({ ok: true, isNewVendor: false, vendorName: vendorInfo.storedName, reviewUrl: reviewUrl, count: previewRows.length, skippedCount: dedup.skipped.length, skipped: dedup.skipped });
  }
 
  const suggestedPrefix = matchPrefix(parsed.vendorName);
@@ -109,6 +114,31 @@
  suggestedPrefix: suggestedPrefix || '',
  rawItems: parsed.items
  });
+ }
+
+ // ---- 추출된 품목 중 이미 마스터에 등록된 것과, 같은 문서 안에서 중복 언급된 것을 걸러낸다 ----
+ function dedupeAgainstMaster(items, vendorName) {
+ const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+ const masterSheet = ss.getSheetByName(MASTER_SHEET);
+ const masterData = masterSheet ? masterSheet.getDataRange().getValues() : [];
+ const newItems = [];
+ const skipped = [];
+ const seenInBatch = {};
+ items.forEach(function (it) {
+ const match = findMasterItem(masterData, vendorName, it.name, it.price);
+ if (match) {
+ skipped.push({ name: it.name, matchedCode: match.code, matchedName: match.name, reason: '이미 등록됨' });
+ return;
+ }
+ const batchKey = normalizeItemName(tileCoreName(it.name)) + '|||' + normalizeItemName(it.spec || '');
+ if (seenInBatch[batchKey]) {
+ skipped.push({ name: it.name, matchedCode: '', matchedName: it.name, reason: '같은 문서 내 중복' });
+ return;
+ }
+ seenInBatch[batchKey] = true;
+ newItems.push(it);
+ });
+ return { newItems: newItems, skipped: skipped };
  }
 
  // ---- 2) 신규 거래처: 접두어 확정 -> 검토중 시트에 씀 ----
@@ -125,14 +155,19 @@
  const finalVendorName = existing ? existing.storedName : vendorName;
  const finalPrefix = existing ? existing.prefix : prefix;
 
+ const dedup = dedupeAgainstMaster(rawItems, finalVendorName);
+ if (!dedup.newItems.length) {
+ return jsonOut({ ok: true, count: 0, allExisting: true, skippedCount: dedup.skipped.length, skipped: dedup.skipped });
+ }
+
  // 거래처명은 처음 보더라도, 같은 코드 접두어(예: HIK)를 이미 다른 거래처명(다른 사업자)이
  // 쓰고 있다면 그 접두어의 최대번호 다음부터 이어간다. (한 회사가 사업자 2개로 나뉜 경우 대응)
  const sharedMax = getMaxLastUsedForPrefix(finalPrefix);
  const startNumber = Math.max(existing ? existing.lastUsed : 0, sharedMax) + 1;
 
- const previewRows = assignCodesAndPrices(rawItems, finalPrefix, startNumber);
+ const previewRows = assignCodesAndPrices(dedup.newItems, finalPrefix, startNumber);
  const reviewUrl = stageForReview(finalVendorName, previewRows);
- return jsonOut({ ok: true, count: previewRows.length, reviewUrl: reviewUrl });
+ return jsonOut({ ok: true, count: previewRows.length, reviewUrl: reviewUrl, skippedCount: dedup.skipped.length, skipped: dedup.skipped });
  }
 
  // ---- '검토중' 탭에 미리보기 기록 ----
