@@ -728,10 +728,10 @@
  const outPrice = Math.round((inPrice * 1.5) / 100) * 100;
  return {
  code: code, name: it.name, specType: it.spec ? '사이즈' : '', spec: it.spec || '',
- inPrice: inPrice, inVat: 'Y', unit: it.unit,
+ inPrice: inPrice, inVat: 1, unit: it.unit,
  category: it.unit === 'SET' ? 'SET상품' : '자재',
- isSet: it.unit === 'SET' ? 'Y' : 'N', stockMgmt: 'Y',
- outPrice: outPrice, outVat: 'Y'
+ isSet: it.unit === 'SET' ? 'Y' : 'N', stockMgmt: 1,
+ outPrice: outPrice, outVat: 1
  };
  });
  }
