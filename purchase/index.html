@@ -307,6 +307,25 @@
     color:var(--muted);
     line-height:1.6;
   }
+
+  button.camera-btn{
+    margin-top:10px;
+    width:100%;
+    padding:12px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--card);
+    color:var(--ink);
+    font-size:14px;
+    font-weight:600;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  button.camera-btn:hover{ border-color:var(--brass); background:#f2f5ff; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -327,6 +346,9 @@
       <p>PDF, JPG, PNG 지원</p>
       <input type="file" id="fileInput" accept="application/pdf,image/*">
     </div>
+
+    <button type="button" class="camera-btn" id="cameraBtn">📷 사진으로 촬영해서 올리기</button>
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
 
     <div class="file-chip" id="fileChip">
       <span class="name" id="fileName"></span>
@@ -421,6 +443,8 @@
 
   const dropZone = document.getElementById('dropZone');
   const fileInput = document.getElementById('fileInput');
+  const cameraBtn = document.getElementById('cameraBtn');
+  const cameraInput = document.getElementById('cameraInput');
   const fileChip = document.getElementById('fileChip');
   const fileName = document.getElementById('fileName');
   const fileClear = document.getElementById('fileClear');
@@ -483,6 +507,12 @@
 
   dropZone.addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', (e) => pickFile(e.target.files[0]));
+
+  cameraBtn.addEventListener('click', () => cameraInput.click());
+  cameraInput.addEventListener('change', (e) => {
+    pickFile(e.target.files[0]);
+    cameraInput.value = '';
+  });
 
   ['dragenter', 'dragover'].forEach(evt => {
     dropZone.addEventListener(evt, (e) => {
