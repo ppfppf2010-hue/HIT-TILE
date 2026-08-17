@@ -46,8 +46,16 @@ invoiceRegistered: row[5] === 'Y', totalAmount: Number(row[6]) || 0,
 balanceBefore: Number(row[7]) || 0, balanceAfter: Number(row[8]) || 0,
 paymentStatus: row[9] || '', paymentMemo: row[10] || '',
 deliveryStatus: row[11] || '대기', returned: row[12] === 'Y', createdAt: row[13],
-returnScheduleDate: toDateStr(row[14])
+returnScheduleDate: toDateStr(row[14]),
+password: row[16] || ''
 };
+}
+
+// ---- 비밀번호(출입/현관) 열이 아직 없으면 헤더 채워둠 ----
+function ensurePasswordHeader(orderSheet) {
+if (orderSheet.getRange(1, 17).getValue() !== '비밀번호') {
+orderSheet.getRange(1, 17).setValue('비밀번호');
+}
 }
 
 // ---- 반품일정 열이 아직 없으면 헤더 채워둠 ----
@@ -164,12 +172,13 @@ counts[d] = (counts[d] || 0) + 1;
 return { ok: true, month: monthStr, counts: counts };
 }
 
-// ---- 신규 배송 건 생성 (업체명/현장명/날짜) ----
+// ---- 신규 배송 건 생성 (업체명/현장명/날짜/비밀번호) ----
 function handleCreateOrder(body) {
 const date = String(body.date || '').trim();
 const vendorName = String(body.vendorName || '').trim();
 const siteName = String(body.siteName || '').trim();
 const phone = String(body.phone || '').trim();
+const password = String(body.password || '').trim();
 if (!date || !vendorName) throw new Error('날짜와 업체명은 필수입니다.');
 
 const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -182,7 +191,28 @@ if (toDateStr(data[i][1]) === date) countToday++;
 const orderId = date.replace(/-/g, '') + '-' + (countToday + 1);
 
 orderSheet.appendRow([orderId, date, vendorName, phone, siteName, 'N', 0, 0, 0, '', '', '대기', 'N', new Date()]);
+if (password) {
+ensurePasswordHeader(orderSheet);
+const rowIdx = findOrderRowIndex(orderSheet, orderId);
+orderSheet.getRange(rowIdx, 17).setValue(password);
+}
 return jsonOut({ ok: true, orderId: orderId });
+}
+
+// ---- 출입/현관 비밀번호 저장 ----
+function handleSavePassword(body) {
+const orderId = body.orderId;
+const password = String(body.password || '').trim();
+if (!orderId) throw new Error('orderId가 없습니다.');
+
+const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+const orderSheet = ss.getSheetByName(ORDER_SHEET);
+ensurePasswordHeader(orderSheet);
+const rowIdx = findOrderRowIndex(orderSheet, orderId);
+if (rowIdx === -1) throw new Error('해당 주문을 찾을 수 없습니다.');
+
+orderSheet.getRange(rowIdx, 17).setValue(password);
+return jsonOut({ ok: true, orderId: orderId, password: password });
 }
 
 // ---- 전표 사진 업로드 -> Claude로 품목(품목명/규격/수량/단가) 추출 ----

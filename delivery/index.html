@@ -563,6 +563,10 @@
       <label for="fPhone">연락처</label>
       <input type="text" id="fPhone" placeholder="010-0000-0000">
     </div>
+    <div class="field">
+      <label for="fPassword">현관/출입 비밀번호</label>
+      <input type="text" id="fPassword" placeholder="예: 1234#">
+    </div>
     <div class="form-actions">
       <button class="btn-primary" id="fSubmit" type="button">등록</button>
       <button class="btn-ghost" id="fCancel" type="button">취소</button>
@@ -605,6 +609,7 @@
   const fVendor = document.getElementById('fVendor');
   const fSite = document.getElementById('fSite');
   const fPhone = document.getElementById('fPhone');
+  const fPassword = document.getElementById('fPassword');
   const fSubmit = document.getElementById('fSubmit');
   const fCancel = document.getElementById('fCancel');
   const fMsg = document.getElementById('fMsg');
@@ -753,7 +758,7 @@
   });
   fCancel.addEventListener('click', () => {
     newForm.classList.remove('show');
-    fVendor.value = ''; fSite.value = ''; fPhone.value = '';
+    fVendor.value = ''; fSite.value = ''; fPhone.value = ''; fPassword.value = '';
     fMsg.textContent = '';
   });
 
@@ -770,12 +775,13 @@
           date: selectedDate,
           vendorName: vendorName,
           siteName: fSite.value.trim(),
-          phone: fPhone.value.trim()
+          phone: fPhone.value.trim(),
+          password: fPassword.value.trim()
         })
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || '등록하지 못했어요.');
-      fVendor.value = ''; fSite.value = ''; fPhone.value = '';
+      fVendor.value = ''; fSite.value = ''; fPhone.value = ''; fPassword.value = '';
       newForm.classList.remove('show');
       await Promise.all([loadDayOrders(), loadMonthCounts()]);
     } catch (err) {
@@ -980,9 +986,9 @@
         returns: {}
       };
       order.items.forEach((it) => {
-        let prefill = it.qty;
+        // 처음 보는 품목은 아직 아무것도 전달 안 한 상태(0)로 시작 - 탭해서 체크해야 함.
+        let prefill = 0;
         if (it.deliveredQty !== null && it.deliveredQty !== undefined) prefill = it.deliveredQty;
-        else if (it.deliveryStatus === '누락') prefill = 0;
         orderDrafts[order.orderId].deliveries[it.name] = prefill;
         orderDrafts[order.orderId].returns[it.name] = it.returnQty || 0;
       });
@@ -993,6 +999,7 @@
   function buildOrderDetail(container, order) {
     const draft = getDraft(order);
 
+    container.appendChild(buildPasswordSection(order));
     container.appendChild(buildInvoiceSection(order, draft));
     if (order.invoiceRegistered) {
       container.appendChild(buildPaymentSection(order, draft));
@@ -1004,6 +1011,67 @@
         container.appendChild(buildReturnSection(order, draft));
       }
     }
+  }
+
+  function buildPasswordSection(order) {
+    const sec = document.createElement('div');
+    sec.className = 'detail-section';
+    const h3 = document.createElement('h3');
+    h3.textContent = '현관/출입 비밀번호';
+    sec.appendChild(h3);
+
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.gap = '8px';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = order.password || '';
+    input.placeholder = '예: 1234#';
+    input.style.flex = '1';
+    input.style.padding = '9px 11px';
+    input.style.border = '1px solid var(--line)';
+    input.style.borderRadius = '8px';
+    input.style.fontSize = '13px';
+    input.style.fontFamily = 'inherit';
+    input.style.background = 'var(--card)';
+    input.style.color = 'var(--ink)';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn-primary';
+    saveBtn.textContent = '저장';
+
+    const msg = document.createElement('div');
+    msg.className = 'section-msg';
+
+    saveBtn.addEventListener('click', async () => {
+      saveBtn.disabled = true;
+      msg.textContent = '저장 중...';
+      msg.className = 'section-msg';
+      try {
+        const res = await fetch(ENDPOINT, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'save_password', orderId: order.orderId, password: input.value.trim() })
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || '저장하지 못했어요.');
+        msg.textContent = '저장됐어요. 배송기사 앱에서 확인할 수 있어요.';
+        msg.className = 'section-msg ok';
+        await loadDayOrders();
+      } catch (err) {
+        msg.textContent = err.message || String(err);
+        msg.className = 'section-msg err';
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+
+    row.appendChild(input);
+    row.appendChild(saveBtn);
+    sec.appendChild(row);
+    sec.appendChild(msg);
+    return sec;
   }
 
   function buildReturnScheduleSection(order) {

@@ -518,6 +518,12 @@
       phoneEl.textContent = order.phone;
       info.appendChild(phoneEl);
     }
+    if (order.password) {
+      const pwEl = document.createElement('div');
+      pwEl.className = 'phone';
+      pwEl.textContent = '🔑 ' + order.password;
+      info.appendChild(pwEl);
+    }
     body.appendChild(info);
     summary.appendChild(body);
 
@@ -716,9 +722,10 @@
     if (!checkDrafts[order.orderId]) {
       const deliveries = {};
       order.items.forEach((it) => {
-        let prefill = it.qty;
+        // 처음 보는 품목은 아직 아무것도 전달 안 한 상태(0)로 시작 - 배송기사가 직접 탭해서 체크해야 함.
+        // 이전에 실제로 저장된 배송수량(deliveredQty)이 있으면 그 값을 그대로 이어서 보여준다.
+        let prefill = 0;
         if (it.deliveredQty !== null && it.deliveredQty !== undefined) prefill = it.deliveredQty;
-        else if (it.deliveryStatus === '누락') prefill = 0;
         deliveries[it.name] = prefill;
       });
       checkDrafts[order.orderId] = deliveries;

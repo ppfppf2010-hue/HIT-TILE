@@ -64,6 +64,7 @@
  if (action === 'save_delivery') return handleSaveDelivery(body);
  if (action === 'save_return') return handleSaveReturn(body);
  if (action === 'save_return_schedule') return handleSaveReturnSchedule(body);
+ if (action === 'save_password') return handleSavePassword(body);
  if (action === 'sync_calendar_deliveries') return handleSyncCalendarDeliveries();
  if (action === 'delete_order') return handleDeleteOrder(body);
  if (action === 'save_balances') return handleSaveBalances(body);
