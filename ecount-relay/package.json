@@ -1,0 +1,13 @@
+{
+  "name": "hittile-ecount-relay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GAS has no fixed outbound IP, but Ecount OAPI requires IP allowlisting. This tiny always-on server sits on a fixed-IP VPS and relays GAS's requests to Ecount.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
