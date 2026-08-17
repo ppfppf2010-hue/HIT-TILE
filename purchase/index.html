@@ -370,6 +370,24 @@
     <div class="error-box" id="errorBox"></div>
   </div>
 
+  <div class="result" id="prefixBox">
+    <div class="result-head">
+      <span class="vendor" id="prefixVendorName"></span>
+      <span class="badge warn">신규 거래처</span>
+      <p class="summary">처음 등록되는 거래처예요. 품목코드에 쓸 접두어를 정해주세요.</p>
+    </div>
+    <div class="month-field show">
+      <label for="prefixInput">코드 접두어 <span>(영문 2~4자, 예: VG)</span></label>
+      <input type="text" id="prefixInput" maxlength="4" placeholder="VG">
+    </div>
+    <button class="submit" id="prefixSubmitBtn">이 접두어로 등록하고 계속하기</button>
+    <div class="status" id="prefixStatusBox">
+      <span class="spinner"></span>
+      <span>거래처 등록하고 품목 준비하는 중이에요...</span>
+    </div>
+    <div class="error-box" id="prefixErrorBox"></div>
+  </div>
+
   <div class="result" id="reviewBox">
     <div class="result-head">
       <span class="vendor" id="resultVendor"></span>
@@ -462,6 +480,12 @@
   const newList = document.getElementById('newList');
   const missSection = document.getElementById('missSection');
   const missList = document.getElementById('missList');
+  const prefixBox = document.getElementById('prefixBox');
+  const prefixVendorName = document.getElementById('prefixVendorName');
+  const prefixInput = document.getElementById('prefixInput');
+  const prefixSubmitBtn = document.getElementById('prefixSubmitBtn');
+  const prefixStatusBox = document.getElementById('prefixStatusBox');
+  const prefixErrorBox = document.getElementById('prefixErrorBox');
   const reviewSheetLink = document.getElementById('reviewSheetLink');
   const confirmBtn = document.getElementById('confirmBtn');
   const confirmStatusBox = document.getElementById('confirmStatusBox');
@@ -475,9 +499,15 @@
   const excelBtn = document.getElementById('excelBtn');
 
   let selectedFile = null;
+  let pendingParsed = null;
+  let pendingTargetMonth = '';
+  let pendingVendorName = '';
 
   function resetAll() {
     selectedFile = null;
+    pendingParsed = null;
+    pendingTargetMonth = '';
+    pendingVendorName = '';
     fileInput.value = '';
     fileChip.classList.remove('show');
     monthField.classList.remove('show');
@@ -486,6 +516,9 @@
     statusBox.classList.remove('show');
     errorBox.classList.remove('show');
     errorBox.classList.remove('credit-warn');
+    prefixBox.classList.remove('show');
+    prefixErrorBox.classList.remove('show');
+    prefixInput.value = '';
     reviewBox.classList.remove('show');
     doneBox.classList.remove('show');
     newSection.classList.remove('show');
@@ -501,6 +534,7 @@
     submitBtn.disabled = false;
     errorBox.classList.remove('show');
     errorBox.classList.remove('credit-warn');
+    prefixBox.classList.remove('show');
     reviewBox.classList.remove('show');
     doneBox.classList.remove('show');
   }
@@ -644,11 +678,22 @@
 
       const data = await res.json();
 
-      if (!data.ok) {
+      if (!data.ok && !data.needsPrefix) {
         throw new Error(data.error || '처리 중 오류가 발생했어요.');
       }
 
-      showReview(data);
+      if (data.needsPrefix) {
+        pendingParsed = data.parsed;
+        pendingTargetMonth = data.targetMonth || '';
+        pendingVendorName = data.vendorName || '';
+        prefixVendorName.textContent = data.vendorName;
+        prefixInput.value = data.suggestedPrefix || '';
+        prefixErrorBox.classList.remove('show');
+        prefixBox.classList.add('show');
+        prefixInput.focus();
+      } else {
+        showReview(data);
+      }
     } catch (err) {
       const msg = err.message || String(err);
       if (isCreditError(msg)) {
@@ -662,6 +707,39 @@
     } finally {
       statusBox.classList.remove('show');
       submitBtn.disabled = false;
+    }
+  });
+
+  prefixSubmitBtn.addEventListener('click', async () => {
+    const prefix = prefixInput.value.trim().toUpperCase();
+    if (!prefix) { prefixInput.focus(); return; }
+    if (!pendingParsed) { prefixErrorBox.textContent = '문서 인식 정보가 없어졌어요. 다시 업로드해주세요.'; prefixErrorBox.classList.add('show'); return; }
+
+    prefixSubmitBtn.disabled = true;
+    prefixStatusBox.classList.add('show');
+    prefixErrorBox.classList.remove('show');
+
+    try {
+      const res = await fetch(ENDPOINT, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'purchase_register_vendor',
+          vendorName: pendingVendorName,
+          prefix: prefix,
+          parsed: pendingParsed,
+          targetMonth: pendingTargetMonth
+        })
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || '처리 중 오류가 발생했어요.');
+      prefixBox.classList.remove('show');
+      showReview(data);
+    } catch (err) {
+      prefixErrorBox.textContent = err.message || String(err);
+      prefixErrorBox.classList.add('show');
+    } finally {
+      prefixSubmitBtn.disabled = false;
+      prefixStatusBox.classList.remove('show');
     }
   });
 

@@ -31,6 +31,8 @@
  '원본품목명(자동,수정금지)', '원본규격(자동,수정금지)'];
 
  // ---- 매입 문서 업로드 -> 거래처+품목 인식 + "구매확인중" 시트에 미리보기로 채워둠 ----
+ // 거래처가 미등록 상태면 Claude를 다시 부르지 않고, 인식된 내용(parsed)을 그대로 프론트에 돌려줘서
+ // 사용자가 접두어를 정하면 handlePurchaseRegisterVendor로 이어서 등록하게 한다(품목등록 페이지와 동일한 흐름).
  function handlePurchaseExtract(body) {
  const fileBase64 = body.fileBase64;
  const mimeType = body.mimeType || 'application/pdf';
@@ -41,10 +43,48 @@
  if (!parsed.vendorName) throw new Error('문서에서 거래처명을 인식하지 못했습니다.');
  if (!parsed.items || parsed.items.length === 0) throw new Error('문서에서 품목을 찾지 못했습니다.');
 
- const totalExtracted = parsed.items.length;
- if (targetMonth) {
- // Claude에게 이미 targetMonth로 범위를 좁혀 추출하도록 요청했지만,
- // 혹시 다른 달 항목이 섞여 나오는 경우를 대비해 한 번 더 걸러낸다.
+ filterItemsByMonth(parsed, targetMonth);
+
+ const vendorInfo = findVendor(parsed.vendorName);
+ if (!vendorInfo) {
+ return jsonOut({
+ ok: true,
+ needsPrefix: true,
+ vendorName: parsed.vendorName,
+ suggestedPrefix: matchPrefix(parsed.vendorName) || '',
+ parsed: parsed,
+ targetMonth: targetMonth
+ });
+ }
+
+ return finalizePurchaseRegistration(parsed, vendorInfo, !!targetMonth);
+ }
+
+ // ---- 신규 거래처 접두어 확정 -> 거래처 등록 + 이어서 구매확인중 스테이징 (Claude 재호출 없음) ----
+ function handlePurchaseRegisterVendor(body) {
+ const vendorName = String(body.vendorName || '').trim();
+ const prefix = String(body.prefix || '').trim().toUpperCase();
+ const parsed = body.parsed;
+ const targetMonth = String(body.targetMonth || '').trim();
+ if (!vendorName) throw new Error('거래처명이 없습니다.');
+ if (!prefix) throw new Error('코드 접두어를 입력해주세요.');
+ if (!parsed || !parsed.items || !parsed.items.length) throw new Error('품목 데이터가 없습니다.');
+
+ // 접두어 확정 사이에 다른 문서로 같은 거래처가 이미 등록됐을 수 있으니 한 번 더 확인한다.
+ let vendorInfo = findVendor(vendorName);
+ if (!vendorInfo) {
+ const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+ const sharedMax = getMaxLastUsedForPrefix(prefix);
+ ss.getSheetByName(VENDOR_SHEET).appendRow([vendorName, prefix, sharedMax]);
+ vendorInfo = { storedName: vendorName, prefix: prefix, lastUsed: sharedMax };
+ }
+
+ return finalizePurchaseRegistration(parsed, vendorInfo, !!targetMonth);
+ }
+
+ // ---- 문서 전체 기준 targetMonth 필터(재확인용) ----
+ function filterItemsByMonth(parsed, targetMonth) {
+ if (!targetMonth) return;
  parsed.items = parsed.items.filter(function (it) {
  const d = String(it.date || parsed.docDate || '');
  return d.indexOf(targetMonth) === 0;
@@ -54,8 +94,10 @@
  }
  }
 
- const vendorInfo = findVendor(parsed.vendorName);
- const finalVendorName = vendorInfo ? vendorInfo.storedName : parsed.vendorName;
+ // ---- 공통: 품목 매칭/자동등록 + 구매확인중 스테이징 ----
+ function finalizePurchaseRegistration(parsed, vendorInfo, filteredByMonth) {
+ const totalExtracted = parsed.items.length;
+ const finalVendorName = vendorInfo.storedName;
 
  const rows = buildPurchaseRows(parsed, finalVendorName, vendorInfo);
  const reviewUrl = stageForPurchaseReview(rows);
@@ -63,10 +105,10 @@
  return jsonOut({
  ok: true,
  vendorName: finalVendorName,
- vendorMatched: !!vendorInfo,
+ vendorMatched: true,
  rows: rows,
  totalExtracted: totalExtracted,
- filteredByMonth: !!targetMonth,
+ filteredByMonth: !!filteredByMonth,
  reviewUrl: reviewUrl
  });
  }
