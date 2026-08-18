@@ -75,6 +75,38 @@
  });
  }
 
+ // ==== 관리용 원격 설정 (스크립트 속성 조회/설정) ====
+ // ADMIN_SECRET 스크립트 속성을 미리 설정해둬야 동작한다. 안 넣으면 이 action들은 항상 거부됨.
+ // 허용된 키(ECOUNT_RELAY_URL/ECOUNT_RELAY_SECRET/ECOUNT_WAREHOUSE_CD)만 조회/설정 가능하도록 제한한다 —
+ // SPREADSHEET_ID나 CLAUDE_API_KEY 같은 민감한 키는 이 경로로 절대 건드릴 수 없게 화이트리스트로 막아둠.
+ const ADMIN_ALLOWED_KEYS = ['ECOUNT_RELAY_URL', 'ECOUNT_RELAY_SECRET', 'ECOUNT_WAREHOUSE_CD'];
+
+ function checkAdminSecret(body) {
+ const expected = PropertiesService.getScriptProperties().getProperty('ADMIN_SECRET');
+ if (!expected) throw new Error('관리 기능 비활성화(ADMIN_SECRET 미설정)');
+ if (body.adminSecret !== expected) throw new Error('인증 실패');
+ }
+
+ // 현재 설정된 값 조회. RELAY_SECRET 자체는 절대 그대로 돌려주지 않고 글자수만 알려준다(유출 방지).
+ function handleAdminGetProperties(body) {
+ checkAdminSecret(body);
+ const props = PropertiesService.getScriptProperties();
+ const result = {};
+ ADMIN_ALLOWED_KEYS.forEach(function (k) {
+ const v = props.getProperty(k);
+ result[k] = !v ? null : (k === 'ECOUNT_RELAY_SECRET' ? '(설정됨, ' + v.length + '자)' : v);
+ });
+ return jsonOut({ ok: true, properties: result });
+ }
+
+ function handleAdminSetProperty(body) {
+ checkAdminSecret(body);
+ const key = String(body.key || '');
+ if (ADMIN_ALLOWED_KEYS.indexOf(key) === -1) throw new Error('허용되지 않은 키: ' + key);
+ PropertiesService.getScriptProperties().setProperty(key, String(body.value || ''));
+ return jsonOut({ ok: true });
+ }
+
  // 매입전표를 이카운트에 저장(한 번의 호출 = 전표 한 장).
  function pushPurchaseToEcount(finalRows) {
  const whCd = PropertiesService.getScriptProperties().getProperty('ECOUNT_WAREHOUSE_CD') || '';
@@ -126,6 +158,8 @@
  if (action === 'delete_order') return handleDeleteOrder(body);
  if (action === 'save_balances') return handleSaveBalances(body);
  if (action === 'add_correction') return handleAddCorrection(body);
+ if (action === 'admin_get_properties') return handleAdminGetProperties(body);
+ if (action === 'admin_set_property') return handleAdminSetProperty(body);
  throw new Error('알 수 없는 action: ' + action);
  } catch (err) {
  return jsonOut({ ok: false, error: err.message });
