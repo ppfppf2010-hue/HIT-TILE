@@ -31,7 +31,7 @@ Google Apps Script(UrlFetchApp)는 요청마다 구글 클라우드의 서로 �
 ## API
 모든 요청은 헤더 `X-Relay-Secret: <RELAY_SECRET>` 필요.
 
-- `POST /register-vendor` — `{businessNo, custName}` → 이카운트 거래처 등록/동기화 (SaveBasicCust)
+- `POST /register-vendor` — `{custName, businessNo?}` → 이카운트 거래처 등록/동기화 (SaveBasicCust). businessNo는 선택값 — 이미 이카운트에 있는 거래처는 이름만으로 자동매칭되고, 진짜 신규 거래처만 사업자번호가 있어야 정상 등록된다(현재 우리 시스템은 사업자번호를 어디서도 입력받지 않으므로 항상 이름만 보냄).
 - `POST /register-item` — `{prodCd, prodDes, spec?, unit?, inPrice?, inPriceVat?, outPrice?, outPriceVat?}` → 이카운트 품목 등록/동기화 (SaveBasicProduct)
 - `POST /push-purchase` — `{rows: [{date, custDes, whCd, prodCd, prodDes, qty, unitPriceVat, supply, vat, remarks}]}` → 매입전표 저장 (SavePurchases). 한 번의 호출에 담긴 rows는 전부 한 장의 전표로 묶인다.
 

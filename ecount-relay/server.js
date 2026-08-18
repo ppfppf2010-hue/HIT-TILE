@@ -98,16 +98,13 @@ async function ecountCall(apiPath, body, retried) {
 app.post('/register-vendor', async (req, res) => {
   try {
     const { businessNo, custName } = req.body;
-    if (!businessNo || !custName) throw new Error('businessNo, custName 필요');
+    if (!custName) throw new Error('custName 필요');
+
+    const bulkDatas = { CUST_NAME: custName };
+    if (businessNo) bulkDatas.BUSINESS_NO = String(businessNo).replace(/\D/g, '');
 
     const data = await ecountCall('/OAPI/V2/AccountBasic/SaveBasicCust', {
-      CustList: [{
-        Line: 1,
-        BulkDatas: {
-          BUSINESS_NO: String(businessNo).replace(/\D/g, ''),
-          CUST_NAME: custName
-        }
-      }]
+      CustList: [{ Line: 1, BulkDatas: bulkDatas }]
     });
     res.json({ ok: true, ecount: data });
   } catch (err) {
