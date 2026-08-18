@@ -34,6 +34,62 @@
  const CLAUDE_MODEL = 'claude-sonnet-5';
  const CODE_DIGITS = 5;
 
+ // ==== 이카운트 OAPI 연동 (고정IP 릴레이 서버 경유) ====
+ // 스크립트 속성(Apps Script 편집기 > 프로젝트 설정 > 스크립트 속성)에 아래 2개를 넣어야 동작한다.
+ // 안 넣으면 조용히 건너뛰고(스킵) 로컬 시트 저장은 평소대로 진행된다 — 절대 저장 자체를 막지 않는다.
+ //   ECOUNT_RELAY_URL    예: https://relay.example.com (끝에 슬래시 없이)
+ //   ECOUNT_RELAY_SECRET 릴레이 서버 .env의 RELAY_SECRET과 동일한 값
+ //   ECOUNT_WAREHOUSE_CD 이카운트 창고코드 (선택, 없으면 안 보냄 — 이카운트 기본창고로 처리될 수 있음)
+ function pushToEcountRelay(path, payload) {
+ const props = PropertiesService.getScriptProperties();
+ const url = props.getProperty('ECOUNT_RELAY_URL');
+ const secret = props.getProperty('ECOUNT_RELAY_SECRET');
+ if (!url || !secret) return { skipped: true, reason: '릴레이 미설정(ECOUNT_RELAY_URL/SECRET 스크립트 속성 없음)' };
+ try {
+ const res = UrlFetchApp.fetch(url.replace(/\/+$/, '') + path, {
+ method: 'post',
+ contentType: 'application/json',
+ headers: { 'X-Relay-Secret': secret },
+ payload: JSON.stringify(payload),
+ muteHttpExceptions: true
+ });
+ const code = res.getResponseCode();
+ let data;
+ try { data = JSON.parse(res.getContentText()); } catch (e) { data = res.getContentText(); }
+ return { ok: code >= 200 && code < 300, status: code, data: data };
+ } catch (err) {
+ return { ok: false, error: err.message };
+ }
+ }
+
+ // 거래처를 이카운트에 등록/동기화. 이미 이카운트에 있는 거래처는 이름만으로 자동매칭된다(사업자번호 없어도 됨).
+ function syncVendorToEcount(vendorName) {
+ return pushToEcountRelay('/register-vendor', { custName: vendorName });
+ }
+
+ // 품목을 이카운트에 등록/동기화(품목코드는 우리 시스템 코드를 그대로 사용).
+ function syncItemToEcount(item) {
+ return pushToEcountRelay('/register-item', {
+ prodCd: item.code, prodDes: item.name, spec: item.spec || '', unit: item.unit || 'EA',
+ inPrice: item.inPrice, inPriceVat: item.inVat, outPrice: item.outPrice, outPriceVat: item.outVat
+ });
+ }
+
+ // 매입전표를 이카운트에 저장(한 번의 호출 = 전표 한 장).
+ function pushPurchaseToEcount(finalRows) {
+ const whCd = PropertiesService.getScriptProperties().getProperty('ECOUNT_WAREHOUSE_CD') || '';
+ const rows = finalRows.map(function (r) {
+ const row = {
+ date: r.date, custDes: r.vendorName, prodCd: r.itemCode, prodDes: r.itemName,
+ qty: r.qty, unitPriceVat: r.unitPrice, supply: r.supply, vat: r.vat, remarks: r.note || ''
+ };
+ if (whCd) row.whCd = whCd;
+ return row;
+ }).filter(function (r) { return r.prodCd; }); // 품목코드 없는(미매칭) 행은 이카운트에 못 올리므로 제외
+ if (!rows.length) return { skipped: true, reason: '품목코드가 있는 행이 없음' };
+ return pushToEcountRelay('/push-purchase', { rows: rows });
+ }
+
  const REVIEW_HEADERS = ['품목코드', '품목명', '규격구분', '규격', '입고단가', '입고단가VAT포함여부',
    '단위', '품목구분', '세트여부', '재고수량관리', '출고단가', '출고단가VAT포함여부', '거래처명',
    '원본품목명(자동,수정금지)', '원본규격(자동,수정금지)'];
@@ -69,6 +125,7 @@
  if (action === 'sync_calendar_deliveries') return handleSyncCalendarDeliveries();
  if (action === 'delete_order') return handleDeleteOrder(body);
  if (action === 'save_balances') return handleSaveBalances(body);
+ if (action === 'add_correction') return handleAddCorrection(body);
  throw new Error('알 수 없는 action: ' + action);
  } catch (err) {
  return jsonOut({ ok: false, error: err.message });
@@ -269,6 +326,15 @@
  sheet.setFrozenRows(1);
 
  return jsonOut({ ok: true, vendorName: vendorName, items: items, savedCount: items.length });
+ }
+
+ // ---- 교정사전에 한 쌍 수동 등록 (예: 거래처 별칭 -> 등록된 정식 거래처명) ----
+ function handleAddCorrection(body) {
+ const wrong = String(body.wrong || '').trim();
+ const right = String(body.right || '').trim();
+ if (!wrong || !right) throw new Error('wrong/right 값이 모두 필요합니다.');
+ saveCorrections([[wrong, right]]);
+ return jsonOut({ ok: true });
  }
 
  function saveCorrections(pairs) {
@@ -765,15 +831,27 @@
  }
 
  // ---- 거래처 조회 (완전일치 우선, 실패 시 정규화 비교로 표기 차이 흡수) ----
+ // 교정사전에 등록된 별칭(예: 문서엔 "화신세라믹"인데 실제 등록은 "(주) H.S 세라믹")도 여기서 함께 흡수한다.
  function findVendor(vendorName) {
  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
  const sheet = ss.getSheetByName(VENDOR_SHEET);
  const data = sheet.getDataRange().getValues();
- const target = normalizeVendorName(vendorName);
+ const correctionMap = getCorrectionMap();
+ const rawKey = String(vendorName || '').trim();
+ let correctedName = correctionMap[rawKey];
+ if (!correctedName) {
+ // Claude가 매번 표기를 살짝 다르게 뽑을 수 있어(공백/(주) 위치 등), 정규화 비교로도 교정사전을 확인한다.
+ const normKey = normalizeVendorName(vendorName);
+ for (const wrong in correctionMap) {
+ if (normalizeVendorName(wrong) === normKey) { correctedName = correctionMap[wrong]; break; }
+ }
+ }
+ correctedName = correctedName || vendorName;
+ const target = normalizeVendorName(correctedName);
 
  for (let i = 1; i < data.length; i++) {
  const stored = String(data[i][0]);
- if (stored.trim() === String(vendorName).trim() || normalizeVendorName(stored) === target) {
+ if (stored.trim() === String(correctedName).trim() || normalizeVendorName(stored) === target) {
  return { rowIndex: i + 1, storedName: stored.trim(), prefix: String(data[i][1]).trim(), lastUsed: Number(data[i][2]) || 0 };
  }
  }
@@ -839,3 +917,4 @@
  ]);
  });
  }
+

@@ -77,6 +77,7 @@
  const sharedMax = getMaxLastUsedForPrefix(prefix);
  ss.getSheetByName(VENDOR_SHEET).appendRow([vendorName, prefix, sharedMax]);
  vendorInfo = { storedName: vendorName, prefix: prefix, lastUsed: sharedMax };
+ syncVendorToEcount(vendorName); // 실패해도 로컬 등록은 이미 끝났으니 무시하고 진행
  }
 
  return finalizePurchaseRegistration(parsed, vendorInfo, !!targetMonth);
@@ -174,13 +175,14 @@
 
  const vendorName = String(rows[0][3] || '').trim();
  const sheetGid = appendToPurchaseSheet(finalRows);
+ const ecountPush = pushPurchaseToEcount(finalRows); // 로컬 저장은 이미 끝났으므로 실패해도 아래 저장 결과 자체는 그대로 반환
 
  // 구매확인중 시트는 헤더만 남기고 비움
  sheet.clear();
  sheet.appendRow(PURCHASE_REVIEW_HEADERS);
  sheet.setFrozenRows(1);
 
- return jsonOut({ ok: true, vendorName: vendorName, savedCount: finalRows.length, rows: finalRows, sheetGid: sheetGid });
+ return jsonOut({ ok: true, vendorName: vendorName, savedCount: finalRows.length, rows: finalRows, sheetGid: sheetGid, ecountPush: ecountPush });
  }
 
  // ---- 품목코드 매칭 + 미매칭 품목 자동 채번/등록 + 공급가액/부가세 계산해서 행 조립 ----
@@ -228,6 +230,7 @@
  const startNumber = Math.max(vendorInfo.lastUsed, sharedMax) + 1;
  const newRows = assignCodesAndPrices(toRegister, vendorInfo.prefix, startNumber, vendorName);
  appendToMasterSheet(vendorName, newRows);
+ newRows.forEach(function (r) { syncItemToEcount(r); }); // 실패해도 로컬 등록은 이미 끝났으니 무시하고 진행
  // codeMap은 원본(추출된 그대로의) 품명+규격 키로 조회하므로, 타일 표기 정리로 이름이 바뀌었어도
  // missingKeys[i]<->newRows[i]는 순서가 그대로 대응되니 원본 키로 매핑해준다.
  newRows.forEach(function (r, i) { codeMap[missingKeys[i]] = { code: r.code, name: r.name, spec: r.spec }; });

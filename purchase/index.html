@@ -428,6 +428,7 @@
       <span class="vendor" id="doneVendorName"></span>
       <span class="badge ok">등록 완료</span>
       <p class="summary" id="doneSummary"></p>
+      <p class="summary" id="doneEcountStatus" style="display:none"></p>
     </div>
 
     <div class="result-actions">
@@ -494,6 +495,7 @@
   const doneBox = document.getElementById('doneBox');
   const doneVendorName = document.getElementById('doneVendorName');
   const doneSummary = document.getElementById('doneSummary');
+  const doneEcountStatus = document.getElementById('doneEcountStatus');
   const againLink = document.getElementById('againLink');
   const sheetLink = document.getElementById('sheetLink');
   const excelBtn = document.getElementById('excelBtn');
@@ -788,6 +790,19 @@
       doneVendorName.textContent = data.vendorName;
       doneSummary.textContent = `${data.savedCount}개 품목이 구매입력 시트에 등록됐어요.`;
       sheetLink.href = data.sheetGid !== undefined ? (SHEET_URL + '#gid=' + data.sheetGid) : SHEET_URL;
+      const ep = data.ecountPush;
+      if (ep) {
+        doneEcountStatus.style.display = '';
+        if (ep.skipped) {
+          doneEcountStatus.textContent = '이카운트 연동은 아직 설정 전이라 건너뛰었어요.';
+        } else if (ep.ok) {
+          doneEcountStatus.textContent = '이카운트에도 자동으로 등록됐어요.';
+        } else {
+          doneEcountStatus.textContent = '이카운트 자동등록 실패 — 직접 확인/업로드가 필요해요.';
+        }
+      } else {
+        doneEcountStatus.style.display = 'none';
+      }
       doneBox.classList.add('show');
     } catch (err) {
       alert(err.message || String(err));
