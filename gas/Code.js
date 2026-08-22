@@ -411,8 +411,10 @@
  }
 
  // ---- 품목명 정규화: 공백/구분기호/대소문자 차이를 무시하고 비교하기 위한 헬퍼 ----
+ // 숫자 사이의 x/X/×는 전부 같은 치수 구분자이므로 비교 전에 '*'로 통일한다(예: "1700×750" vs "1700*750").
  function normalizeItemName(name) {
  return String(name || '')
+ .replace(/(\d)\s*[×xX]\s*(\d)/g, '$1*$2')
  .replace(/\s+/g, '')
  .replace(/[\/\-_.]/g, '')
  .toUpperCase();
@@ -475,13 +477,44 @@
  return prevRow[n];
  }
 
+ // ---- 문자열에서 숫자(치수/중량 등)와 나머지 텍스트를 분리 ----
+ // 치수·중량 숫자는 다른 물건을 가르는 핵심 값이라 정확히 같아야 하고, 그 앞뒤 텍스트만
+ // 오타/표기 수준(에프런 vs 에이프런 등)의 차이를 허용하기 위한 헬퍼.
+ function splitDigitsText(normalized) {
+ return {
+ digits: (String(normalized || '').match(/\d+/g) || []).join(','),
+ text: String(normalized || '').replace(/\d+/g, '')
+ };
+ }
+
  // ---- 같은 품목명이라도 규격이 서로 다르면 다른 품목으로 본다 ----
  // 둘 중 하나라도 규격이 비어있으면(규격 구분이 없는 품목) 판단 보류하고 이름만으로 매칭을 허용한다.
+ // 숫자(치수/중량)는 반드시 정확히 일치해야 하고(예: 1700*750 vs 1700*730은 다른 품목), 그 외
+ // 텍스트는 오타 수준 차이(예: "에프런별도" vs "에이프런별도")까지는 같은 품목으로 본다.
  function specsCompatible(targetSpec, rowSpec) {
  const a = normalizeItemName(targetSpec);
  const b = normalizeItemName(rowSpec);
  if (!a || !b) return true;
- return a === b;
+ if (a === b) return true;
+ const da = splitDigitsText(a), db = splitDigitsText(b);
+ if (da.digits !== db.digits) return false;
+ if (!da.text || !db.text) return da.text === db.text;
+ const maxDist = Math.max(1, Math.min(3, Math.ceil(Math.max(da.text.length, db.text.length) * 0.3)));
+ return levenshteinDistance(da.text, db.text) <= maxDist;
+ }
+
+ // ---- 마지막 보정: 이름/규격 필드 경계가 문서마다 다르게 나뉘는 경우 대비 ----
+ // 예: 같은 "에폭시(쌍곰) 20kg"인데 어떤 문서는 "20kg"을 품명에 붙이고(규격엔 용도만),
+ // 마스터에는 "20kg"이 규격에 있는 식으로 필드가 어긋날 수 있다. 이름+규격을 합친 문자열로
+ // 다시 비교하되, 숫자(치수/중량)는 정확히 같아야 하고 나머지 텍스트만 오타 수준 차이를 허용한다.
+ function combinedCompatible(targetName, targetSpec, rowName, rowSpec) {
+ const a = splitDigitsText(normalizeItemName(String(targetName || '') + String(targetSpec || '')));
+ const b = splitDigitsText(normalizeItemName(String(rowName || '') + String(rowSpec || '')));
+ if (a.digits !== b.digits) return false;
+ if (!a.text && !b.text) return true;
+ if (!a.text || !b.text) return false;
+ const maxDist = Math.max(1, Math.min(3, Math.ceil(Math.max(a.text.length, b.text.length) * 0.25)));
+ return levenshteinDistance(a.text, b.text) <= maxDist;
  }
 
  // ---- 품목등록마스터에서 거래처+품목명(+규격) 매칭 ----
@@ -541,7 +574,19 @@
  best = row; bestDist = dist; bestPriceDiff = priceDiff;
  }
  }
- return best ? normalizeMasterMatch(best) : null;
+ if (best) return normalizeMasterMatch(best);
+
+ // 여기까지 못 찾았으면 이름/규격 필드 경계가 문서마다 다르게 나뉜 경우를 의심해서
+ // 이름+규격을 합친 문자열로 마지막 한 번 더 비교한다(치수/중량 숫자는 정확히 같아야 함).
+ // 후보가 여럿이면 가격이 가장 가까운 쪽을 고른다.
+ let best2 = null, bestPriceDiff2 = Infinity;
+ for (let i = 0; i < rows.length; i++) {
+ const row = rows[i];
+ if (!combinedCompatible(itemName, spec, row[1], row[3])) continue;
+ const priceDiff = price ? Math.abs((Number(row[4]) || 0) - Number(price)) : Infinity;
+ if (priceDiff < bestPriceDiff2) { best2 = row; bestPriceDiff2 = priceDiff; }
+ }
+ return best2 ? normalizeMasterMatch(best2) : null;
  }
 
  function findMasterItem(masterData, vendorName, itemName, price, spec) {
