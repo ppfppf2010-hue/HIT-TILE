@@ -51,6 +51,25 @@ password: row[16] || ''
 };
 }
 
+// ---- 배송일정 시트에 등록됐던 업체명+연락처 목록 (자동완성용, 같은 업체는 가장 최근 연락처로) ----
+function getDeliveryVendorContacts() {
+const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+const sheet = ss.getSheetByName(ORDER_SHEET);
+if (!sheet) return { ok: true, contacts: [] };
+const data = sheet.getDataRange().getValues();
+const phoneByName = {};
+const order = [];
+for (let i = 1; i < data.length; i++) {
+const name = String(data[i][2] || '').trim();
+if (!name) continue;
+if (!(name in phoneByName)) order.push(name);
+const phone = String(data[i][3] || '').trim();
+if (phone) phoneByName[name] = phone; // 뒤에 나올수록(=더 최근 등록) 최신 연락처로 덮어씀
+}
+const contacts = order.map(function (name) { return { name: name, phone: phoneByName[name] || '' }; });
+return { ok: true, contacts: contacts };
+}
+
 // ---- 비밀번호(출입/현관) 열이 아직 없으면 헤더 채워둠 ----
 function ensurePasswordHeader(orderSheet) {
 if (orderSheet.getRange(1, 17).getValue() !== '비밀번호') {

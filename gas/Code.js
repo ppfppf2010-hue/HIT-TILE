@@ -889,8 +889,7 @@
  }
 
  function assignCodesAndPrices(items, prefix, startNumber, vendorName) {
- // 신양(상사) 제품 등록은 세트 상품이 없으므로 품목구분/세트여부를 1/0으로 고정한다.
- const isSinyang = /신양/.test(String(vendorName || ''));
+ // 입고단가VAT포함여부/품목구분/세트여부/재고수량관리는 거래처·상품유형과 무관하게 전부 1로 고정한다.
  return items.map(function (it, i) {
  const numberPart = startNumber + i;
  const code = prefix + String(numberPart).padStart(CODE_DIGITS, '0');
@@ -899,8 +898,7 @@
  return {
  code: code, name: it.name, specType: it.spec ? '사이즈' : '', spec: it.spec || '',
  inPrice: inPrice, inVat: 1, unit: it.unit,
- category: isSinyang ? '1' : (it.unit === 'SET' ? 'SET상품' : '자재'),
- isSet: isSinyang ? '0' : (it.unit === 'SET' ? 'Y' : 'N'), stockMgmt: 1,
+ category: 1, isSet: 1, stockMgmt: 1,
  outPrice: outPrice, outVat: 1
  };
  });
