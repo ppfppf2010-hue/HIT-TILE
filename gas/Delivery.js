@@ -4,6 +4,13 @@ const BANK_INFO = '국민은행 676301-04-294382 (예금주 이용광)';
 const CALENDAR_NAME_DELIVERY = '히트타일 배송일정';
 const CALENDAR_NAME_RETURN = '히트타일 반품일정';
 
+// ---- 드라이브 접근 권한을 처음 승인받기 위한 용도. Apps Script 에디터에서 이 함수를 한 번 Run 하면
+// ---- 구글 계정 권한 승인 팝업이 뜨고, 그 뒤부터 배송완료사진 업로드(DriveApp)가 정상 동작한다. ----
+function authorizeDriveAccess() {
+const folder = getOrCreateDeliveryPhotoFolder('__authorize_test__');
+Logger.log('드라이브 권한 승인 완료: ' + folder.getUrl());
+}
+
 // ---- 배송일정/배송품목 탭 최초 1회 세팅 (Run 버튼으로 직접 실행) ----
 function setupDeliverySheets() {
 const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -47,8 +54,21 @@ balanceBefore: Number(row[7]) || 0, balanceAfter: Number(row[8]) || 0,
 paymentStatus: row[9] || '', paymentMemo: row[10] || '',
 deliveryStatus: row[11] || '대기', returned: row[12] === 'Y', createdAt: row[13],
 returnScheduleDate: toDateStr(row[14]),
-password: row[16] || ''
+password: row[16] || '',
+photos: parseDeliveryPhotos(row[17])
 };
+}
+
+// ---- 배송완료사진 열(JSON 문자열)을 파싱 -> [{id, url}, ...] ----
+function parseDeliveryPhotos(val) {
+const s = String(val || '').trim();
+if (!s) return [];
+try {
+const list = JSON.parse(s);
+return Array.isArray(list) ? list : [];
+} catch (e) {
+return [];
+}
 }
 
 // ---- 배송일정 시트에 등록됐던 업체명+연락처 목록 (자동완성용, 같은 업체는 가장 최근 연락처로) ----
@@ -234,6 +254,52 @@ orderSheet.getRange(rowIdx, 17).setValue(password);
 return jsonOut({ ok: true, orderId: orderId, password: password });
 }
 
+// ---- 배송완료사진(18번째 열) 헤더가 아직 없으면 채워둠 ----
+function ensurePhotoHeader(orderSheet) {
+if (orderSheet.getRange(1, 18).getValue() !== '배송완료사진') {
+orderSheet.getRange(1, 18).setValue('배송완료사진');
+}
+}
+
+// ---- 배송완료사진을 저장할 구글드라이브 폴더(주문건마다 하위 폴더) ----
+function getOrCreateDeliveryPhotoFolder(orderId) {
+const rootName = '히트타일 배송완료사진';
+const rootIter = DriveApp.getFoldersByName(rootName);
+const root = rootIter.hasNext() ? rootIter.next() : DriveApp.createFolder(rootName);
+const subIter = root.getFoldersByName(orderId);
+return subIter.hasNext() ? subIter.next() : root.createFolder(orderId);
+}
+
+// ---- 배송기사가 찍은 배송완료 사진 1장을 드라이브에 저장하고 배송일정 시트에 링크를 누적 기록 ----
+function handleSaveDeliveryPhoto(body) {
+const orderId = body.orderId;
+const base64 = body.base64;
+const mimeType = body.mimeType || 'image/jpeg';
+if (!orderId) throw new Error('orderId가 없습니다.');
+if (!base64) throw new Error('사진 데이터가 없습니다.');
+
+const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+const orderSheet = ss.getSheetByName(ORDER_SHEET);
+const rowIdx = findOrderRowIndex(orderSheet, orderId);
+if (rowIdx === -1) throw new Error('해당 주문을 찾을 수 없습니다.');
+
+const folder = getOrCreateDeliveryPhotoFolder(orderId);
+const ext = mimeType.indexOf('png') !== -1 ? 'png' : 'jpg';
+const stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'HHmmss');
+const blob = Utilities.newBlob(Utilities.base64Decode(base64), mimeType, orderId + '_' + stamp + '_' + Utilities.getUuid().slice(0, 4) + '.' + ext);
+const file = folder.createFile(blob);
+file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+const entry = { id: file.getId(), url: file.getUrl() };
+
+ensurePhotoHeader(orderSheet);
+const cell = orderSheet.getRange(rowIdx, 18);
+const list = parseDeliveryPhotos(cell.getValue());
+list.push(entry);
+cell.setValue(JSON.stringify(list));
+
+return jsonOut({ ok: true, orderId: orderId, photo: entry, photos: list });
+}
+
 // ---- 전표 사진 업로드 -> Claude로 품목(품목명/규격/수량/단가) 추출 ----
 function handleDeliveryExtract(body) {
 const fileBase64 = body.fileBase64;
@@ -244,15 +310,9 @@ if (!fileBase64) throw new Error('파일이 없습니다.');
 const parsed = extractDeliveryItemsWithClaude(fileBase64, mimeType);
 if (!parsed.items || !parsed.items.length) throw new Error('사진에서 품목을 찾지 못했어요. 다시 촬영하거나 수기로 입력해주세요.');
 
-if (orderId) {
-const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-const orderSheet = ss.getSheetByName(ORDER_SHEET);
-const rowIdx = findOrderRowIndex(orderSheet, orderId);
-if (rowIdx !== -1) {
-const vendorName = orderSheet.getRange(rowIdx, 3).getValue();
-applyMasterCatalogMatch(parsed.items, vendorName);
-}
-}
+// 배송일정의 업체명은 배송받는 고객사라 품목등록마스터의 거래처명(매입처)과는 무관하므로,
+// 거래처로 좁히지 않고 마스터 전체를 대상으로 매칭한다.
+applyMasterCatalogMatchAnyVendor(parsed.items);
 
 return jsonOut({ ok: true, items: parsed.items });
 }

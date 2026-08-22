@@ -289,6 +289,52 @@
   .section-msg{ font-size:12px; margin-top:8px; min-height:14px; color:var(--muted); }
   .section-msg.err{ color:var(--err); }
   .section-msg.ok{ color:var(--ok); }
+
+  button.camera-btn{
+    width:100%;
+    padding:12px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--card);
+    color:var(--ink);
+    font-size:14px;
+    font-weight:600;
+    cursor:pointer;
+    font-family:inherit;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  button.camera-btn:hover{ border-color:var(--brass); background:#f2f5ff; }
+
+  .photo-grid{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+  .photo-grid:empty{ display:none; margin:0; }
+  .photo-thumb-wrap{ position:relative; }
+  .photo-thumb{
+    width:76px; height:76px;
+    object-fit:cover;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:#eee;
+    display:block;
+  }
+  .photo-remove{
+    position:absolute;
+    top:-6px; right:-6px;
+    width:20px; height:20px;
+    border-radius:50%;
+    border:none;
+    background:var(--err);
+    color:#fff;
+    font-size:13px;
+    line-height:1;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
 </style>
 </head>
 <body>
@@ -601,6 +647,7 @@
     }
 
     container.appendChild(buildDeliverySection(order));
+    container.appendChild(buildPhotoSection(order));
     if (order.deliveryStatus === '완료' && order.returnScheduleDate) {
       container.appendChild(buildReturnCheckSection(order));
     }
@@ -924,6 +971,167 @@
     actions.appendChild(saveBtn);
     actions.appendChild(finalizeBtn);
     sec.appendChild(actions);
+    sec.appendChild(msg);
+    return sec;
+  }
+
+  // ---- 배송완료 사진 촬영/업로드 ----
+  let photoDrafts = {}; // orderId -> { staged: [{base64, mimeType, previewUrl}] } (아직 안 올린 사진)
+
+  function getPhotoDraft(order) {
+    if (!photoDrafts[order.orderId]) photoDrafts[order.orderId] = { staged: [] };
+    return photoDrafts[order.orderId];
+  }
+
+  function loadImageFromFile(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  // 휴대폰 원본 사진은 용량이 커서 업로드가 느리니, 가로/세로 최대 1600px로 줄이고 JPEG로 재압축한다.
+  async function compressPhotoForDelivery(file) {
+    const img = await loadImageFromFile(file);
+    URL.revokeObjectURL(img.src);
+    const maxSide = 1600;
+    const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.width * scale);
+    canvas.height = Math.round(img.height * scale);
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+    return { base64: dataUrl.split(',')[1], mimeType: 'image/jpeg', previewUrl: dataUrl };
+  }
+
+  function buildPhotoSection(order) {
+    const sec = document.createElement('div');
+    sec.className = 'detail-section';
+    const h3 = document.createElement('h3');
+    h3.textContent = '배송완료 사진';
+    sec.appendChild(h3);
+
+    const draft = getPhotoDraft(order);
+
+    const uploadedGrid = document.createElement('div');
+    uploadedGrid.className = 'photo-grid';
+    (order.photos || []).forEach((p) => {
+      const a = document.createElement('a');
+      a.href = p.url; a.target = '_blank'; a.rel = 'noopener';
+      const img = document.createElement('img');
+      img.className = 'photo-thumb';
+      img.src = 'https://drive.google.com/thumbnail?id=' + p.id + '&sz=w300';
+      a.appendChild(img);
+      uploadedGrid.appendChild(a);
+    });
+    sec.appendChild(uploadedGrid);
+
+    const stagedGrid = document.createElement('div');
+    stagedGrid.className = 'photo-grid';
+    sec.appendChild(stagedGrid);
+
+    const actions = document.createElement('div');
+    actions.className = 'form-actions';
+
+    const cameraBtn = document.createElement('button');
+    cameraBtn.type = 'button';
+    cameraBtn.className = 'camera-btn';
+    cameraBtn.textContent = '📷 사진 촬영해서 추가';
+
+    const cameraInput = document.createElement('input');
+    cameraInput.type = 'file';
+    cameraInput.accept = 'image/*';
+    cameraInput.capture = 'environment';
+    cameraInput.style.display = 'none';
+
+    const uploadBtn = document.createElement('button');
+    uploadBtn.type = 'button';
+    uploadBtn.className = 'btn-primary';
+
+    const msg = document.createElement('div');
+    msg.className = 'section-msg';
+
+    function updateUploadBtn() {
+      uploadBtn.textContent = draft.staged.length ? draft.staged.length + '장 업로드' : '업로드';
+      uploadBtn.disabled = draft.staged.length === 0;
+    }
+
+    function renderStaged() {
+      stagedGrid.innerHTML = '';
+      draft.staged.forEach((s, idx) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'photo-thumb-wrap';
+        const img = document.createElement('img');
+        img.className = 'photo-thumb';
+        img.src = s.previewUrl;
+        wrap.appendChild(img);
+        const rm = document.createElement('button');
+        rm.type = 'button';
+        rm.className = 'photo-remove';
+        rm.textContent = '×';
+        rm.addEventListener('click', () => { draft.staged.splice(idx, 1); renderStaged(); updateUploadBtn(); });
+        wrap.appendChild(rm);
+        stagedGrid.appendChild(wrap);
+      });
+    }
+
+    cameraBtn.addEventListener('click', () => cameraInput.click());
+    cameraInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      cameraInput.value = '';
+      if (!file) return;
+      msg.textContent = '';
+      try {
+        const compressed = await compressPhotoForDelivery(file);
+        draft.staged.push(compressed);
+        renderStaged();
+        updateUploadBtn();
+      } catch (err) {
+        msg.textContent = err.message || String(err);
+        msg.className = 'section-msg err';
+      }
+    });
+
+    uploadBtn.addEventListener('click', async () => {
+      uploadBtn.disabled = true;
+      const total = draft.staged.length;
+      let done = 0;
+      try {
+        while (draft.staged.length) {
+          done++;
+          msg.textContent = '업로드 중... (' + done + '/' + total + ')';
+          msg.className = 'section-msg';
+          const item = draft.staged[0];
+          const res = await fetch(ENDPOINT, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'save_delivery_photo', orderId: order.orderId, base64: item.base64, mimeType: item.mimeType })
+          });
+          const data = await res.json();
+          if (!data.ok) throw new Error(data.error || '업로드하지 못했어요.');
+          draft.staged.shift();
+        }
+        msg.textContent = '업로드 완료했어요.';
+        msg.className = 'section-msg ok';
+        renderStaged();
+        await loadDayOrders();
+      } catch (err) {
+        msg.textContent = err.message || String(err);
+        msg.className = 'section-msg err';
+        renderStaged();
+        updateUploadBtn();
+        uploadBtn.disabled = false;
+      }
+    });
+
+    updateUploadBtn();
+    renderStaged();
+
+    actions.appendChild(cameraBtn);
+    actions.appendChild(uploadBtn);
+    sec.appendChild(actions);
+    sec.appendChild(cameraInput);
     sec.appendChild(msg);
     return sec;
   }
