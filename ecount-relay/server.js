@@ -233,17 +233,19 @@ app.post('/verify-test', async (req, res) => {
     const sessionId = loginData && loginData.Data && loginData.Data.Datas && loginData.Data.Datas.SESSION_ID;
     if (!sessionId) return res.json({ ok: false, step: 'login', data: loginData });
 
+    const vendorBulkDatas = req.body.vendorBulkDatas || { BUSINESS_NO: '1234567890', CUST_NAME: '검증테스트거래처' };
     const vendorRes = await fetch(`https://sboapi${zone}.ecount.com/OAPI/V2/AccountBasic/SaveBasicCust?SESSION_ID=${encodeURIComponent(sessionId)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ CustList: [{ Line: 1, BulkDatas: { BUSINESS_NO: '1234567890', CUST_NAME: '검증테스트거래처' } }] })
+      body: JSON.stringify({ CustList: [{ Line: 1, BulkDatas: vendorBulkDatas }] })
     });
     const vendorData = await vendorRes.json();
 
+    const purchaseBulkDatas = req.body.purchaseBulkDatas || { UPLOAD_SER_NO: '1', IO_DATE: '20260825', PROD_CD: 'VERIFYTEST', PROD_DES: '검증테스트품목', QTY: '1' };
     const purchaseRes = await fetch(`https://sboapi${zone}.ecount.com/OAPI/V2/Purchases/SavePurchases?SESSION_ID=${encodeURIComponent(sessionId)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ PurchasesList: [{ Line: 1, BulkDatas: { UPLOAD_SER_NO: '1', IO_DATE: '20260825', PROD_CD: 'VERIFYTEST', PROD_DES: '검증테스트품목', QTY: '1' } }] })
+      body: JSON.stringify({ PurchasesList: [{ Line: 1, BulkDatas: purchaseBulkDatas }] })
     });
     const purchaseData = await purchaseRes.json();
 
