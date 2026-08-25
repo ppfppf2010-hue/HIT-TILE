@@ -415,11 +415,11 @@
       <datalist id="vendorNameList"></datalist>
       <div class="vendor-check-result" id="vendorCheckResult"></div>
     </div>
-    <div class="month-field show">
+    <div class="month-field show" id="prefixFieldWrap">
       <label for="prefixInput">코드 접두어 <span>(영문 2~4자, 예: VG)</span></label>
       <input type="text" id="prefixInput" maxlength="4" placeholder="VG">
     </div>
-    <div class="month-field show">
+    <div class="month-field show" id="businessNoFieldWrap">
       <label for="businessNoInput">사업자등록번호 <span>(이카운트 거래처 등록용, 모르면 비워둬도 됩니다)</span></label>
       <input type="text" id="businessNoInput" placeholder="123-45-67890">
     </div>
@@ -529,6 +529,8 @@
   const vendorNameList = document.getElementById('vendorNameList');
   const vendorCheckBtn = document.getElementById('vendorCheckBtn');
   const vendorCheckResult = document.getElementById('vendorCheckResult');
+  const prefixFieldWrap = document.getElementById('prefixFieldWrap');
+  const businessNoFieldWrap = document.getElementById('businessNoFieldWrap');
   const prefixInput = document.getElementById('prefixInput');
   const businessNoInput = document.getElementById('businessNoInput');
   const prefixSubmitBtn = document.getElementById('prefixSubmitBtn');
@@ -739,6 +741,7 @@
         prefixInput.value = data.suggestedPrefix || '';
         prefixErrorBox.classList.remove('show');
         vendorCheckResult.classList.remove('show', 'match', 'new', 'err');
+        setVendorMatched(false);
         prefixBox.classList.add('show');
         prefixVendorName.focus();
         loadVendorNames();
@@ -778,8 +781,18 @@
     }
   }
 
+  let vendorMatched = false;
+
+  function setVendorMatched(matched) {
+    vendorMatched = matched;
+    prefixFieldWrap.classList.toggle('show', !matched);
+    businessNoFieldWrap.classList.toggle('show', !matched);
+    prefixSubmitBtn.textContent = matched ? '이 거래처로 등록하고 계속하기' : '이 접두어로 등록하고 계속하기';
+  }
+
   prefixVendorName.addEventListener('input', () => {
     vendorCheckResult.classList.remove('show', 'match', 'new', 'err');
+    setVendorMatched(false);
   });
 
   vendorCheckBtn.addEventListener('click', async () => {
@@ -799,13 +812,16 @@
         vendorCheckResult.textContent = '✓ 기존 거래처와 일치해요 (코드 접두어: ' + data.vendorInfo.prefix + ')' +
           (data.corrected ? ' — 이 표기 차이는 교정사전에 저장했어요, 다음부터는 자동으로 잡힐 거예요.' : '');
         vendorCheckResult.classList.add('show', 'match');
+        setVendorMatched(true);
       } else {
         vendorCheckResult.textContent = '일치하는 기존 거래처가 없어요. 신규 거래처로 등록됩니다.';
         vendorCheckResult.classList.add('show', 'new');
+        setVendorMatched(false);
       }
     } catch (err) {
       vendorCheckResult.textContent = err.message || String(err);
       vendorCheckResult.classList.add('show', 'err');
+      setVendorMatched(false);
     } finally {
       vendorCheckBtn.disabled = false;
       vendorCheckBtn.textContent = '확인';
@@ -816,7 +832,7 @@
     const vendorName = prefixVendorName.value.trim();
     if (!vendorName) { prefixVendorName.focus(); return; }
     const prefix = prefixInput.value.trim().toUpperCase();
-    if (!prefix) { prefixInput.focus(); return; }
+    if (!vendorMatched && !prefix) { prefixInput.focus(); return; }
     if (!pendingParsed) { prefixErrorBox.textContent = '문서 인식 정보가 없어졌어요. 다시 업로드해주세요.'; prefixErrorBox.classList.add('show'); return; }
 
     prefixSubmitBtn.disabled = true;

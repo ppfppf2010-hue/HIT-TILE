@@ -68,12 +68,13 @@
  const parsed = body.parsed;
  const targetMonth = String(body.targetMonth || '').trim();
  if (!vendorName) throw new Error('거래처명이 없습니다.');
- if (!prefix) throw new Error('코드 접두어를 입력해주세요.');
  if (!parsed || !parsed.items || !parsed.items.length) throw new Error('품목 데이터가 없습니다.');
 
  // 접두어 확정 사이에 다른 문서로 같은 거래처가 이미 등록됐을 수 있으니 한 번 더 확인한다.
+ // (확인 버튼으로 이미 기존 거래처와 일치하는 걸 확인했다면 접두어 없이도 그대로 기존 거래처로 등록된다.)
  let vendorInfo = findVendor(vendorName);
  if (!vendorInfo) {
+ if (!prefix) throw new Error('코드 접두어를 입력해주세요.');
  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
  const sharedMax = getMaxLastUsedForPrefix(prefix);
  ss.getSheetByName(VENDOR_SHEET).appendRow([vendorName, prefix, sharedMax, businessNo]);
