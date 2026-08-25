@@ -73,6 +73,9 @@
  if (action === 'add_correction') return handleAddCorrection(body);
  if (action === 'list_vendor_names') return handleListVendorNames();
  if (action === 'check_vendor') return handleCheckVendor(body);
+ if (action === 'sale_extract') return handleSaleExtract(body);
+ if (action === 'sale_register_vendor') return handleSaleRegisterVendor(body);
+ if (action === 'sale_confirm') return handleSaleConfirm();
  throw new Error('알 수 없는 action: ' + action);
  } catch (err) {
  return jsonOut({ ok: false, error: err.message });
@@ -963,6 +966,11 @@
  function ecountSyncVendor(vendorName, businessNo) {
  if (!businessNo) return { ok: false, error: '사업자등록번호가 없어 이카운트 거래처 동기화를 건너뛰었습니다.' };
  return ecountRelayCall('/register-vendor', { businessNo: businessNo, custName: vendorName });
+ }
+
+ // 판매전표(매출) 저장 - Sale.js의 handleSaleConfirm에서 사용.
+ function ecountSyncSale(pushRows) {
+ return ecountRelayCall('/push-sale', { rows: pushRows });
  }
 
  function ecountSyncItem(item) {

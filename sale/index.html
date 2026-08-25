@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>히트타일 판매등록</title>
+<style>
+  :root{
+    --bg:#f5f6f8;
+    --ink:#1a1a1a;
+    --muted:#6b7280;
+    --line:rgba(17,17,17,0.09);
+    --brass:#2563eb;
+    --brass-deep:#1d4ed8;
+    --ok:#16803c;
+    --warn:#b0824f;
+    --err:#b1503f;
+    --card:#ffffff;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Malgun Gothic',sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    padding:0 0 60px;
+  }
+  header{
+    padding:36px 6vw 24px;
+    border-bottom:1px solid var(--line);
+  }
+  header h1{
+    margin:0 0 8px;
+    font-size:24px;
+  }
+  header p{
+    margin:0;
+    color:var(--muted);
+    font-size:14px;
+    line-height:1.5;
+  }
+  main{
+    max-width:560px;
+    margin:32px auto 0;
+    padding:0 6vw;
+  }
+
+  .upload-panel{}
+
+  .drop{
+    border:2px dashed var(--line);
+    border-radius:14px;
+    padding:40px 20px;
+    text-align:center;
+    background:var(--card);
+    cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .drop.drag{
+    border-color:var(--brass);
+    background:#f2f5ff;
+  }
+  .drop p{ margin:6px 0; color:var(--muted); font-size:14px; }
+  .drop .big{ font-size:16px; color:var(--ink); font-weight:600; }
+  .drop input{ display:none; }
+
+  .file-chip{
+    margin-top:14px;
+    display:none;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:10px 14px;
+    font-size:13px;
+  }
+  .file-chip.show{ display:flex; }
+  .file-chip .name{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .file-chip button{
+    border:none; background:none; color:var(--muted); cursor:pointer; font-size:13px;
+  }
+
+  .month-field{
+    margin-top:14px;
+    display:none;
+  }
+  .month-field.show{ display:block; }
+  .month-field label{
+    display:block;
+    font-size:12.5px;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  .month-field label span{
+    font-size:11px;
+    color:rgba(114,109,100,0.75);
+  }
+  .month-field input{
+    width:100%;
+    padding:10px 12px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--card);
+    color:var(--ink);
+    font-size:14px;
+    font-family:inherit;
+  }
+  .month-field input:focus{
+    outline:none;
+    border-color:var(--brass);
+  }
+
+  .vendor-check-row{
+    display:flex;
+    gap:8px;
+  }
+  .vendor-check-row input{ flex:1; min-width:0; }
+  .vendor-check-btn{
+    flex-shrink:0;
+    padding:0 16px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--card);
+    color:var(--ink);
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+    font-family:inherit;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .vendor-check-btn:hover{ border-color:var(--brass); background:#f2f5ff; }
+  .vendor-check-btn:disabled{ cursor:default; opacity:0.6; }
+  .vendor-check-result{
+    margin-top:8px;
+    font-size:12.5px;
+    line-height:1.5;
+    display:none;
+  }
+  .vendor-check-result.show{ display:block; }
+  .vendor-check-result.match{ color:var(--ok); }
+  .vendor-check-result.new{ color:var(--warn); }
+  .vendor-check-result.err{ color:var(--err); }
+
+  button.submit{
+    margin-top:16px;
+    width:100%;
+    padding:14px;
+    border:none;
+    border-radius:10px;
+    background:var(--brass);
+    color:#fff;
+    font-size:15px;
+    font-weight:600;
+    cursor:pointer;
+    transition:background .15s ease;
+  }
+  button.submit:disabled{
+    background:#d1d5db;
+    cursor:default;
+  }
+  button.submit:not(:disabled):hover{ background:var(--brass-deep); }
+
+  .status{
+    margin-top:18px;
+    font-size:13px;
+    color:var(--muted);
+    display:none;
+    align-items:center;
+    gap:8px;
+  }
+  .status.show{ display:flex; }
+  .spinner{
+    width:14px; height:14px;
+    border:2px solid var(--line);
+    border-top-color:var(--brass);
+    border-radius:50%;
+    animation:spin .7s linear infinite;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  .result{
+    margin-top:28px;
+    display:none;
+  }
+  .result.show{ display:block; }
+
+  .result-head{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:16px 18px;
+    margin-bottom:14px;
+  }
+  .result-head .vendor{
+    font-size:16px;
+    font-weight:700;
+  }
+  .result-head .summary{
+    margin:8px 0 0;
+    font-size:13px;
+    color:var(--muted);
+  }
+  .result-head .summary.ok{ color:var(--ok); font-weight:600; }
+  .result-head .summary.err{ color:var(--err); font-weight:600; }
+  .badge{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    font-size:11px;
+    padding:3px 8px;
+    border-radius:999px;
+    margin-left:8px;
+    font-weight:600;
+  }
+  .badge.ok{ background:rgba(92,122,94,0.12); color:var(--ok); }
+  .badge.warn{ background:rgba(176,130,79,0.14); color:var(--warn); }
+
+  .no-code{ color:var(--warn); font-size:11px; }
+  .blank-cell{ color:rgba(17,17,17,0.28); }
+
+  .error-box{
+    margin-top:18px;
+    display:none;
+    background:#fbeeeb;
+    border:1px solid rgba(177,80,63,0.3);
+    color:var(--err);
+    border-radius:10px;
+    padding:14px 16px;
+    font-size:13px;
+    line-height:1.5;
+  }
+  .error-box.show{ display:block; }
+  .error-box.credit-warn{
+    background:#fff4e5;
+    border-color:rgba(176,130,79,0.5);
+    color:#8a5a1f;
+    font-weight:700;
+    font-size:14px;
+  }
+
+  .again{
+    margin-top:16px;
+    text-align:center;
+  }
+  .again a{
+    color:var(--muted);
+    font-size:13px;
+    cursor:pointer;
+    text-decoration:underline;
+  }
+
+  .result-actions{
+    display:flex;
+    gap:10px;
+    margin-top:14px;
+  }
+  .action-btn{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:7px;
+    padding:11px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:var(--card);
+    color:var(--ink);
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+    text-decoration:none;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .action-btn:hover{
+    border-color:var(--brass);
+    background:#f2f5ff;
+  }
+  .action-btn svg{ width:15px; height:15px; }
+
+  .note-tag{
+    font-size:10.5px;
+    padding:2px 6px;
+    border-radius:5px;
+    white-space:nowrap;
+  }
+  .note-tag.new{ background:rgba(92,122,94,0.12); color:var(--ok); }
+  .note-tag.miss{ background:rgba(177,80,63,0.12); color:var(--err); }
+
+  .flag-section{
+    margin-bottom:14px;
+    display:none;
+  }
+  .flag-section.show{ display:block; }
+  .flag-section h3{
+    margin:0 0 8px;
+    font-size:13px;
+    font-weight:600;
+  }
+  .flag-sub{
+    font-size:11px;
+    font-weight:400;
+    color:var(--muted);
+    margin-left:4px;
+  }
+  .flag-list{
+    list-style:none;
+    margin:0;
+    padding:0;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .flag-list li{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:9px 12px;
+    font-size:13px;
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .flag-list.miss li{
+    border-color:rgba(177,80,63,0.3);
+    background:#fbeeeb;
+  }
+  .flag-list li .fl-name{ font-weight:600; }
+  .flag-list li .fl-spec{ color:var(--muted); font-weight:400; margin-left:6px; }
+  .flag-list li .fl-meta{
+    color:var(--muted);
+    font-size:12px;
+    white-space:nowrap;
+  }
+
+  .note{
+    margin-top:24px;
+    font-size:12px;
+    color:var(--muted);
+    line-height:1.6;
+  }
+
+  button.camera-btn{
+    margin-top:10px;
+    width:100%;
+    padding:12px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--card);
+    color:var(--ink);
+    font-size:14px;
+    font-weight:600;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  button.camera-btn:hover{ border-color:var(--brass); background:#f2f5ff; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<header>
+  <h1>히트타일 판매등록</h1>
+  <p>판매 거래명세서·세금계산서(PDF 또는 사진)를 올리면 거래처(고객)와 품목을 자동으로 인식해서 "판매확인중" 시트에 미리 채워둡니다. 시트에서 확인/수정한 뒤 확정하면 판매입력 시트에 등록돼요.</p>
+</header>
+
+<main>
+
+  <div class="upload-panel">
+    <div class="drop" id="dropZone">
+      <div class="big">클릭해서 파일 선택</div>
+      <p>또는 이 영역에 파일을 끌어다 놓으세요</p>
+      <p>캡쳐한 사진은 Ctrl+V로 붙여넣기도 가능해요</p>
+      <p>PDF, JPG, PNG 지원</p>
+      <input type="file" id="fileInput" accept="application/pdf,image/*">
+    </div>
+
+    <button type="button" class="camera-btn" id="cameraBtn">📷 사진으로 촬영해서 올리기</button>
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+
+    <div class="file-chip" id="fileChip">
+      <span class="name" id="fileName"></span>
+      <button type="button" id="fileClear">지우기</button>
+    </div>
+
+    <div class="month-field" id="monthField">
+      <label for="monthInput">특정 월만 등록 <span>(선택, 거래처원장처럼 여러 달이 섞인 문서일 때)</span></label>
+      <input type="month" id="monthInput">
+    </div>
+
+    <button class="submit" id="submitBtn" disabled>업로드해서 분석하기</button>
+
+    <div class="status" id="statusBox">
+      <span class="spinner"></span>
+      <span id="statusText">문서를 분석하는 중이에요...</span>
+    </div>
+
+    <div class="error-box" id="errorBox"></div>
+  </div>
+
+  <div class="result" id="prefixBox">
+    <div class="result-head">
+      <span class="badge warn">신규 거래처</span>
+      <p class="summary">처음 등록되는 거래처예요. 인식된 이름이 틀렸다면 아래에서 정확히 고친 뒤 진행해주세요(이름이 기존 거래처와 정확히 같아지면 새로 만들지 않고 기존 거래처로 등록됩니다).</p>
+    </div>
+    <div class="month-field show">
+      <label for="prefixVendorName">거래처명 <span>(인식이 틀렸으면 여기서 수정)</span></label>
+      <div class="vendor-check-row">
+        <input type="text" id="prefixVendorName" placeholder="거래처명" list="vendorNameList" autocomplete="off">
+        <button type="button" class="vendor-check-btn" id="vendorCheckBtn">확인</button>
+      </div>
+      <datalist id="vendorNameList"></datalist>
+      <div class="vendor-check-result" id="vendorCheckResult"></div>
+    </div>
+    <div class="month-field show" id="prefixFieldWrap">
+      <label for="prefixInput">코드 접두어 <span>(영문 2~4자, 예: VG)</span></label>
+      <input type="text" id="prefixInput" maxlength="4" placeholder="VG">
+    </div>
+    <div class="month-field show" id="businessNoFieldWrap">
+      <label for="businessNoInput">사업자등록번호 <span>(이카운트 거래처 등록용, 모르면 비워둬도 됩니다)</span></label>
+      <input type="text" id="businessNoInput" placeholder="123-45-67890">
+    </div>
+    <button class="submit" id="prefixSubmitBtn">이 접두어로 등록하고 계속하기</button>
+    <div class="status" id="prefixStatusBox">
+      <span class="spinner"></span>
+      <span>거래처 등록하고 품목 준비하는 중이에요...</span>
+    </div>
+    <div class="error-box" id="prefixErrorBox"></div>
+  </div>
+
+  <div class="result" id="reviewBox">
+    <div class="result-head">
+      <span class="vendor" id="resultVendor"></span>
+      <span class="badge" id="vendorBadge"></span>
+      <p class="summary" id="resultSummary"></p>
+    </div>
+
+    <div class="flag-section" id="newSection">
+      <h3>🆕 신규 자동등록된 품목</h3>
+      <ul class="flag-list" id="newList"></ul>
+    </div>
+
+    <div class="flag-section" id="missSection">
+      <h3>⚠️ 미매칭 품목 <span class="flag-sub">품목코드가 비어있어요 · 품목등록마스터 확인 필요</span></h3>
+      <ul class="flag-list miss" id="missList"></ul>
+    </div>
+
+    <div class="result-actions">
+      <a class="action-btn" id="reviewSheetLink" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+        판매확인중 시트에서 확인·수정
+      </a>
+    </div>
+
+    <button class="submit" id="confirmBtn" style="margin-top:14px;">확인 끝났어요 · 판매입력에 등록하기</button>
+    <div class="status" id="confirmStatusBox">
+      <span class="spinner"></span>
+      <span>판매입력 시트에 저장하는 중이에요...</span>
+    </div>
+
+    <div class="again">
+      <a id="againLinkReview">다른 파일 업로드하기</a>
+    </div>
+  </div>
+
+  <div class="result" id="doneBox">
+    <div class="result-head">
+      <span class="vendor" id="doneVendorName"></span>
+      <span class="badge ok">등록 완료</span>
+      <p class="summary" id="doneSummary"></p>
+      <p class="summary" id="doneEcountStatus" style="display:none"></p>
+    </div>
+
+    <div class="result-actions">
+      <a class="action-btn" id="sheetLink" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+        구글시트에서 확인
+      </a>
+      <button type="button" class="action-btn" id="excelBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        엑셀로 저장
+      </button>
+    </div>
+
+    <div class="again">
+      <a id="againLink">다른 파일 업로드하기</a>
+    </div>
+  </div>
+
+  <p class="note">
+    거래처코드(Ecount)·담당자·거래유형은 자동으로 채워지지 않아요. 출하창고는 "본사창고"로 통일 등록됩니다. "판매확인중" 시트에서 품목명·규격·단가 등을 확인/수정한 뒤 등록하기를 눌러주세요 — 고친 내용은 다음 인식부터 자동으로 참고합니다.
+  </p>
+
+</main>
+
+<script>
+  const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec';
+  const SPREADSHEET_ID = '1XBzkR5oVC1kmRkT270FnbIm_IdRzzumpB48TGorKJSM';
+  const SHEET_URL = 'https://docs.google.com/spreadsheets/d/' + SPREADSHEET_ID + '/edit';
+
+  let lastResult = null;
+
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  const cameraBtn = document.getElementById('cameraBtn');
+  const cameraInput = document.getElementById('cameraInput');
+  const fileChip = document.getElementById('fileChip');
+  const fileName = document.getElementById('fileName');
+  const fileClear = document.getElementById('fileClear');
+  const monthField = document.getElementById('monthField');
+  const monthInput = document.getElementById('monthInput');
+  const submitBtn = document.getElementById('submitBtn');
+  const statusBox = document.getElementById('statusBox');
+  const statusText = document.getElementById('statusText');
+  const errorBox = document.getElementById('errorBox');
+  const reviewBox = document.getElementById('reviewBox');
+  const resultVendor = document.getElementById('resultVendor');
+  const vendorBadge = document.getElementById('vendorBadge');
+  const resultSummary = document.getElementById('resultSummary');
+  const newSection = document.getElementById('newSection');
+  const newList = document.getElementById('newList');
+  const missSection = document.getElementById('missSection');
+  const missList = document.getElementById('missList');
+  const prefixBox = document.getElementById('prefixBox');
+  const prefixVendorName = document.getElementById('prefixVendorName');
+  const vendorNameList = document.getElementById('vendorNameList');
+  const vendorCheckBtn = document.getElementById('vendorCheckBtn');
+  const vendorCheckResult = document.getElementById('vendorCheckResult');
+  const prefixFieldWrap = document.getElementById('prefixFieldWrap');
+  const businessNoFieldWrap = document.getElementById('businessNoFieldWrap');
+  const prefixInput = document.getElementById('prefixInput');
+  const businessNoInput = document.getElementById('businessNoInput');
+  const prefixSubmitBtn = document.getElementById('prefixSubmitBtn');
+  const prefixStatusBox = document.getElementById('prefixStatusBox');
+  const prefixErrorBox = document.getElementById('prefixErrorBox');
+  const reviewSheetLink = document.getElementById('reviewSheetLink');
+  const confirmBtn = document.getElementById('confirmBtn');
+  const confirmStatusBox = document.getElementById('confirmStatusBox');
+  const againLinkReview = document.getElementById('againLinkReview');
+
+  const doneBox = document.getElementById('doneBox');
+  const doneVendorName = document.getElementById('doneVendorName');
+  const doneSummary = document.getElementById('doneSummary');
+  const doneEcountStatus = document.getElementById('doneEcountStatus');
+  const againLink = document.getElementById('againLink');
+  const sheetLink = document.getElementById('sheetLink');
+  const excelBtn = document.getElementById('excelBtn');
+
+  let selectedFile = null;
+  let pendingParsed = null;
+  let pendingTargetMonth = '';
+  let pendingVendorName = '';
+
+  function resetAll() {
+    selectedFile = null;
+    pendingParsed = null;
+    pendingTargetMonth = '';
+    pendingVendorName = '';
+    fileInput.value = '';
+    fileChip.classList.remove('show');
+    monthField.classList.remove('show');
+    monthInput.value = '';
+    submitBtn.disabled = true;
+    statusBox.classList.remove('show');
+    errorBox.classList.remove('show');
+    errorBox.classList.remove('credit-warn');
+    prefixBox.classList.remove('show');
+    prefixErrorBox.classList.remove('show');
+    prefixInput.value = '';
+    reviewBox.classList.remove('show');
+    doneBox.classList.remove('show');
+    newSection.classList.remove('show');
+    missSection.classList.remove('show');
+  }
+
+  function pickFile(file) {
+    if (!file) return;
+    selectedFile = file;
+    fileName.textContent = file.name;
+    fileChip.classList.add('show');
+    monthField.classList.add('show');
+    submitBtn.disabled = false;
+    errorBox.classList.remove('show');
+    errorBox.classList.remove('credit-warn');
+    prefixBox.classList.remove('show');
+    reviewBox.classList.remove('show');
+    doneBox.classList.remove('show');
+  }
+
+  dropZone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', (e) => pickFile(e.target.files[0]));
+
+  cameraBtn.addEventListener('click', () => cameraInput.click());
+  cameraInput.addEventListener('change', (e) => {
+    pickFile(e.target.files[0]);
+    cameraInput.value = '';
+  });
+
+  ['dragenter', 'dragover'].forEach(evt => {
+    dropZone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      dropZone.classList.add('drag');
+    });
+  });
+  ['dragleave', 'drop'].forEach(evt => {
+    dropZone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag');
+    });
+  });
+  dropZone.addEventListener('drop', (e) => {
+    const file = e.dataTransfer.files[0];
+    pickFile(file);
+  });
+
+  document.addEventListener('paste', (e) => {
+    const items = (e.clipboardData && e.clipboardData.items) || [];
+    for (const item of items) {
+      if (item.type.indexOf('image') !== -1) {
+        const file = item.getAsFile();
+        if (file) { pickFile(file); e.preventDefault(); }
+        break;
+      }
+    }
+  });
+
+  fileClear.addEventListener('click', (e) => {
+    e.stopPropagation();
+    resetAll();
+  });
+
+  againLink.addEventListener('click', resetAll);
+  againLinkReview.addEventListener('click', resetAll);
+
+  function isCreditError(msg) {
+    return /credit balance is too low|insufficient_quota/i.test(String(msg || ''));
+  }
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // 휴대폰 카메라로 찍은 사진은 원본이 수십 MB라 Claude API 10MB 제한을 넘기기 쉬움.
+  // 캔버스로 리사이즈+재압축해서 base64로 반환(글자 읽기엔 충분한 해상도로 단계적으로 줄여감).
+  function loadImage(file) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  function canvasToBase64(canvas, quality) {
+    const dataUrl = canvas.toDataURL('image/jpeg', quality);
+    return dataUrl.split(',')[1];
+  }
+
+  async function compressImageForUpload(file) {
+    const MAX_BASE64_BYTES = 9.5 * 1024 * 1024; // Claude 10MB 제한에 여유를 둠
+    const img = await loadImage(file);
+    URL.revokeObjectURL(img.src);
+
+    const attempts = [
+      { maxSide: 2400, quality: 0.85 },
+      { maxSide: 2000, quality: 0.8 },
+      { maxSide: 1600, quality: 0.75 },
+      { maxSide: 1200, quality: 0.7 },
+      { maxSide: 1000, quality: 0.6 }
+    ];
+
+    let base64 = null;
+    for (const { maxSide, quality } of attempts) {
+      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      base64 = canvasToBase64(canvas, quality);
+      if (base64.length <= MAX_BASE64_BYTES) break;
+    }
+    return { base64: base64, mimeType: 'image/jpeg' };
+  }
+
+  submitBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+
+    submitBtn.disabled = true;
+    statusBox.classList.add('show');
+    errorBox.classList.remove('show');
+    errorBox.classList.remove('credit-warn');
+    reviewBox.classList.remove('show');
+    doneBox.classList.remove('show');
+    statusText.textContent = '문서를 분석하는 중이에요...';
+
+    try {
+      const isImage = (selectedFile.type || '').indexOf('image/') === 0;
+      let base64, mimeType;
+      if (isImage) {
+        statusText.textContent = '사진 용량을 줄이는 중이에요...';
+        const compressed = await compressImageForUpload(selectedFile);
+        base64 = compressed.base64;
+        mimeType = compressed.mimeType;
+      } else {
+        base64 = await fileToBase64(selectedFile);
+        mimeType = selectedFile.type || 'application/pdf';
+      }
+
+      statusText.textContent = '거래처·품목을 인식해서 판매확인중 시트에 준비하는 중이에요...';
+
+      const res = await fetch(ENDPOINT, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'sale_extract',
+          fileBase64: base64,
+          mimeType: mimeType,
+          targetMonth: monthInput.value || ''
+        })
+      });
+
+      const data = await res.json();
+
+      if (!data.ok && !data.needsPrefix) {
+        throw new Error(data.error || '처리 중 오류가 발생했어요.');
+      }
+
+      if (data.needsPrefix) {
+        pendingParsed = data.parsed;
+        pendingTargetMonth = data.targetMonth || '';
+        pendingVendorName = data.vendorName || '';
+        prefixVendorName.value = data.vendorName || '';
+        prefixInput.value = data.suggestedPrefix || '';
+        prefixErrorBox.classList.remove('show');
+        vendorCheckResult.classList.remove('show', 'match', 'new', 'err');
+        setVendorMatched(false);
+        prefixBox.classList.add('show');
+        prefixVendorName.focus();
+        loadVendorNames();
+      } else {
+        showReview(data);
+      }
+    } catch (err) {
+      const msg = err.message || String(err);
+      if (isCreditError(msg)) {
+        errorBox.textContent = '⚠️ Claude API 크레딧이 부족해요. console.anthropic.com에서 충전한 뒤 다시 시도해주세요.';
+        errorBox.classList.add('credit-warn');
+      } else {
+        errorBox.textContent = msg;
+        errorBox.classList.remove('credit-warn');
+      }
+      errorBox.classList.add('show');
+    } finally {
+      statusBox.classList.remove('show');
+      submitBtn.disabled = false;
+    }
+  });
+
+  let vendorNamesLoaded = false;
+  async function loadVendorNames() {
+    if (vendorNamesLoaded) return;
+    vendorNamesLoaded = true;
+    try {
+      const res = await fetch(ENDPOINT, { method: 'POST', body: JSON.stringify({ action: 'list_vendor_names' }) });
+      const data = await res.json();
+      if (data.ok && data.names) {
+        vendorNameList.innerHTML = data.names.map(function (n) {
+          return '<option value="' + n.replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '">';
+        }).join('');
+      }
+    } catch (e) {
+      vendorNamesLoaded = false; // 실패하면 다음에 다시 시도
+    }
+  }
+
+  let vendorMatched = false;
+
+  function setVendorMatched(matched) {
+    vendorMatched = matched;
+    prefixFieldWrap.classList.toggle('show', !matched);
+    businessNoFieldWrap.classList.toggle('show', !matched);
+    prefixSubmitBtn.textContent = matched ? '이 거래처로 등록하고 계속하기' : '이 접두어로 등록하고 계속하기';
+  }
+
+  prefixVendorName.addEventListener('input', () => {
+    vendorCheckResult.classList.remove('show', 'match', 'new', 'err');
+    setVendorMatched(false);
+  });
+
+  vendorCheckBtn.addEventListener('click', async () => {
+    const name = prefixVendorName.value.trim();
+    if (!name) { prefixVendorName.focus(); return; }
+    vendorCheckBtn.disabled = true;
+    vendorCheckBtn.textContent = '확인 중...';
+    vendorCheckResult.classList.remove('show', 'match', 'new', 'err');
+    try {
+      const res = await fetch(ENDPOINT, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'check_vendor', vendorName: name, originalVendorName: pendingVendorName })
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || '확인 중 오류가 발생했어요.');
+      if (data.matched) {
+        vendorCheckResult.textContent = '✓ 기존 거래처와 일치해요 (코드 접두어: ' + data.vendorInfo.prefix + ')' +
+          (data.corrected ? ' — 이 표기 차이는 교정사전에 저장했어요, 다음부터는 자동으로 잡힐 거예요.' : '');
+        vendorCheckResult.classList.add('show', 'match');
+        setVendorMatched(true);
+      } else {
+        vendorCheckResult.textContent = '일치하는 기존 거래처가 없어요. 신규 거래처로 등록됩니다.';
+        vendorCheckResult.classList.add('show', 'new');
+        setVendorMatched(false);
+      }
+    } catch (err) {
+      vendorCheckResult.textContent = err.message || String(err);
+      vendorCheckResult.classList.add('show', 'err');
+      setVendorMatched(false);
+    } finally {
+      vendorCheckBtn.disabled = false;
+      vendorCheckBtn.textContent = '확인';
+    }
+  });
+
+  prefixSubmitBtn.addEventListener('click', async () => {
+    const vendorName = prefixVendorName.value.trim();
+    if (!vendorName) { prefixVendorName.focus(); return; }
+    const prefix = prefixInput.value.trim().toUpperCase();
+    if (!vendorMatched && !prefix) { prefixInput.focus(); return; }
+    if (!pendingParsed) { prefixErrorBox.textContent = '문서 인식 정보가 없어졌어요. 다시 업로드해주세요.'; prefixErrorBox.classList.add('show'); return; }
+
+    prefixSubmitBtn.disabled = true;
+    prefixStatusBox.classList.add('show');
+    prefixErrorBox.classList.remove('show');
+
+    try {
+      const res = await fetch(ENDPOINT, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'sale_register_vendor',
+          vendorName: vendorName,
+          prefix: prefix,
+          businessNo: businessNoInput.value.trim(),
+          parsed: pendingParsed,
+          targetMonth: pendingTargetMonth
+        })
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || '처리 중 오류가 발생했어요.');
+      prefixBox.classList.remove('show');
+      showReview(data);
+    } catch (err) {
+      prefixErrorBox.textContent = err.message || String(err);
+      prefixErrorBox.classList.add('show');
+    } finally {
+      prefixSubmitBtn.disabled = false;
+      prefixStatusBox.classList.remove('show');
+    }
+  });
+
+  function showReview(data) {
+    lastResult = data;
+
+    reviewSheetLink.href = data.reviewUrl || SHEET_URL;
+
+    resultVendor.textContent = data.vendorName;
+    if (data.vendorMatched) {
+      vendorBadge.textContent = '기존 거래처 매칭됨';
+      vendorBadge.className = 'badge ok';
+    } else {
+      vendorBadge.textContent = '신규/미등록 거래처';
+      vendorBadge.className = 'badge warn';
+    }
+
+    const rows = data.rows || [];
+    const autoCount = rows.filter(r => r.note && r.note.indexOf('자동등록됨') !== -1).length;
+    const missCount = rows.filter(r => !r.itemCode).length;
+    let summary = `${rows.length}개 품목이 판매확인중 시트에 준비됐어요. 확인/수정 후 등록해주세요.`;
+    if (data.filteredByMonth && data.totalExtracted) {
+      summary = `문서에서 인식된 ${data.totalExtracted}개 품목 중 선택한 월 품목 ${rows.length}개가 판매확인중 시트에 준비됐어요.`;
+    }
+    if (autoCount) summary += ` 신규 자동등록 ${autoCount}건.`;
+    if (missCount) summary += ` 미매칭 ${missCount}건.`;
+    resultSummary.textContent = summary;
+
+    renderFlagList(newList, newSection, rows.filter(r => r.note && r.note.indexOf('자동등록됨') !== -1), (r) => `단가 ${Number(r.unitPrice).toLocaleString()}원 · 코드 ${r.itemCode}`);
+    renderFlagList(missList, missSection, rows.filter(r => !r.itemCode), (r) => `수량 ${r.qty}${r.spec ? '' : ''}`);
+
+    reviewBox.classList.add('show');
+    if (data.reviewUrl) window.open(data.reviewUrl, '_blank', 'noopener');
+  }
+
+  confirmBtn.addEventListener('click', async () => {
+    confirmBtn.disabled = true;
+    confirmStatusBox.classList.add('show');
+    try {
+      const res = await fetch(ENDPOINT, { method: 'POST', body: JSON.stringify({ action: 'sale_confirm' }) });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || '처리 중 오류가 발생했어요.');
+
+      lastResult = data;
+      reviewBox.classList.remove('show');
+      doneVendorName.textContent = data.vendorName;
+      doneSummary.textContent = `${data.savedCount}개 품목이 판매입력 시트에 등록됐어요.`;
+      sheetLink.href = data.sheetGid !== undefined ? (SHEET_URL + '#gid=' + data.sheetGid) : SHEET_URL;
+      const ecount = data.ecount;
+      doneEcountStatus.classList.remove('ok', 'err');
+      if (ecount && ecount.sale) {
+        doneEcountStatus.style.display = '';
+        const sale = ecount.sale;
+        if (sale.ok) {
+          doneEcountStatus.textContent = '✓ 이카운트에도 판매전표까지 자동으로 올라갔어요.';
+          doneEcountStatus.classList.add('ok');
+        } else {
+          doneEcountStatus.textContent = '⚠ 이카운트 판매전표 등록 실패 — ' + (sale.error || '알 수 없는 오류') + ' (직접 확인/업로드가 필요해요)';
+          doneEcountStatus.classList.add('err');
+        }
+      } else {
+        doneEcountStatus.style.display = 'none';
+      }
+      doneBox.classList.add('show');
+    } catch (err) {
+      alert(err.message || String(err));
+    } finally {
+      confirmBtn.disabled = false;
+      confirmStatusBox.classList.remove('show');
+    }
+  });
+
+  function renderFlagList(listEl, sectionEl, items, metaFn) {
+    listEl.innerHTML = '';
+    if (!items.length) {
+      sectionEl.classList.remove('show');
+      return;
+    }
+    items.forEach((r) => {
+      const li = document.createElement('li');
+      const left = document.createElement('span');
+      left.innerHTML = `<span class="fl-name">${escapeHtml(r.itemName)}</span>` + (r.spec ? `<span class="fl-spec">${escapeHtml(r.spec)}</span>` : '');
+      const right = document.createElement('span');
+      right.className = 'fl-meta';
+      right.textContent = metaFn(r);
+      li.appendChild(left);
+      li.appendChild(right);
+      listEl.appendChild(li);
+    });
+    sectionEl.classList.add('show');
+  }
+
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  excelBtn.addEventListener('click', () => {
+    if (!lastResult || !lastResult.rows || !lastResult.rows.length) return;
+
+    const header = ['일자', '순번', '거래처코드', '거래처명', '담당자', '출하창고', '거래유형', '통화', '환율', '품목코드', '품목명', '규격명', '수량', '단가(vat포함)', '외화금액', '공급가액', '부가세', '적요'];
+
+    const rows = lastResult.rows.map((r) => ([
+      r.date, r.seq, r.vendorCode, r.vendorName, r.manager, r.warehouse,
+      r.dealType, r.currency, r.rate, r.itemCode, r.itemName, r.spec,
+      r.qty, r.unitPrice, r.foreignAmount, r.supply, r.vat, r.note
+    ]));
+
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '판매입력');
+
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    XLSX.writeFile(wb, `판매입력_${lastResult.vendorName}_${today}.xlsx`);
+  });
+</script>
+
+</body>
+</html>
