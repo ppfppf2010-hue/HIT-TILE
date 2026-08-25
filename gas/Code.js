@@ -71,6 +71,8 @@
  if (action === 'delete_order') return handleDeleteOrder(body);
  if (action === 'save_balances') return handleSaveBalances(body);
  if (action === 'add_correction') return handleAddCorrection(body);
+ if (action === 'list_vendor_names') return handleListVendorNames();
+ if (action === 'check_vendor') return handleCheckVendor(body);
  throw new Error('알 수 없는 action: ' + action);
  } catch (err) {
  return jsonOut({ ok: false, error: err.message });
@@ -842,6 +844,38 @@
  }
  }
  return null;
+ }
+
+ // ---- 거래처명 자동완성용 전체 목록 (거래처코드관리 시트 A열, 빈 값 제외 오름차순) ----
+ function handleListVendorNames() {
+ const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+ const sheet = ss.getSheetByName(VENDOR_SHEET);
+ const data = sheet.getDataRange().getValues();
+ const names = [];
+ for (let i = 1; i < data.length; i++) {
+ const name = String(data[i][0] || '').trim();
+ if (name) names.push(name);
+ }
+ names.sort();
+ return jsonOut({ ok: true, names: names });
+ }
+
+ // ---- 확인 버튼: 입력한 거래처명이 기존 거래처와 매칭되는지 즉시 조회 ----
+ // originalVendorName(Claude가 처음 인식한 표현)이 함께 오고, 매칭됐는데 표현이 다르면
+ // 다음부터는 자동으로 잡히도록 교정사전에 그 자리에서 저장해준다.
+ function handleCheckVendor(body) {
+ const vendorName = String(body.vendorName || '').trim();
+ if (!vendorName) throw new Error('거래처명이 없습니다.');
+ const originalVendorName = String(body.originalVendorName || '').trim();
+
+ const vendorInfo = findVendor(vendorName);
+ let corrected = false;
+ if (vendorInfo && originalVendorName && originalVendorName !== vendorName) {
+ saveCorrections([[originalVendorName, vendorInfo.storedName]]);
+ corrected = true;
+ }
+
+ return jsonOut({ ok: true, matched: !!vendorInfo, vendorInfo: vendorInfo, corrected: corrected });
  }
 
  // ---- 같은 코드 접두어(예: HIK)를 쓰는 모든 거래처명 행 중 최대번호 조회 ----

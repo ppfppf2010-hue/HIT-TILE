@@ -112,6 +112,37 @@
     border-color:var(--brass);
   }
 
+  .vendor-check-row{
+    display:flex;
+    gap:8px;
+  }
+  .vendor-check-row input{ flex:1; min-width:0; }
+  .vendor-check-btn{
+    flex-shrink:0;
+    padding:0 16px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--card);
+    color:var(--ink);
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+    font-family:inherit;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .vendor-check-btn:hover{ border-color:var(--brass); background:#f2f5ff; }
+  .vendor-check-btn:disabled{ cursor:default; opacity:0.6; }
+  .vendor-check-result{
+    margin-top:8px;
+    font-size:12.5px;
+    line-height:1.5;
+    display:none;
+  }
+  .vendor-check-result.show{ display:block; }
+  .vendor-check-result.match{ color:var(--ok); }
+  .vendor-check-result.new{ color:var(--warn); }
+  .vendor-check-result.err{ color:var(--err); }
+
   button.submit{
     margin-top:16px;
     width:100%;
@@ -377,7 +408,12 @@
     </div>
     <div class="month-field show">
       <label for="prefixVendorName">거래처명 <span>(인식이 틀렸으면 여기서 수정)</span></label>
-      <input type="text" id="prefixVendorName" placeholder="거래처명">
+      <div class="vendor-check-row">
+        <input type="text" id="prefixVendorName" placeholder="거래처명" list="vendorNameList" autocomplete="off">
+        <button type="button" class="vendor-check-btn" id="vendorCheckBtn">확인</button>
+      </div>
+      <datalist id="vendorNameList"></datalist>
+      <div class="vendor-check-result" id="vendorCheckResult"></div>
     </div>
     <div class="month-field show">
       <label for="prefixInput">코드 접두어 <span>(영문 2~4자, 예: VG)</span></label>
@@ -490,6 +526,9 @@
   const missList = document.getElementById('missList');
   const prefixBox = document.getElementById('prefixBox');
   const prefixVendorName = document.getElementById('prefixVendorName');
+  const vendorNameList = document.getElementById('vendorNameList');
+  const vendorCheckBtn = document.getElementById('vendorCheckBtn');
+  const vendorCheckResult = document.getElementById('vendorCheckResult');
   const prefixInput = document.getElementById('prefixInput');
   const businessNoInput = document.getElementById('businessNoInput');
   const prefixSubmitBtn = document.getElementById('prefixSubmitBtn');
@@ -699,8 +738,10 @@
         prefixVendorName.value = data.vendorName || '';
         prefixInput.value = data.suggestedPrefix || '';
         prefixErrorBox.classList.remove('show');
+        vendorCheckResult.classList.remove('show', 'match', 'new', 'err');
         prefixBox.classList.add('show');
         prefixVendorName.focus();
+        loadVendorNames();
       } else {
         showReview(data);
       }
@@ -717,6 +758,57 @@
     } finally {
       statusBox.classList.remove('show');
       submitBtn.disabled = false;
+    }
+  });
+
+  let vendorNamesLoaded = false;
+  async function loadVendorNames() {
+    if (vendorNamesLoaded) return;
+    vendorNamesLoaded = true;
+    try {
+      const res = await fetch(ENDPOINT, { method: 'POST', body: JSON.stringify({ action: 'list_vendor_names' }) });
+      const data = await res.json();
+      if (data.ok && data.names) {
+        vendorNameList.innerHTML = data.names.map(function (n) {
+          return '<option value="' + n.replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '">';
+        }).join('');
+      }
+    } catch (e) {
+      vendorNamesLoaded = false; // 실패하면 다음에 다시 시도
+    }
+  }
+
+  prefixVendorName.addEventListener('input', () => {
+    vendorCheckResult.classList.remove('show', 'match', 'new', 'err');
+  });
+
+  vendorCheckBtn.addEventListener('click', async () => {
+    const name = prefixVendorName.value.trim();
+    if (!name) { prefixVendorName.focus(); return; }
+    vendorCheckBtn.disabled = true;
+    vendorCheckBtn.textContent = '확인 중...';
+    vendorCheckResult.classList.remove('show', 'match', 'new', 'err');
+    try {
+      const res = await fetch(ENDPOINT, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'check_vendor', vendorName: name, originalVendorName: pendingVendorName })
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || '확인 중 오류가 발생했어요.');
+      if (data.matched) {
+        vendorCheckResult.textContent = '✓ 기존 거래처와 일치해요 (코드 접두어: ' + data.vendorInfo.prefix + ')' +
+          (data.corrected ? ' — 이 표기 차이는 교정사전에 저장했어요, 다음부터는 자동으로 잡힐 거예요.' : '');
+        vendorCheckResult.classList.add('show', 'match');
+      } else {
+        vendorCheckResult.textContent = '일치하는 기존 거래처가 없어요. 신규 거래처로 등록됩니다.';
+        vendorCheckResult.classList.add('show', 'new');
+      }
+    } catch (err) {
+      vendorCheckResult.textContent = err.message || String(err);
+      vendorCheckResult.classList.add('show', 'err');
+    } finally {
+      vendorCheckBtn.disabled = false;
+      vendorCheckBtn.textContent = '확인';
     }
   });
 
