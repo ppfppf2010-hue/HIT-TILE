@@ -85,13 +85,37 @@ async function ecountCall(apiPath, body, retried) {
   });
   const data = await res.json();
 
-  // 세션 만료/무효로 보이는 에러면 한 번만 재로그인 후 재시도
-  const looksLikeSessionError = data && (data.Status === '401' || (data.Error && /session|세션/i.test(JSON.stringify(data.Error))));
+  // 세션 만료/무효로 보이는 에러면 한 번만 재로그인 후 재시도.
+  // 실측해보니 세션이 끊겼을 때 Status="500" + Errors[].Code="EXP00001" + Message="Please login."
+  // 형태로 오기도 해서(세션/session 단어가 전혀 없음), 코드/문구 둘 다로 넓게 잡는다.
+  const errorText = JSON.stringify(data && (data.Errors || data.Error || '')) || '';
+  const looksLikeSessionError = data && (
+    data.Status === '401' ||
+    /EXP00001/i.test(errorText) ||
+    /session|세션|login|로그인/i.test(errorText)
+  );
   if (looksLikeSessionError && !retried) {
     await ecountLogin(true);
     return ecountCall(apiPath, body, true);
   }
   return data;
+}
+
+// ---- 이카운트 응답 자체에 에러가 실려왔는지 판별 ----
+// HTTP 요청은 성공(200)해도, 이카운트 OAPI는 본문 안에 Status/Errors/Error로 실패를 표시한다.
+// 이걸 확인 안 하면(예전 버그) 실제로는 실패했는데도 ok:true로 잘못 응답하게 된다.
+function ecountFailureMessage(data) {
+  if (!data) return '이카운트로부터 응답을 받지 못했습니다.';
+  if (data.Errors && data.Errors.length) {
+    return data.Errors.map(function (e) { return e.Message || e.Code; }).join(' / ');
+  }
+  if (data.Error && (data.Error.Message || data.Error.Code)) {
+    return data.Error.Message || ('에러코드 ' + data.Error.Code);
+  }
+  if (data.Status && String(data.Status) !== '200') {
+    return '이카운트 응답 코드 ' + data.Status;
+  }
+  return null; // 실패 흔적 없음 -> 성공으로 간주
 }
 
 // ---- 거래처 등록/동기화 (SaveBasicCust) ----
@@ -110,6 +134,8 @@ app.post('/register-vendor', async (req, res) => {
         }
       }]
     });
+    const failMsg = ecountFailureMessage(data);
+    if (failMsg) return res.json({ ok: false, error: failMsg, ecount: data });
     res.json({ ok: true, ecount: data });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
@@ -139,6 +165,8 @@ app.post('/register-item', async (req, res) => {
         }
       }]
     });
+    const failMsg = ecountFailureMessage(data);
+    if (failMsg) return res.json({ ok: false, error: failMsg, ecount: data });
     res.json({ ok: true, ecount: data });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
@@ -172,6 +200,8 @@ app.post('/push-purchase', async (req, res) => {
     }));
 
     const data = await ecountCall('/OAPI/V2/Purchases/SavePurchases', { PurchasesList });
+    const failMsg = ecountFailureMessage(data);
+    if (failMsg) return res.json({ ok: false, error: failMsg, ecount: data });
     res.json({ ok: true, ecount: data });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
