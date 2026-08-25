@@ -300,11 +300,12 @@
  if (corrections.length) saveCorrections(corrections);
 
  appendToMasterSheet(vendorName, items);
+ items.forEach(function (it) { syncItemToEcount(it); }); // 실패해도 로컬 등록은 이미 끝났으니 무시하고 진행
 
  // 거래처 코드 마지막번호 갱신 (코드 문자열에서 접두어/숫자 파싱)
  let maxNumber = 0, prefix = '';
  items.forEach(function (it) {
- const m = String(it.code).match(/^([A-Za-z]+)(\d+)$/);
+ const m = String(it.code).match(/^([^\d]+)(\d+)$/);
  if (m) {
  prefix = m[1];
  const n = parseInt(m[2], 10);
@@ -319,6 +320,7 @@
  const newMax = Math.max(maxNumber, getMaxLastUsedForPrefix(prefix));
  ss.getSheetByName(VENDOR_SHEET).appendRow([vendorName, prefix, newMax]);
  saveLastUsedByPrefix(prefix, newMax);
+ syncVendorToEcount(vendorName); // 실패해도 로컬 등록은 이미 끝났으니 무시하고 진행
  }
 
  // 검토중 시트는 헤더만 남기고 비움
@@ -679,7 +681,7 @@
  const vendorData = vendorSheet.getDataRange().getValues();
  const maxByPrefix = {};
  dedupedRows.forEach(function (r) {
- const m = String(r[0]).trim().match(/^([A-Za-z]+)(\d+)$/);
+ const m = String(r[0]).trim().match(/^([^\d]+)(\d+)$/);
  if (m) {
  const p = m[1];
  const n = parseInt(m[2], 10);
