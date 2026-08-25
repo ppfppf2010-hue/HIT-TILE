@@ -218,7 +218,9 @@
  parsed.items.forEach(function (it) {
  const key = itemKey(it.name, it.spec);
  if (codeMap[key] !== undefined) return;
- const match = findMasterItem(masterData, vendorName, it.name, it.price, it.spec);
+ // 고객사(거래처)는 우리가 어디서 사왔는지와 무관하므로, 거래처로 좁히지 않고 전체 마스터에서 찾는다
+ // (배송 매칭과 같은 이유: 배송받는/구매하는 고객사는 품목등록마스터의 매입 거래처와 무관함).
+ const match = findMasterItemAnyVendor(masterData, it.name, it.price, it.spec);
  if (match) {
  codeMap[key] = match;
  } else if (missingKeys.indexOf(key) === -1) {
@@ -260,7 +262,8 @@
  const finalName = match ? match.name : it.name;
  const finalSpec = match && match.spec ? match.spec : (it.spec || '');
  const autoRegistered = !!(vendorInfo && missingKeys.indexOf(key) !== -1);
- const unitPrice = Math.round(Number(it.price) || 0);
+ // 카톡 캡처 등 가격이 안 적힌 주문은, 매칭된 기존 품목이면 마스터에 등록된 출고단가를 그대로 쓴다.
+ const unitPrice = Math.round(Number(it.price) || (match && match.outPrice) || 0);
  const qty = Number(it.qty) || 0;
  const supply = Math.round((unitPrice * qty) / 1.1);
  const vat = Math.round(unitPrice * qty) - supply;
@@ -331,14 +334,22 @@
  : [''];
 
  const systemPrompt = [
- '당신은 판매 거래명세서(세금계산서 포함, 히트타일이 발행한 문서)에서 거래처명과 판매 품목을 추출하는 도우미입니다.',
+ '당신은 히트타일의 판매 기록(정식 거래명세서/세금계산서뿐 아니라, 카카오톡 등 메신저로 고객이 보낸 주문 캡처도 포함)에서 거래처명과 판매 품목을 추출하는 도우미입니다.',
  ''
  ].concat(correctionBlock).concat([
  '[거래처명 인식]',
- '- 이 문서는 히트타일이 판매자(공급자) 입장에서 발행한 것입니다. 문서 안에 보통 "공급받는자:", "공급받는자명 :", "거래처명 :" 같은 라벨과 함께 실제 고객 회사명이 적혀 있습니다.',
+ '- 정식 문서면 보통 "공급받는자:", "공급받는자명 :", "거래처명 :" 같은 라벨과 함께 실제 고객 회사명이 적혀 있습니다.',
  '- "공급자:"/"공급자명 :" 라벨 옆에는 대부분 히트타일 자신(대구/서울 등 지점명이 붙은 형태 포함)이 적혀 있습니다. 이건 절대 vendorName으로 쓰지 마세요 — 그건 우리 회사입니다.',
  '- 실제로 추출해야 할 거래처명은 "공급받는자"/"거래처명" 라벨 옆의 회사명(=우리 고객)입니다.',
  '- 이런 라벨이 아예 안 보이는 문서도 있습니다. 이 경우 문서 상단/하단에 실제 물건을 받은 쪽으로 보이는 회사명을 찾아 vendorName으로 쓰세요.',
+ '- 카카오톡 등 메신저 캡처인 경우: 대화방 이름, 상대방 프로필명, 또는 대화 내용 중 언급된 업체명(현장명 포함)을 거래처명으로 쓰세요. 정말 아무 단서가 없으면 캡처 속 상대방 이름(개인명이라도)을 그대로 vendorName으로 쓰세요.',
+ '',
+ '[카카오톡/메신저 캡처 인식 - 표 형식 문서와 다름]',
+ '- 이런 캡처는 표가 아니라 대화체입니다. "타일 20장 주세요", "OO 5개요" 처럼 품명+수량만 짧게 적혀 있고 규격/단가는 아예 없는 경우가 대부분입니다.',
+ '- 품명은 정식 등록명이 아니라 손님이 부르는 약칭/줄임말/오타로 적혀있을 수 있습니다. 억지로 새 품목명을 만들지 말고, 실제 의미(제품 종류)가 통하도록 자연스러운 품명으로 정리해서 추출하세요 — 정확한 품목코드 매칭은 이후 별도 로직이 처리합니다.',
+ '- 단가가 대화에 전혀 없으면 price를 0으로 두세요 (0이면 이후 로직이 기존 등록 단가를 자동으로 채웁니다). 절대 임의로 가격을 추측해서 채우지 마세요.',
+ '- 수량 표현이 "장/개/박스/판" 등 다양하게 나올 수 있습니다. 문서에 적힌 단위 그대로 unit에 넣고, 숫자만 qty로 추출하세요.',
+ '- 여러 사람이 순서대로 대화한 캡처면, 실제 "주문 확정"으로 보이는 메시지만 품목으로 반영하고, 단순 질문/잡담/이모티콘 메시지는 무시하세요.',
  '',
  '[품목 추출 규칙]',
  '1. 일자, 품명, 규격, 단위, 수량, 단가, 공급가액, 세액 컬럼이 있는 표에서 실제 품목 거래행만 추출합니다.',

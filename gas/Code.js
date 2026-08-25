@@ -415,7 +415,7 @@
  const split = splitTileSizePrefix(name);
  if (split) { name = split.name; spec = split.spec; }
  }
- return { code: row[0], name: name, spec: spec };
+ return { code: row[0], name: name, spec: spec, inPrice: Number(row[4]) || 0, outPrice: Number(row[10]) || 0 };
  }
 
  // ---- 편집거리(Levenshtein distance): 오타 몇 글자 차이 정도를 재기 위한 헬퍼 ----
