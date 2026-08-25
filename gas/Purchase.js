@@ -64,6 +64,7 @@
  function handlePurchaseRegisterVendor(body) {
  const vendorName = String(body.vendorName || '').trim();
  const prefix = String(body.prefix || '').trim().toUpperCase();
+ const businessNo = String(body.businessNo || '').trim();
  const parsed = body.parsed;
  const targetMonth = String(body.targetMonth || '').trim();
  if (!vendorName) throw new Error('거래처명이 없습니다.');
@@ -75,8 +76,9 @@
  if (!vendorInfo) {
  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
  const sharedMax = getMaxLastUsedForPrefix(prefix);
- ss.getSheetByName(VENDOR_SHEET).appendRow([vendorName, prefix, sharedMax]);
- vendorInfo = { storedName: vendorName, prefix: prefix, lastUsed: sharedMax };
+ ss.getSheetByName(VENDOR_SHEET).appendRow([vendorName, prefix, sharedMax, businessNo]);
+ vendorInfo = { storedName: vendorName, prefix: prefix, lastUsed: sharedMax, businessNo: businessNo };
+ ecountSyncVendor(vendorName, businessNo);
  }
 
  return finalizePurchaseRegistration(parsed, vendorInfo, !!targetMonth);
@@ -180,7 +182,29 @@
  sheet.appendRow(PURCHASE_REVIEW_HEADERS);
  sheet.setFrozenRows(1);
 
- return jsonOut({ ok: true, vendorName: vendorName, savedCount: finalRows.length, rows: finalRows, sheetGid: sheetGid });
+ // ---- 이카운트 중계서버로 거래처 동기화 + 품목 동기화 + 매입전표 저장 ----
+ // 실패해도 구글시트 저장은 이미 끝난 뒤이므로 흐름을 막지 않고 결과만 응답에 담아 돌려준다.
+ const vendorForSync = findVendor(vendorName);
+ const ecountVendorResult = ecountSyncVendor(vendorName, vendorForSync ? vendorForSync.businessNo : '');
+
+ const codesToSync = finalRows.filter(function (r) { return r.itemCode; }).map(function (r) { return r.itemCode; });
+ const ecountItemResults = ecountSyncItemsByCode(codesToSync);
+
+ const whCd = PropertiesService.getScriptProperties().getProperty('ECOUNT_DEFAULT_WH_CD') || '';
+ const pushRows = finalRows.filter(function (r) { return r.itemCode; }).map(function (r) {
+ return { date: r.date, custDes: vendorName, whCd: whCd, prodCd: r.itemCode, prodDes: r.itemName, qty: r.qty, unitPriceVat: r.unitPrice, supply: r.supply, vat: r.vat, remarks: r.note || '' };
+ });
+ let ecountPurchaseResult;
+ if (!pushRows.length) {
+ ecountPurchaseResult = { ok: false, error: '품목코드가 매칭된 행이 없어 이카운트 매입전표 저장을 건너뛰었습니다.' };
+ } else if (!whCd) {
+ ecountPurchaseResult = { ok: false, error: 'ECOUNT_DEFAULT_WH_CD 스크립트 속성이 없어 이카운트 매입전표 저장을 건너뛰었습니다. Apps Script 편집기 > 프로젝트 설정 > 스크립트 속성에서 입고창고의 이카운트 창고코드를 등록해주세요.' };
+ } else {
+ ecountPurchaseResult = ecountRelayCall('/push-purchase', { rows: pushRows });
+ }
+
+ return jsonOut({ ok: true, vendorName: vendorName, savedCount: finalRows.length, rows: finalRows, sheetGid: sheetGid,
+ ecount: { vendor: ecountVendorResult, items: ecountItemResults, purchase: ecountPurchaseResult } });
  }
 
  // ---- 품목코드 매칭 + 미매칭 품목 자동 채번/등록 + 공급가액/부가세 계산해서 행 조립 ----

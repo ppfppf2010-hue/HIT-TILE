@@ -7,6 +7,7 @@
 //
 // 이 서버는 GAS로부터만 호출된다고 가정하고, RELAY_SECRET 공유 비밀키로 간단히 인증한다.
 
+require('dotenv').config();
 const express = require('express');
 const app = express();
 app.use(express.json({ limit: '2mb' }));

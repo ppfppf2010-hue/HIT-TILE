@@ -274,6 +274,10 @@
       <label for="prefixInput">코드 접두어 (영문 2~4자, 예: VG)</label>
       <input type="text" id="prefixInput" maxlength="4" placeholder="VG">
     </div>
+    <div class="field">
+      <label for="businessNoInput">사업자등록번호 (이카운트 거래처 등록용, 모르면 비워둬도 됩니다)</label>
+      <input type="text" id="businessNoInput" placeholder="123-45-67890">
+    </div>
     <button class="submit" id="prefixSubmitBtn">이 접두어로 미리보기 만들기</button>
   </div>
 
@@ -326,6 +330,7 @@
   const prefixCard = document.getElementById('prefixCard');
   const prefixVendorName = document.getElementById('prefixVendorName');
   const prefixInput = document.getElementById('prefixInput');
+  const businessNoInput = document.getElementById('businessNoInput');
   const prefixSubmitBtn = document.getElementById('prefixSubmitBtn');
 
   const reviewCard = document.getElementById('reviewCard');
@@ -549,7 +554,7 @@
     prefixSubmitBtn.disabled = true;
     prefixSubmitBtn.textContent = '만드는 중...';
     try {
-      const data = await callApi({ action: 'previewNew', vendorName: pendingVendorName, prefix: prefix, rawItems: pendingRawItems });
+      const data = await callApi({ action: 'previewNew', vendorName: pendingVendorName, prefix: prefix, businessNo: businessNoInput.value.trim(), rawItems: pendingRawItems });
       if (!data.ok) throw new Error(data.error || '처리 중 오류가 발생했어요.');
       prefixCard.classList.remove('show');
       if (data.allExisting) {

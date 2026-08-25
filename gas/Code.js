@@ -36,7 +36,7 @@
 
  const REVIEW_HEADERS = ['품목코드', '품목명', '규격구분', '규격', '입고단가', '입고단가VAT포함여부',
    '단위', '품목구분', '세트여부', '재고수량관리', '출고단가', '출고단가VAT포함여부', '거래처명',
-   '원본품목명(자동,수정금지)', '원본규격(자동,수정금지)'];
+   '원본품목명(자동,수정금지)', '원본규격(자동,수정금지)', '사업자번호(자동,수정금지)'];
 
  const VENDOR_PREFIX_MAP = [
    { keyword: '베리굿', prefix: 'VG' },
@@ -107,7 +107,7 @@
  const startNumber = Math.max(vendorInfo.lastUsed, sharedMax) + 1;
  // 시트에 저장된 원래 표기(storedName)를 사용해서 이후 저장되는 거래처명 표기를 통일시킨다.
  const previewRows = assignCodesAndPrices(dedup.newItems, vendorInfo.prefix, startNumber, vendorInfo.storedName);
- const reviewUrl = stageForReview(vendorInfo.storedName, previewRows);
+ const reviewUrl = stageForReview(vendorInfo.storedName, previewRows, vendorInfo.businessNo || '');
  return jsonOut({ ok: true, isNewVendor: false, vendorName: vendorInfo.storedName, reviewUrl: reviewUrl, count: previewRows.length, skippedCount: dedup.skipped.length, skipped: dedup.skipped });
  }
 
@@ -150,6 +150,7 @@
  function handlePreviewNew(body) {
  const vendorName = (body.vendorName || '').trim();
  const prefix = (body.prefix || '').trim().toUpperCase();
+ const businessNo = (body.businessNo || '').trim();
  const rawItems = body.rawItems;
  if (!vendorName) throw new Error('거래처명이 없습니다.');
  if (!prefix) throw new Error('코드 접두어를 입력해주세요.');
@@ -159,6 +160,7 @@
  const existing = findVendor(vendorName);
  const finalVendorName = existing ? existing.storedName : vendorName;
  const finalPrefix = existing ? existing.prefix : prefix;
+ const finalBusinessNo = existing ? (existing.businessNo || businessNo) : businessNo;
 
  const dedup = dedupeAgainstMaster(rawItems, finalVendorName);
  if (!dedup.newItems.length) {
@@ -171,12 +173,14 @@
  const startNumber = Math.max(existing ? existing.lastUsed : 0, sharedMax) + 1;
 
  const previewRows = assignCodesAndPrices(dedup.newItems, finalPrefix, startNumber, finalVendorName);
- const reviewUrl = stageForReview(finalVendorName, previewRows);
+ const reviewUrl = stageForReview(finalVendorName, previewRows, finalBusinessNo);
  return jsonOut({ ok: true, count: previewRows.length, reviewUrl: reviewUrl, skippedCount: dedup.skipped.length, skipped: dedup.skipped });
  }
 
  // ---- '검토중' 탭에 미리보기 기록 ----
- function stageForReview(vendorName, rows) {
+ // businessNo(사업자등록번호)는 신규 거래처일 때만 의미가 있고, 화면엔 안 보이는 숨김열에 실어뒀다가
+ // handleConfirm에서 거래처를 실제로 등록할 때 함께 저장하고 이카운트 동기화에도 사용한다.
+ function stageForReview(vendorName, rows, businessNo) {
  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
  let sheet = ss.getSheetByName(REVIEW_SHEET);
  if (!sheet) sheet = ss.insertSheet(REVIEW_SHEET);
@@ -186,12 +190,12 @@
  rows.forEach(function (r) {
  sheet.appendRow([r.code, r.name, r.specType, r.spec, r.inPrice, r.inVat,
  r.unit, r.category, r.isSet, r.stockMgmt, r.outPrice, r.outVat, vendorName,
- r.name, r.spec]); // 마지막 2개는 원본값 (수정 여부 비교용, 숨김열)
+ r.name, r.spec, businessNo || '']); // 마지막 3개는 숨김열 (원본값 2개 + 사업자번호)
  });
 
  sheet.setFrozenRows(1);
  try { sheet.autoResizeColumns(1, 13); } catch (e) { /* ignore */ }
- try { sheet.hideColumns(14, 2); } catch (e) { /* ignore */ }
+ try { sheet.hideColumns(14, 3); } catch (e) { /* ignore */ }
  const headerRange = sheet.getRange(1, 1, 1, REVIEW_HEADERS.length);
  headerRange.setFontWeight('bold').setBackground('#eef4ff');
 
@@ -220,6 +224,7 @@
  });
  let vendorName = String(rows[0][12] || '').trim();
  if (!vendorName) throw new Error('거래처명(13번째 열)이 비어있는 행이 있습니다. 확인해주세요.');
+ const reviewBusinessNo = String(rows[0][15] || '').trim();
 
  // 이미 등록된 거래처라면(표기가 살짝 달라도) 시트에 저장된 원래 표기로 통일해서 저장한다.
  const existingForSave = findVendor(vendorName);
@@ -253,14 +258,15 @@
  if (n > maxNumber) maxNumber = n;
  }
  });
- const vendorInfo = findVendor(vendorName);
+ let vendorInfo = findVendor(vendorName);
  if (vendorInfo) {
  const newMax = Math.max(maxNumber, vendorInfo.lastUsed, getMaxLastUsedForPrefix(vendorInfo.prefix));
  saveLastUsedByPrefix(vendorInfo.prefix, newMax);
  } else if (prefix) {
  const newMax = Math.max(maxNumber, getMaxLastUsedForPrefix(prefix));
- ss.getSheetByName(VENDOR_SHEET).appendRow([vendorName, prefix, newMax]);
+ ss.getSheetByName(VENDOR_SHEET).appendRow([vendorName, prefix, newMax, reviewBusinessNo]);
  saveLastUsedByPrefix(prefix, newMax);
+ vendorInfo = { storedName: vendorName, prefix: prefix, lastUsed: newMax, businessNo: reviewBusinessNo };
  }
 
  // 검토중 시트는 헤더만 남기고 비움
@@ -268,7 +274,14 @@
  sheet.appendRow(REVIEW_HEADERS);
  sheet.setFrozenRows(1);
 
- return jsonOut({ ok: true, vendorName: vendorName, items: items, savedCount: items.length });
+ // ---- 이카운트 중계서버로 거래처/품목 동기화 (실패해도 시트 저장은 이미 끝났으므로 결과만 담아 돌려준다) ----
+ const ecountVendorResult = ecountSyncVendor(vendorName, vendorInfo ? vendorInfo.businessNo : reviewBusinessNo);
+ const ecountItemResults = items.map(function (it) {
+ return { code: it.code, result: ecountSyncItem(it) };
+ });
+
+ return jsonOut({ ok: true, vendorName: vendorName, items: items, savedCount: items.length,
+ ecount: { vendor: ecountVendorResult, items: ecountItemResults } });
  }
 
  function saveCorrections(pairs) {
@@ -609,6 +622,18 @@
  Logger.log('마이그레이션 완료: ' + needsPrefix.length + '개 거래처에 접두어 부여');
  }
 
+ // ==== 관리자용 1회성 마이그레이션: 거래처코드관리 시트에 사업자등록번호 헤더 추가 ====
+ // 이카운트 연동(register-vendor)에 businessNo가 필요해져서 D열을 새로 씀. 기존 행의 D열은 비워둬도
+ // 동작에는 문제없고(그 거래처는 이카운트 동기화만 건너뜀), 새로 등록되는 거래처부터 자동으로 채워진다.
+ // Apps Script 편집기에서 이 함수를 선택하고 [Run] 버튼으로 한 번만 실행하면 됩니다.
+ function addVendorBusinessNoHeader() {
+ const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+ const sheet = ss.getSheetByName(VENDOR_SHEET);
+ if (!sheet) { Logger.log('거래처코드관리 시트를 찾을 수 없습니다.'); return; }
+ sheet.getRange(1, 4).setValue('사업자등록번호');
+ Logger.log('완료: D1에 "사업자등록번호" 헤더를 추가했습니다.');
+ }
+
  // ---- Claude에게 거래처명 목록 -> 짧고 겹치지 않는 영문 접두어 매핑 요청 ----
  function generatePrefixesWithClaude(vendorNames, existingPrefixes) {
  const apiKey = PropertiesService.getScriptProperties().getProperty('CLAUDE_API_KEY');
@@ -774,7 +799,7 @@
  for (let i = 1; i < data.length; i++) {
  const stored = String(data[i][0]);
  if (stored.trim() === String(vendorName).trim() || normalizeVendorName(stored) === target) {
- return { rowIndex: i + 1, storedName: stored.trim(), prefix: String(data[i][1]).trim(), lastUsed: Number(data[i][2]) || 0 };
+ return { rowIndex: i + 1, storedName: stored.trim(), prefix: String(data[i][1]).trim(), lastUsed: Number(data[i][2]) || 0, businessNo: String(data[i][3] || '').trim() };
  }
  }
  return null;
@@ -837,5 +862,64 @@
  r.code, r.name, r.specType, r.spec, r.inPrice, r.inVat,
  r.unit, r.category, r.isSet, r.stockMgmt, r.outPrice, r.outVat, vendorName, now
  ]);
+ });
+ }
+
+ // ==== 이카운트(Ecount) 중계서버 연동 ====
+ // GAS는 고정 IP가 없어 이카운트 OAPI를 직접 호출할 수 없으므로, 고정 IP를 가진 중계서버(ecount-relay)를
+ // 거쳐서 호출한다. 중계서버 주소/비밀키는 스크립트 속성(ECOUNT_RELAY_URL, ECOUNT_RELAY_SECRET)에 등록해서 쓴다.
+ // 이카운트 동기화가 실패해도 구글시트 저장은 이미 끝난 뒤이므로, 흐름을 막지 않고 결과만 응답에 담아 돌려준다.
+ function ecountRelayCall(path, payload) {
+ const props = PropertiesService.getScriptProperties();
+ const url = props.getProperty('ECOUNT_RELAY_URL');
+ const secret = props.getProperty('ECOUNT_RELAY_SECRET');
+ if (!url || !secret) return { ok: false, error: 'ECOUNT_RELAY_URL/ECOUNT_RELAY_SECRET 스크립트 속성이 설정되지 않았습니다.' };
+ try {
+ const res = UrlFetchApp.fetch(url.replace(/\/+$/, '') + path, {
+ method: 'post',
+ contentType: 'application/json',
+ headers: { 'X-Relay-Secret': secret },
+ payload: JSON.stringify(payload),
+ muteHttpExceptions: true
+ });
+ return JSON.parse(res.getContentText());
+ } catch (e) {
+ return { ok: false, error: e.message };
+ }
+ }
+
+ // businessNo(사업자등록번호)는 이카운트의 실제 거래처코드라 필수 - 없으면 동기화를 건너뛴다.
+ function ecountSyncVendor(vendorName, businessNo) {
+ if (!businessNo) return { ok: false, error: '사업자등록번호가 없어 이카운트 거래처 동기화를 건너뛰었습니다.' };
+ return ecountRelayCall('/register-vendor', { businessNo: businessNo, custName: vendorName });
+ }
+
+ function ecountSyncItem(item) {
+ return ecountRelayCall('/register-item', {
+ prodCd: item.code,
+ prodDes: item.name,
+ spec: item.spec || '',
+ unit: item.unit || 'EA',
+ inPrice: item.inPrice,
+ inPriceVat: !!Number(item.inVat),
+ outPrice: item.outPrice,
+ outPriceVat: !!Number(item.outVat)
+ });
+ }
+
+ // 품목등록마스터에서 코드로 조회해서 이카운트에 동기화한다 (구매확정 시, 시트에 이미 있는 코드 기준으로 재동기화할 때 사용).
+ function ecountSyncItemsByCode(codes) {
+ const unique = codes.filter(function (c, i) { return c && codes.indexOf(c) === i; });
+ if (!unique.length) return [];
+ const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+ const masterSheet = ss.getSheetByName(MASTER_SHEET);
+ const masterData = masterSheet ? masterSheet.getDataRange().getValues() : [];
+ return unique.map(function (code) {
+ const row = masterData.find(function (r) { return String(r[0]).trim() === code; });
+ if (!row) return { code: code, result: { ok: false, error: '품목등록마스터에서 코드를 찾지 못했습니다.' } };
+ return {
+ code: code,
+ result: ecountSyncItem({ code: code, name: row[1], spec: row[3], unit: row[6], inPrice: row[4], inVat: row[5], outPrice: row[10], outVat: row[11] })
+ };
  });
  }
