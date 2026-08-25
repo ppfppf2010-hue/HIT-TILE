@@ -8,6 +8,7 @@ if (action === 'balances') return jsonOut(getBalances());
 if (action === 'delivery_by_date') return jsonOut(getDeliveryByDate(e.parameter.date || ''));
 if (action === 'delivery_month') return jsonOut(getDeliveryMonthCounts(e.parameter.month || ''));
 if (action === 'vendor_names') return jsonOut(getVendorNames());
+if (action === 'delivery_vendor_contacts') return jsonOut(getDeliveryVendorContacts());
 return jsonOut({ ok: false, error: '알 수 없는 요청입니다: ' + action });
 } catch (err) {
 return jsonOut({ ok: false, error: err.message });

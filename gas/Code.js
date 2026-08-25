@@ -66,9 +66,11 @@
  if (action === 'save_return') return handleSaveReturn(body);
  if (action === 'save_return_schedule') return handleSaveReturnSchedule(body);
  if (action === 'save_password') return handleSavePassword(body);
+ if (action === 'save_delivery_photo') return handleSaveDeliveryPhoto(body);
  if (action === 'sync_calendar_deliveries') return handleSyncCalendarDeliveries();
  if (action === 'delete_order') return handleDeleteOrder(body);
  if (action === 'save_balances') return handleSaveBalances(body);
+ if (action === 'add_correction') return handleAddCorrection(body);
  throw new Error('알 수 없는 action: ' + action);
  } catch (err) {
  return jsonOut({ ok: false, error: err.message });
@@ -284,6 +286,15 @@
  ecount: { vendor: ecountVendorResult, items: ecountItemResults } });
  }
 
+ // ---- 교정사전에 한 쌍 수동 등록 (예: 거래처 별칭 -> 등록된 정식 거래처명) ----
+ function handleAddCorrection(body) {
+ const wrong = String(body.wrong || '').trim();
+ const right = String(body.right || '').trim();
+ if (!wrong || !right) throw new Error('wrong/right 값이 모두 필요합니다.');
+ saveCorrections([[wrong, right]]);
+ return jsonOut({ ok: true });
+ }
+
  function saveCorrections(pairs) {
  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
  let sheet = ss.getSheetByName(CORRECTION_SHEET);
@@ -437,26 +448,20 @@
  // price가 주어지면, 편집거리가 같은 후보가 여럿일 때 가격이 더 가까운 쪽을 우선한다.
  // spec이 주어지면, 이름이 같아도 규격이 서로 다르면(둘 다 값이 있을 때) 다른 품목으로 취급해서
  // 같은 품명·다른 규격 품목이 같은 코드로 잘못 합쳐지는 걸 막는다.
- function findMasterItem(masterData, vendorName, itemName, price, spec) {
- const targetVendor = normalizeVendorName(vendorName);
+ // ---- 후보 행 집합(rows) 안에서 이름/규격 기준으로 품목을 찾는 공통 매칭 로직 (거래처 범위는 호출자가 결정) ----
+ function matchItemInRows(rows, itemName, price, spec) {
  const targetExact = String(itemName || '').trim();
  const targetCore = tileCoreName(itemName);
  const targetNorm = normalizeItemName(targetCore);
  if (!targetExact) return null;
 
- const sameVendorRows = [];
- for (let i = 0; i < masterData.length; i++) {
- const row = masterData[i];
- if (normalizeVendorName(String(row[12] || '')) === targetVendor) sameVendorRows.push(row);
- }
-
- for (let i = 0; i < sameVendorRows.length; i++) {
- const row = sameVendorRows[i];
+ for (let i = 0; i < rows.length; i++) {
+ const row = rows[i];
  if (String(row[1] || '').trim() === targetExact && specsCompatible(spec, row[3])) return normalizeMasterMatch(row);
  }
  // 정규화일치: 공백/구두점 차이는 물론, 타일 사이즈 접두어가 이름/규격 중 어디 붙어있든(구식/신식 표기) 같은 값으로 본다.
- for (let i = 0; i < sameVendorRows.length; i++) {
- const row = sameVendorRows[i];
+ for (let i = 0; i < rows.length; i++) {
+ const row = rows[i];
  if (normalizeItemName(tileCoreName(row[1])) === targetNorm && specsCompatible(spec, row[3])) return normalizeMasterMatch(row);
  }
 
@@ -467,8 +472,8 @@
  if (parenMatch) {
  const baseNorm = normalizeItemName(parenMatch[1].trim());
  const parenNorm = normalizeItemName(parenMatch[2].trim());
- for (let i = 0; i < sameVendorRows.length; i++) {
- const row = sameVendorRows[i];
+ for (let i = 0; i < rows.length; i++) {
+ const row = rows[i];
  if (normalizeItemName(tileCoreName(row[1])) !== baseNorm) continue;
  const rowSpecNorm = normalizeItemName(row[3]);
  if (!rowSpecNorm || rowSpecNorm === parenNorm || levenshteinDistance(rowSpecNorm, parenNorm) <= 2) {
@@ -481,8 +486,8 @@
  // 잘못 합쳐지는 걸 막는다. 여러 후보가 남으면 편집거리가 가장 가깝고, 같으면 가격이 가장 가까운 쪽을 고른다.
  const maxDist = Math.max(1, Math.min(4, Math.ceil(targetNorm.length * 0.2)));
  let best = null, bestDist = Infinity, bestPriceDiff = Infinity;
- for (let i = 0; i < sameVendorRows.length; i++) {
- const row = sameVendorRows[i];
+ for (let i = 0; i < rows.length; i++) {
+ const row = rows[i];
  const rowNorm = normalizeItemName(tileCoreName(row[1]));
  if (!rowNorm) continue;
  if (!specsCompatible(spec, row[3])) continue;
@@ -493,8 +498,23 @@
  best = row; bestDist = dist; bestPriceDiff = priceDiff;
  }
  }
- if (best) return normalizeMasterMatch(best);
+ return best ? normalizeMasterMatch(best) : null;
+ }
 
+ function findMasterItem(masterData, vendorName, itemName, price, spec) {
+ const targetVendor = normalizeVendorName(vendorName);
+ const sameVendorRows = [];
+ for (let i = 0; i < masterData.length; i++) {
+ const row = masterData[i];
+ if (normalizeVendorName(String(row[12] || '')) === targetVendor) sameVendorRows.push(row);
+ }
+
+ const scoped = matchItemInRows(sameVendorRows, itemName, price, spec);
+ if (scoped) return scoped;
+
+ // 거래처 무관 완전일치(최후 수단)
+ const targetExact = String(itemName || '').trim();
+ if (!targetExact) return null;
  for (let i = 0; i < masterData.length; i++) {
  const row = masterData[i];
  if (String(row[1] || '').trim() === targetExact && specsCompatible(spec, row[3])) {
@@ -504,17 +524,24 @@
  return null;
  }
 
- // ---- 추출된 품목명/규격을 해당 거래처의 마스터 등록 품목과 대조해서 이미 알려진 표기로 자동 보정 ----
+ // ---- 배송용: 배송일정의 "업체명"은 배송받는 고객사일 뿐 품목등록마스터의 거래처명(매입처)과는
+ // 무관한 값이라, 거래처로 좁히지 않고 마스터 전체에서 findMasterItem과 같은 유사매칭을 적용한다. ----
+ function findMasterItemAnyVendor(masterData, itemName, price, spec) {
+ return matchItemInRows(masterData, itemName, price, spec);
+ }
+
+ // ---- 배송용: 추출된 품목명/규격을 마스터 등록 품목과 대조해서 이미 알려진 표기로 자동 보정 ----
+ // 배송일정의 "업체명"은 배송받는 고객사일 뿐 매입 거래처와는 무관해서 거래처로 좁히지 않는다.
  // 매칭 여부(matched)와 품목코드(code)도 함께 표시해서, 화면에서 품목등록마스터 시트와 대조 확인할 수 있게 한다.
- function applyMasterCatalogMatch(items, vendorName) {
- if (!items || !items.length || !vendorName) return items;
+ function applyMasterCatalogMatchAnyVendor(items) {
+ if (!items || !items.length) return items;
  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
  const masterSheet = ss.getSheetByName(MASTER_SHEET);
  if (!masterSheet) return items;
  const masterData = masterSheet.getDataRange().getValues();
  items.forEach(function (it) {
  if (!it.name) { it.matched = false; it.code = ''; return; }
- const match = findMasterItem(masterData, vendorName, it.name, it.price, it.spec);
+ const match = findMasterItemAnyVendor(masterData, it.name, it.price, it.spec);
  if (match) {
  it.name = match.name;
  if (match.spec) it.spec = match.spec;
@@ -790,15 +817,27 @@
  }
 
  // ---- 거래처 조회 (완전일치 우선, 실패 시 정규화 비교로 표기 차이 흡수) ----
+ // 교정사전에 등록된 별칭(예: 문서엔 "화신세라믹"인데 실제 등록은 "(주) H.S 세라믹")도 여기서 함께 흡수한다.
  function findVendor(vendorName) {
  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
  const sheet = ss.getSheetByName(VENDOR_SHEET);
  const data = sheet.getDataRange().getValues();
- const target = normalizeVendorName(vendorName);
+ const correctionMap = getCorrectionMap();
+ const rawKey = String(vendorName || '').trim();
+ let correctedName = correctionMap[rawKey];
+ if (!correctedName) {
+ // Claude가 매번 표기를 살짝 다르게 뽑을 수 있어(공백/(주) 위치 등), 정규화 비교로도 교정사전을 확인한다.
+ const normKey = normalizeVendorName(vendorName);
+ for (const wrong in correctionMap) {
+ if (normalizeVendorName(wrong) === normKey) { correctedName = correctionMap[wrong]; break; }
+ }
+ }
+ correctedName = correctedName || vendorName;
+ const target = normalizeVendorName(correctedName);
 
  for (let i = 1; i < data.length; i++) {
  const stored = String(data[i][0]);
- if (stored.trim() === String(vendorName).trim() || normalizeVendorName(stored) === target) {
+ if (stored.trim() === String(correctedName).trim() || normalizeVendorName(stored) === target) {
  return { rowIndex: i + 1, storedName: stored.trim(), prefix: String(data[i][1]).trim(), lastUsed: Number(data[i][2]) || 0, businessNo: String(data[i][3] || '').trim() };
  }
  }
@@ -836,8 +875,7 @@
  }
 
  function assignCodesAndPrices(items, prefix, startNumber, vendorName) {
- // 신양(상사) 제품 등록은 세트 상품이 없으므로 품목구분/세트여부를 1/0으로 고정한다.
- const isSinyang = /신양/.test(String(vendorName || ''));
+ // 입고단가VAT포함여부/품목구분/세트여부/재고수량관리는 거래처·상품유형과 무관하게 전부 1로 고정한다.
  return items.map(function (it, i) {
  const numberPart = startNumber + i;
  const code = prefix + String(numberPart).padStart(CODE_DIGITS, '0');
@@ -846,8 +884,7 @@
  return {
  code: code, name: it.name, specType: it.spec ? '사이즈' : '', spec: it.spec || '',
  inPrice: inPrice, inVat: 1, unit: it.unit,
- category: isSinyang ? '1' : (it.unit === 'SET' ? 'SET상품' : '자재'),
- isSet: isSinyang ? '0' : (it.unit === 'SET' ? 'Y' : 'N'), stockMgmt: 1,
+ category: 1, isSet: 1, stockMgmt: 1,
  outPrice: outPrice, outVat: 1
  };
  });

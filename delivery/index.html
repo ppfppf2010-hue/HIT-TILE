@@ -648,21 +648,30 @@
   }
   calSyncBtn.addEventListener('click', () => syncCalendarDeliveries(false));
 
+  let vendorPhoneMap = {};
+
   async function loadVendorNames() {
     try {
-      const res = await fetch(ENDPOINT + '?action=vendor_names');
+      const res = await fetch(ENDPOINT + '?action=delivery_vendor_contacts');
       const data = await res.json();
       if (data.ok) {
         const list = document.getElementById('vendorNameList');
         list.innerHTML = '';
-        (data.names || []).forEach((n) => {
+        vendorPhoneMap = {};
+        (data.contacts || []).forEach((c) => {
           const opt = document.createElement('option');
-          opt.value = n;
+          opt.value = c.name;
           list.appendChild(opt);
+          if (c.phone) vendorPhoneMap[c.name] = c.phone;
         });
       }
     } catch (err) { /* 자동완성 실패해도 조용히 무시 */ }
   }
+
+  fVendor.addEventListener('input', () => {
+    const phone = vendorPhoneMap[fVendor.value.trim()];
+    if (phone) fPhone.value = phone;
+  });
 
   async function loadMonthCounts() {
     try {
@@ -798,7 +807,7 @@
       if (!data.ok) throw new Error(data.error || '등록하지 못했어요.');
       fVendor.value = ''; fSite.value = ''; fPhone.value = ''; fPassword.value = '';
       newForm.classList.remove('show');
-      await Promise.all([loadDayOrders(), loadMonthCounts()]);
+      await Promise.all([loadDayOrders(), loadMonthCounts(), loadVendorNames()]);
     } catch (err) {
       fMsg.textContent = err.message || String(err);
     } finally {
