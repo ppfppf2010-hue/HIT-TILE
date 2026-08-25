@@ -208,6 +208,41 @@ app.post('/push-purchase', async (req, res) => {
   }
 });
 
+// ---- 판매전표 저장 (SaveSale) ----
+// rows: [{ date(YYYYMMDD), custDes, whCd, prodCd, prodDes, qty, unitPriceVat, supply, vat, remarks }]
+// 한 번의 호출에 들어온 rows는 전부 같은 순번(UPLOAD_SER_NO)을 줘서 하나의 전표로 묶는다.
+// SavePurchases와 구조는 동일하고, whCd는 출하창고(구매의 입고창고와 반대 방향)라는 점만 다르다.
+app.post('/push-sale', async (req, res) => {
+  try {
+    const { rows } = req.body;
+    if (!rows || !rows.length) throw new Error('rows 필요');
+
+    const SaleList = rows.map((r, i) => ({
+      Line: i + 1,
+      BulkDatas: {
+        UPLOAD_SER_NO: '1',
+        IO_DATE: r.date,
+        CUST_DES: r.custDes,
+        WH_CD: r.whCd,
+        PROD_CD: r.prodCd,
+        PROD_DES: r.prodDes,
+        QTY: String(r.qty),
+        USER_PRICE_VAT: String(r.unitPriceVat),
+        SUPPLY_AMT: String(r.supply),
+        VAT_AMT: String(r.vat),
+        REMARKS: r.remarks || ''
+      }
+    }));
+
+    const data = await ecountCall('/OAPI/V2/Sale/SaveSale', { SaleList });
+    const failMsg = ecountFailureMessage(data);
+    if (failMsg) return res.json({ ok: false, error: failMsg, ecount: data });
+    res.json({ ok: true, ecount: data });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 app.listen(PORT, () => console.log('ecount relay listening on ' + PORT));
