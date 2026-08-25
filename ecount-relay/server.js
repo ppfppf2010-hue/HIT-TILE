@@ -208,53 +208,6 @@ app.post('/push-purchase', async (req, res) => {
   }
 });
 
-// ---- 임시: 테스트 인증키로 SaveBasicCust/SavePurchases를 한 번 호출해서 이카운트 API 검증을 트리거한다.
-// 검증 끝나면 이 엔드포인트는 지운다. 테스트 키는 절대 코드/저장소에 남기지 않고 매 요청마다 body로 받는다.
-app.post('/verify-test', async (req, res) => {
-  const TEST_KEY = req.body.testKey;
-  if (!TEST_KEY) return res.status(400).json({ ok: false, error: 'testKey 필요' });
-  const TEST_COM_CODE = ECOUNT_COM_CODE || '654451';
-  try {
-    const zoneRes = await fetch('https://sboapi.ecount.com/OAPI/V2/Zone', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ COM_CODE: TEST_COM_CODE })
-    });
-    const zoneData = await zoneRes.json();
-    const zone = zoneData && zoneData.Data && zoneData.Data.ZONE;
-    if (!zone) return res.json({ ok: false, step: 'zone', data: zoneData });
-
-    const loginRes = await fetch(`https://sboapi${zone}.ecount.com/OAPI/V2/OAPILogin`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ COM_CODE: TEST_COM_CODE, USER_ID: ECOUNT_USER_ID, API_CERT_KEY: TEST_KEY, LAN_TYPE: 'ko-KR', ZONE: zone })
-    });
-    const loginData = await loginRes.json();
-    const sessionId = loginData && loginData.Data && loginData.Data.Datas && loginData.Data.Datas.SESSION_ID;
-    if (!sessionId) return res.json({ ok: false, step: 'login', data: loginData });
-
-    const vendorBulkDatas = req.body.vendorBulkDatas || { BUSINESS_NO: '1234567890', CUST_NAME: '검증테스트거래처' };
-    const vendorRes = await fetch(`https://sboapi${zone}.ecount.com/OAPI/V2/AccountBasic/SaveBasicCust?SESSION_ID=${encodeURIComponent(sessionId)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ CustList: [{ Line: 1, BulkDatas: vendorBulkDatas }] })
-    });
-    const vendorData = await vendorRes.json();
-
-    const purchaseBulkDatas = req.body.purchaseBulkDatas || { UPLOAD_SER_NO: '1', IO_DATE: '20260825', PROD_CD: 'VERIFYTEST', PROD_DES: '검증테스트품목', QTY: '1' };
-    const purchaseRes = await fetch(`https://sboapi${zone}.ecount.com/OAPI/V2/Purchases/SavePurchases?SESSION_ID=${encodeURIComponent(sessionId)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ PurchasesList: [{ Line: 1, BulkDatas: purchaseBulkDatas }] })
-    });
-    const purchaseData = await purchaseRes.json();
-
-    res.json({ ok: true, zone: zone, vendor: vendorData, purchase: purchaseData });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 app.listen(PORT, () => console.log('ecount relay listening on ' + PORT));

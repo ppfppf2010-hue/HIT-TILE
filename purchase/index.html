@@ -917,7 +917,7 @@
         doneEcountStatus.style.display = '';
         const purchase = ecount.purchase;
         if (purchase.ok) {
-          doneEcountStatus.textContent = '✓ 이카운트에도 매입전표까지 자동으로 올라갔어요. [디버그] ' + JSON.stringify(purchase.ecount || purchase);
+          doneEcountStatus.textContent = '✓ 이카운트에도 매입전표까지 자동으로 올라갔어요.';
           doneEcountStatus.classList.add('ok');
         } else {
           doneEcountStatus.textContent = '⚠ 이카운트 매입전표 등록 실패 — ' + (purchase.error || '알 수 없는 오류') + ' (직접 확인/업로드가 필요해요)';
