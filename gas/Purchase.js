@@ -403,7 +403,7 @@
  '6. 이 문서가 매출/입금 방식(공급자 입장에서 매출로 기록된 방식)이거나 컬럼 구성이 다르더라도, 히트타일이 지불하는 금액에 해당하는 단가 컬럼을 찾아 최대한 추출을 시도하세요. 설명이 필요해 보여도 거절하지 말고 best-effort로 JSON을 출력하세요.',
  '7. 이월, 전기이월, 수입, 대체, 대입, 입금, 카드, 통장결제, DC처리, 계좌변경 안내 같은 결제/이월/요약 행은 실제 매입 품목이 아니므로 items에서 제외하세요.',
  '8. 반품/취소 행은 별도 품목이 아니라 원래 품목의 수량을 마이너스로 처리한 것입니다. 문서의 수량(qty) 컬럼에 마이너스가 적혀 있으면 그대로 마이너스로 추출하세요. 수량은 양수인데 금액(공급가액/합계금액) 컬럼만 마이너스라면, 그 경우엔 qty에도 마이너스 부호를 붙여서 추출하세요.',
- '9. 아래 JSON 형식으로만 출력하세요. 다른 설명이나 코드블록 표시 없이 순수 JSON 객체 하나만 출력합니다.',
+ '9. 아래 JSON 형식으로만 출력하세요. 다른 설명이나 코드블록 표시 없이 순수 JSON 객체 하나만 출력합니다. 교정이력을 참고해서 무언가 고쳤더라도 그 사실을 설명하는 문장을 절대 앞뒤에 붙이지 마세요 - 오직 JSON 객체 하나만, 그 자체로 시작하고 끝나야 합니다.',
  '{"vendorName":"거래처 상호명","docDate":"YYYY-MM-DD","items":[{"name":"품목명","spec":"규격(없으면 빈 문자열)","unit":"단위","qty":숫자,"price":단가숫,"date":"YYYY-MM-DD(해당 품목 행의 실제 날짜, 문서 전체가 한 날짜뿐이면 생략 가능)"}]}'
  ]).join('\n');
 
@@ -446,6 +446,11 @@
  const textBlock = (data.content || []).filter(function (c) { return c.type === 'text'; })[0];
  let jsonText = textBlock ? textBlock.text : '{}';
  jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
+ // 지침(순수 JSON만 출력)을 어기고 "OO은 교정이력에 따라 정정합니다" 같은 설명 문장을 JSON 앞뒤에
+ // 덧붙이는 경우가 가끔 있어서, 첫 '{'~마지막 '}' 구간만 잘라내 파싱한다.
+ const firstBrace = jsonText.indexOf('{');
+ const lastBrace = jsonText.lastIndexOf('}');
+ if (firstBrace !== -1 && lastBrace > firstBrace) jsonText = jsonText.slice(firstBrace, lastBrace + 1);
 
  try {
  const parsed = JSON.parse(jsonText);
