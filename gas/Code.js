@@ -72,9 +72,11 @@
  if (action === 'save_balances') return handleSaveBalances(body);
  if (action === 'add_correction') return handleAddCorrection(body);
  if (action === 'list_vendor_names') return handleListVendorNames();
+ if (action === 'list_item_master') return handleListItemMaster();
  if (action === 'check_vendor') return handleCheckVendor(body);
  if (action === 'sale_extract') return handleSaleExtract(body);
  if (action === 'sale_register_vendor') return handleSaleRegisterVendor(body);
+ if (action === 'sale_manual_entry') return handleSaleManualEntry(body);
  if (action === 'sale_confirm') return handleSaleConfirm();
  throw new Error('알 수 없는 action: ' + action);
  } catch (err) {
@@ -861,6 +863,34 @@
  }
  names.sort();
  return jsonOut({ ok: true, names: names });
+ }
+
+ // ---- 품목명 자동완성/단가 자동채움용 전체 목록 (품목등록마스터, 품명+규격 기준 중복 제거) ----
+ // 판매등록 "직접 입력" 탭에서 품목명 타이핑 시 이 목록으로 규격/출고단가를 자동으로 채워준다.
+ function handleListItemMaster() {
+ const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+ const sheet = ss.getSheetByName(MASTER_SHEET);
+ if (!sheet) return jsonOut({ ok: true, items: [] });
+ const data = sheet.getDataRange().getValues();
+ const seen = {};
+ const items = [];
+ for (let i = 1; i < data.length; i++) {
+ const name = String(data[i][1] || '').trim();
+ if (!name) continue;
+ const spec = String(data[i][3] || '').trim();
+ const key = name + '|||' + spec;
+ if (seen[key]) continue;
+ seen[key] = true;
+ items.push({
+ code: String(data[i][0] || '').trim(),
+ name: name,
+ spec: spec,
+ unit: String(data[i][6] || 'EA').trim(),
+ outPrice: Number(data[i][10]) || 0
+ });
+ }
+ items.sort(function (a, b) { return a.name.localeCompare(b.name); });
+ return jsonOut({ ok: true, items: items });
  }
 
  // ---- 확인 버튼: 입력한 거래처명이 기존 거래처와 매칭되는지 즉시 조회 ----

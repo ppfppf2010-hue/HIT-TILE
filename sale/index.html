@@ -359,6 +359,81 @@
     transition:border-color .15s ease, background .15s ease;
   }
   button.camera-btn:hover{ border-color:var(--brass); background:#f2f5ff; }
+
+  .tabs{ display:flex; gap:8px; margin-bottom:18px; }
+  .tab-btn{
+    flex:1;
+    padding:11px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--card);
+    color:var(--muted);
+    font-size:14px;
+    font-weight:600;
+    cursor:pointer;
+    font-family:inherit;
+    transition:border-color .15s ease, background .15s ease, color .15s ease;
+  }
+  .tab-btn.active{
+    border-color:var(--brass);
+    background:#eef4ff;
+    color:var(--brass-deep);
+  }
+
+  .manual-panel{ display:none; }
+  .manual-panel.show{ display:block; }
+
+  .item-rows{ display:flex; flex-direction:column; gap:10px; margin-top:14px; }
+  .item-row{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:10px 12px;
+  }
+  .item-row-main{ display:flex; gap:8px; }
+  .item-row-main .item-name{ flex:1; min-width:0; }
+  .item-row-main .item-qty{ width:76px; text-align:right; }
+  .item-row-sub{ display:flex; align-items:center; gap:8px; margin-top:6px; }
+  .item-row-sub .item-spec{ flex:1; min-width:0; font-size:12.5px; color:var(--muted); }
+  .item-row-sub .item-price{ width:104px; font-size:12.5px; color:var(--muted); text-align:right; }
+  .item-row-sub .item-remove{
+    flex-shrink:0;
+    border:none;
+    background:none;
+    color:var(--muted);
+    cursor:pointer;
+    font-size:17px;
+    line-height:1;
+    padding:2px 4px;
+  }
+  .item-row-sub .item-remove:hover{ color:var(--err); }
+  .item-row input{
+    padding:8px 10px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:#fff;
+    color:var(--ink);
+    font-size:14px;
+    font-family:inherit;
+    width:100%;
+  }
+  .item-row input:focus{ outline:none; border-color:var(--brass); }
+
+  button.add-row-btn{
+    margin-top:10px;
+    width:100%;
+    padding:11px;
+    border:1px dashed var(--line);
+    border-radius:10px;
+    background:none;
+    color:var(--muted);
+    font-size:13.5px;
+    font-weight:600;
+    cursor:pointer;
+    font-family:inherit;
+    transition:border-color .15s ease, color .15s ease;
+  }
+  button.add-row-btn:hover{ border-color:var(--brass); color:var(--brass-deep); }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -371,7 +446,12 @@
 
 <main>
 
-  <div class="upload-panel">
+  <div class="tabs" id="modeTabs">
+    <button type="button" class="tab-btn active" id="tabPhoto" data-mode="photo">📷 사진으로 올리기</button>
+    <button type="button" class="tab-btn" id="tabManual" data-mode="manual">✏️ 직접 입력</button>
+  </div>
+
+  <div class="upload-panel" id="photoPanel">
     <div class="drop" id="dropZone">
       <div class="big">클릭해서 파일 선택</div>
       <p>또는 이 영역에 파일을 끌어다 놓으세요</p>
@@ -402,6 +482,28 @@
 
     <div class="error-box" id="errorBox"></div>
   </div>
+
+  <div class="manual-panel" id="manualPanel">
+    <div class="month-field show">
+      <label for="manualVendorName">거래처명</label>
+      <input type="text" id="manualVendorName" placeholder="거래처명" list="vendorNameList" autocomplete="off">
+    </div>
+
+    <div class="item-rows" id="itemRows"></div>
+
+    <button type="button" class="add-row-btn" id="addRowBtn">+ 품목 추가</button>
+
+    <button class="submit" id="manualSubmitBtn">판매확인중 시트에 준비하기</button>
+
+    <div class="status" id="manualStatusBox">
+      <span class="spinner"></span>
+      <span>거래처·품목을 확인해서 판매확인중 시트에 준비하는 중이에요...</span>
+    </div>
+
+    <div class="error-box" id="manualErrorBox"></div>
+  </div>
+
+  <datalist id="itemNameList"></datalist>
 
   <div class="result" id="prefixBox">
     <div class="result-head">
@@ -510,6 +612,18 @@
   const fileClear = document.getElementById('fileClear');
   const monthField = document.getElementById('monthField');
   const monthInput = document.getElementById('monthInput');
+  const tabPhoto = document.getElementById('tabPhoto');
+  const tabManual = document.getElementById('tabManual');
+  const photoPanel = document.getElementById('photoPanel');
+  const manualPanel = document.getElementById('manualPanel');
+  const manualVendorName = document.getElementById('manualVendorName');
+  const itemRows = document.getElementById('itemRows');
+  const addRowBtn = document.getElementById('addRowBtn');
+  const manualSubmitBtn = document.getElementById('manualSubmitBtn');
+  const manualStatusBox = document.getElementById('manualStatusBox');
+  const manualErrorBox = document.getElementById('manualErrorBox');
+  const itemNameList = document.getElementById('itemNameList');
+
   const submitBtn = document.getElementById('submitBtn');
   const statusBox = document.getElementById('statusBox');
   const statusText = document.getElementById('statusText');
@@ -550,6 +664,80 @@
   let pendingTargetMonth = '';
   let pendingVendorName = '';
 
+  // ---- 탭 전환 (사진으로 올리기 / 직접 입력) ----
+  function setMode(mode) {
+    tabPhoto.classList.toggle('active', mode === 'photo');
+    tabManual.classList.toggle('active', mode === 'manual');
+    photoPanel.style.display = mode === 'photo' ? '' : 'none';
+    manualPanel.classList.toggle('show', mode === 'manual');
+    if (mode === 'manual') {
+      loadVendorNames();
+      loadItemMaster();
+      if (!itemRows.children.length) { for (let i = 0; i < 6; i++) addItemRow(); }
+    }
+  }
+  tabPhoto.addEventListener('click', () => setMode('photo'));
+  tabManual.addEventListener('click', () => setMode('manual'));
+
+  // ---- 직접 입력 탭: 품목마스터 목록(자동완성 + 단가 자동채움용) ----
+  let itemMasterCache = [];
+  let itemMasterLoaded = false;
+  async function loadItemMaster() {
+    if (itemMasterLoaded) return;
+    itemMasterLoaded = true;
+    try {
+      const res = await fetch(ENDPOINT, { method: 'POST', body: JSON.stringify({ action: 'list_item_master' }) });
+      const data = await res.json();
+      if (data.ok && data.items) {
+        itemMasterCache = data.items;
+        const seenNames = {};
+        itemNameList.innerHTML = itemMasterCache.filter(function (it) {
+          if (seenNames[it.name]) return false;
+          seenNames[it.name] = true;
+          return true;
+        }).map(function (it) {
+          return '<option value="' + it.name.replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '">';
+        }).join('');
+      }
+    } catch (e) {
+      itemMasterLoaded = false; // 실패하면 다음에 다시 시도
+    }
+  }
+
+  // ---- 직접 입력 탭: 품목 행 하나 생성 ----
+  function addItemRow() {
+    const row = document.createElement('div');
+    row.className = 'item-row';
+    row.innerHTML =
+      '<div class="item-row-main">' +
+        '<input type="text" class="item-name" placeholder="품목명" list="itemNameList" autocomplete="off">' +
+        '<input type="number" class="item-qty" placeholder="수량" min="0">' +
+      '</div>' +
+      '<div class="item-row-sub">' +
+        '<input type="text" class="item-spec" placeholder="규격">' +
+        '<input type="number" class="item-price" placeholder="단가">' +
+        '<button type="button" class="item-remove">×</button>' +
+      '</div>';
+
+    const nameInput = row.querySelector('.item-name');
+    const specInput = row.querySelector('.item-spec');
+    const priceInput = row.querySelector('.item-price');
+    const removeBtn = row.querySelector('.item-remove');
+
+    nameInput.addEventListener('input', () => {
+      const match = itemMasterCache.find(function (it) { return it.name === nameInput.value.trim(); });
+      if (match) {
+        specInput.value = match.spec || '';
+        priceInput.value = match.outPrice || '';
+      }
+    });
+    removeBtn.addEventListener('click', () => row.remove());
+
+    itemRows.appendChild(row);
+    return row;
+  }
+  addRowBtn.addEventListener('click', () => addItemRow());
+
   function resetAll() {
     selectedFile = null;
     pendingParsed = null;
@@ -569,6 +757,10 @@
     reviewBox.classList.remove('show');
     doneBox.classList.remove('show');
     missSection.classList.remove('show');
+    manualErrorBox.classList.remove('show');
+    manualVendorName.value = '';
+    itemRows.innerHTML = '';
+    for (let i = 0; i < 6; i++) addItemRow();
   }
 
   function pickFile(file) {
@@ -728,21 +920,7 @@
         throw new Error(data.error || '처리 중 오류가 발생했어요.');
       }
 
-      if (data.needsPrefix) {
-        pendingParsed = data.parsed;
-        pendingTargetMonth = data.targetMonth || '';
-        pendingVendorName = data.vendorName || '';
-        prefixVendorName.value = data.vendorName || '';
-        prefixInput.value = data.suggestedPrefix || '';
-        prefixErrorBox.classList.remove('show');
-        vendorCheckResult.classList.remove('show', 'match', 'new', 'err');
-        setVendorMatched(false);
-        prefixBox.classList.add('show');
-        prefixVendorName.focus();
-        loadVendorNames();
-      } else {
-        showReview(data);
-      }
+      applySaleResponse(data);
     } catch (err) {
       const msg = err.message || String(err);
       if (isCreditError(msg)) {
@@ -756,6 +934,70 @@
     } finally {
       statusBox.classList.remove('show');
       submitBtn.disabled = false;
+    }
+  });
+
+  // ---- sale_extract / sale_manual_entry 공통 응답 처리 (needsPrefix면 접두어 입력 화면, 아니면 바로 검토 화면) ----
+  function applySaleResponse(data) {
+    if (!data.ok && !data.needsPrefix) {
+      throw new Error(data.error || '처리 중 오류가 발생했어요.');
+    }
+    if (data.needsPrefix) {
+      pendingParsed = data.parsed;
+      pendingTargetMonth = data.targetMonth || '';
+      pendingVendorName = data.vendorName || '';
+      prefixVendorName.value = data.vendorName || '';
+      prefixInput.value = data.suggestedPrefix || '';
+      prefixErrorBox.classList.remove('show');
+      vendorCheckResult.classList.remove('show', 'match', 'new', 'err');
+      setVendorMatched(false);
+      prefixBox.classList.add('show');
+      prefixVendorName.focus();
+      loadVendorNames();
+    } else {
+      showReview(data);
+    }
+  }
+
+  // ---- 직접 입력 탭: 제출 ----
+  manualSubmitBtn.addEventListener('click', async () => {
+    const vendorName = manualVendorName.value.trim();
+    if (!vendorName) { manualVendorName.focus(); return; }
+
+    const items = Array.from(itemRows.querySelectorAll('.item-row')).map(function (row) {
+      return {
+        name: row.querySelector('.item-name').value.trim(),
+        spec: row.querySelector('.item-spec').value.trim(),
+        qty: Number(row.querySelector('.item-qty').value) || 0,
+        unitPrice: Number(row.querySelector('.item-price').value) || 0
+      };
+    }).filter(function (it) { return it.name && it.qty; });
+
+    if (!items.length) {
+      manualErrorBox.textContent = '품목명과 수량을 입력해주세요.';
+      manualErrorBox.classList.add('show');
+      return;
+    }
+
+    manualSubmitBtn.disabled = true;
+    manualStatusBox.classList.add('show');
+    manualErrorBox.classList.remove('show');
+    reviewBox.classList.remove('show');
+    doneBox.classList.remove('show');
+
+    try {
+      const res = await fetch(ENDPOINT, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'sale_manual_entry', vendorName: vendorName, items: items })
+      });
+      const data = await res.json();
+      applySaleResponse(data);
+    } catch (err) {
+      manualErrorBox.textContent = err.message || String(err);
+      manualErrorBox.classList.add('show');
+    } finally {
+      manualStatusBox.classList.remove('show');
+      manualSubmitBtn.disabled = false;
     }
   });
 

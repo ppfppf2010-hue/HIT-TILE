@@ -77,6 +77,44 @@
  return finalizeSaleRegistration(parsed, vendorInfo, !!targetMonth);
  }
 
+ // ---- 판매등록 "직접 입력" 탭: 사진/PDF 업로드 없이 사람이 직접 거래처명+품목을 입력한 경우 ----
+ // Claude 추출 단계를 건너뛰고, 문서 인식 결과와 똑같은 모양의 parsed 객체를 만들어서
+ // handleSaleExtract와 완전히 같은 이후 흐름(거래처 매칭 -> 필요시 접두어 등록 -> 판매확인중 스테이징)을 그대로 탄다.
+ function handleSaleManualEntry(body) {
+ const vendorName = String(body.vendorName || '').trim();
+ const rawItems = Array.isArray(body.items) ? body.items : [];
+ if (!vendorName) throw new Error('거래처명이 없습니다.');
+
+ const items = rawItems
+ .map(function (it) {
+ return {
+ name: String(it.name || '').trim(),
+ spec: String(it.spec || '').trim(),
+ unit: String(it.unit || 'EA').trim(),
+ qty: Number(it.qty) || 0,
+ price: Number(it.unitPrice) || 0
+ };
+ })
+ .filter(function (it) { return it.name && it.qty; });
+ if (!items.length) throw new Error('품목명과 수량을 입력해주세요.');
+
+ const parsed = { vendorName: vendorName, docDate: String(body.docDate || '').trim(), items: items };
+
+ const vendorInfo = findVendor(vendorName);
+ if (!vendorInfo) {
+ return jsonOut({
+ ok: true,
+ needsPrefix: true,
+ vendorName: vendorName,
+ suggestedPrefix: matchPrefix(vendorName) || '',
+ parsed: parsed,
+ targetMonth: ''
+ });
+ }
+
+ return finalizeSaleRegistration(parsed, vendorInfo, false);
+ }
+
  // ---- 문서 전체 기준 targetMonth 필터(재확인용) ----
  function filterSaleItemsByMonth(parsed, targetMonth) {
  if (!targetMonth) return;
