@@ -122,7 +122,6 @@
  let sheet = ss.getSheetByName(PURCHASE_REVIEW_SHEET);
  if (!sheet) sheet = ss.insertSheet(PURCHASE_REVIEW_SHEET);
  sheet.clear();
- sheet.clearDataValidations();
 
  sheet.appendRow(PURCHASE_REVIEW_HEADERS);
  rows.forEach(function (r) {
@@ -263,7 +262,6 @@
 
  // 구매확인중 시트는 헤더만 남기고 비움
  sheet.clear();
- sheet.clearDataValidations();
  sheet.appendRow(PURCHASE_REVIEW_HEADERS);
  sheet.setFrozenRows(1);
 

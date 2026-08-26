@@ -114,7 +114,6 @@
  let sheet = ss.getSheetByName(SALE_REVIEW_SHEET);
  if (!sheet) sheet = ss.insertSheet(SALE_REVIEW_SHEET);
  sheet.clear();
- sheet.clearDataValidations();
 
  sheet.appendRow(SALE_REVIEW_HEADERS);
  rows.forEach(function (r) {
@@ -226,7 +225,6 @@
 
  // 판매확인중 시트는 헤더만 남기고 비움
  sheet.clear();
- sheet.clearDataValidations();
  sheet.appendRow(SALE_REVIEW_HEADERS);
  sheet.setFrozenRows(1);
 
