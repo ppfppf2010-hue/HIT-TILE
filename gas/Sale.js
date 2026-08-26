@@ -89,7 +89,7 @@
  }
  }
 
- // ---- 공통: 품목 매칭/자동등록 + 판매확인중 스테이징 ----
+ // ---- 공통: 품목 매칭 + 판매확인중 스테이징 ----
  function finalizeSaleRegistration(parsed, vendorInfo, filteredByMonth) {
  const totalExtracted = parsed.items.length;
  const finalVendorName = vendorInfo.storedName;
@@ -191,7 +191,13 @@
  if (r.itemCode) return;
  const key = String(r.itemName).trim() + '|||' + String(r.spec || '').trim();
  if (!newItemMap[key]) {
- newItemMap[key] = { name: r.itemName, spec: r.spec || '', price: r.unitPrice, unit: 'EA' };
+ // 타일(사이즈*사이즈포셀린... 접두어가 붙은 품목명)은 규격을 이름에서 떼어 spec에 두는 정식 표기로 등록한다.
+ let finalName = r.itemName, finalSpec = r.spec || '';
+ if (!finalSpec) {
+ const split = splitTileSizePrefix(finalName);
+ if (split) { finalName = split.name; finalSpec = split.spec; }
+ }
+ newItemMap[key] = { name: finalName, spec: finalSpec, price: r.unitPrice, unit: 'EA' };
  newItemKeys.push(key);
  }
  });
