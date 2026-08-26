@@ -102,7 +102,7 @@
  const totalExtracted = parsed.items.length;
  const finalVendorName = vendorInfo.storedName;
 
- const rows = buildPurchaseRows(parsed, finalVendorName, vendorInfo);
+ const rows = buildPurchaseRows(parsed, finalVendorName);
  const reviewUrl = stageForPurchaseReview(rows);
 
  return jsonOut({
@@ -122,6 +122,7 @@
  let sheet = ss.getSheetByName(PURCHASE_REVIEW_SHEET);
  if (!sheet) sheet = ss.insertSheet(PURCHASE_REVIEW_SHEET);
  sheet.clear();
+ sheet.clearDataValidations();
 
  sheet.appendRow(PURCHASE_REVIEW_HEADERS);
  rows.forEach(function (r) {
@@ -139,8 +140,40 @@
  const headerRange = sheet.getRange(1, 1, 1, PURCHASE_REVIEW_HEADERS.length);
  headerRange.setFontWeight('bold').setBackground('#eef4ff');
 
+ if (rows.length) applyItemCodeDropdown(sheet, rows.length);
+
  SpreadsheetApp.flush();
  return ss.getUrl() + '#gid=' + sheet.getSheetId();
+ }
+
+ // ---- 품목코드 칸(J열)에서 "코드 | 품목명 | 규격" 형태로 기존 품목을 검색/선택할 수 있게 드롭다운을 건다 ----
+ // 이미 매칭된 행에도 걸어서, 오인식으로 잘못 매칭됐을 때 다른 코드로 바꿀 수 있게 한다.
+ // allowInvalid를 켜둬서 빈 칸(신규 품목 확정용)이나 직접 타이핑한 코드도 그대로 허용한다.
+ function applyItemCodeDropdown(sheet, rowCount) {
+ const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+ const masterSheet = ss.getSheetByName(MASTER_SHEET);
+ if (!masterSheet) return;
+ const masterData = masterSheet.getDataRange().getValues();
+
+ const labels = [];
+ for (let i = 1; i < masterData.length; i++) {
+ const code = String(masterData[i][0] || '').trim();
+ const name = String(masterData[i][1] || '').trim();
+ if (!code || !name) continue;
+ const spec = String(masterData[i][3] || '').trim();
+ labels.push(code + ' | ' + name + (spec ? ' | ' + spec : ''));
+ }
+ if (!labels.length) return;
+
+ const helperCol = 28; // AB열 - 드롭다운 소스 목록을 적어두는 숨김 열
+ sheet.getRange(1, helperCol, labels.length, 1).setValues(labels.map(function (l) { return [l]; }));
+ try { sheet.hideColumns(helperCol); } catch (e) { /* ignore */ }
+
+ const rule = SpreadsheetApp.newDataValidation()
+ .requireValueInRange(sheet.getRange(1, helperCol, labels.length, 1), true)
+ .setAllowInvalid(true)
+ .build();
+ sheet.getRange(2, 10, rowCount, 1).setDataValidation(rule);
  }
 
  // ---- "구매확인중" 시트 내용을 그대로 읽어와 "구매입력"에 확정 저장 ----
@@ -167,26 +200,70 @@
  });
  if (corrections.length) saveCorrections(corrections);
 
+ // 품목코드 칸은 드롭다운으로 "코드 | 품목명 | 규격"을 고른 경우 그 전체 라벨이 그대로 들어있으니
+ // 맨 앞의 코드만 떼어낸다. 사람이 코드만 직접 타이핑했거나 비워뒀으면 그대로 통과한다.
+ function parseItemCode(raw) {
+ const s = String(raw || '').trim();
+ if (!s) return '';
+ const pipeIdx = s.indexOf('|');
+ return (pipeIdx === -1 ? s : s.slice(0, pipeIdx)).trim();
+ }
+
  const finalRows = rows.map(function (r) {
  return {
  date: r[0], seq: r[1], vendorCode: r[2], vendorName: r[3], manager: r[4], warehouse: r[5],
- dealType: r[6], currency: r[7], rate: r[8], itemCode: r[9], itemName: r[10], spec: r[11],
+ dealType: r[6], currency: r[7], rate: r[8], itemCode: parseItemCode(r[9]), itemName: r[10], spec: r[11],
  qty: r[12], unitPrice: r[13], foreignAmount: r[14], supply: r[15], vat: r[16], note: r[17]
  };
  });
 
  const vendorName = String(rows[0][3] || '').trim();
+ const vendorInfo = findVendor(vendorName);
+
+ // ---- 품목코드가 여전히 비어있는(=신규 품목으로 그대로 확정된) 행은 이 시점에 비로소 채번+마스터 등록한다 ----
+ // (미매칭 상태로 검토 화면까지 왔다가, 사람이 기존 코드로 지정하지 않고 그대로 둔 품목만 해당.)
+ const newItemKeys = [];
+ const newItemMap = {};
+ finalRows.forEach(function (r) {
+ if (r.itemCode) return;
+ const key = String(r.itemName).trim() + '|||' + String(r.spec || '').trim();
+ if (!newItemMap[key]) {
+ newItemMap[key] = { name: r.itemName, spec: r.spec || '', price: r.unitPrice, unit: 'EA' };
+ newItemKeys.push(key);
+ }
+ });
+
+ if (newItemKeys.length) {
+ if (!vendorInfo) throw new Error('거래처(' + vendorName + ')가 등록되어 있지 않아 신규 품목에 코드를 발급할 수 없습니다.');
+ const toRegister = newItemKeys.map(function (key) { return newItemMap[key]; });
+ const sharedMax = getMaxLastUsedForPrefix(vendorInfo.prefix);
+ const startNumber = Math.max(vendorInfo.lastUsed, sharedMax) + 1;
+ const newRows = assignCodesAndPrices(toRegister, vendorInfo.prefix, startNumber, vendorName);
+ appendToMasterSheet(vendorName, newRows);
+ newRows.forEach(function (r) { ecountSyncItem(r); }); // 실패해도 로컬 등록은 이미 끝났으니 무시하고 진행
+ saveLastUsedByPrefix(vendorInfo.prefix, Math.max(startNumber + newRows.length - 1, sharedMax));
+
+ const codeByKey = {};
+ newItemKeys.forEach(function (key, i) { codeByKey[key] = newRows[i]; });
+ finalRows.forEach(function (r) {
+ if (r.itemCode) return;
+ const key = String(r.itemName).trim() + '|||' + String(r.spec || '').trim();
+ const nr = codeByKey[key];
+ if (nr) { r.itemCode = nr.code; r.itemName = nr.name; r.spec = nr.spec; r.note = (r.note ? r.note + ' / ' : '') + '신규 품목 자동등록됨'; }
+ });
+ }
+
  const sheetGid = appendToPurchaseSheet(finalRows);
 
  // 구매확인중 시트는 헤더만 남기고 비움
  sheet.clear();
+ sheet.clearDataValidations();
  sheet.appendRow(PURCHASE_REVIEW_HEADERS);
  sheet.setFrozenRows(1);
 
  // ---- 이카운트 중계서버로 거래처 동기화 + 품목 동기화 + 매입전표 저장 ----
  // 실패해도 구글시트 저장은 이미 끝난 뒤이므로 흐름을 막지 않고 결과만 응답에 담아 돌려준다.
- const vendorForSync = findVendor(vendorName);
- const ecountVendorResult = ecountSyncVendor(vendorName, vendorForSync ? vendorForSync.businessNo : '');
+ const ecountVendorResult = ecountSyncVendor(vendorName, vendorInfo ? vendorInfo.businessNo : '');
 
  const codesToSync = finalRows.filter(function (r) { return r.itemCode; }).map(function (r) { return r.itemCode; });
  const ecountItemResults = ecountSyncItemsByCode(codesToSync);
@@ -208,57 +285,27 @@
  ecount: { vendor: ecountVendorResult, items: ecountItemResults, purchase: ecountPurchaseResult } });
  }
 
- // ---- 품목코드 매칭 + 미매칭 품목 자동 채번/등록 + 공급가액/부가세 계산해서 행 조립 ----
- function buildPurchaseRows(parsed, vendorName, vendorInfo) {
+ // ---- 품목코드 매칭 + 공급가액/부가세 계산해서 행 조립 ----
+ // v3 변경점: 미매칭 품목을 여기서 바로 신규 채번/등록하지 않는다. 인식 오류로 미매칭된 품목이
+ // 계속 새 코드로 잘못 생성되는 문제 때문에, 코드가 빈 채로 "구매확인중" 시트에 올려서
+ // 사람이 (a) 기존 코드로 지정하거나 (b) 그대로 둬서 confirm 시점에 신규 등록하게 한다.
+ function buildPurchaseRows(parsed, vendorName) {
  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
  const masterSheet = ss.getSheetByName(MASTER_SHEET);
  const masterData = masterSheet.getDataRange().getValues();
  const today = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyyMMdd');
  const docDate = normalizeDateYyyyMmDd(parsed.docDate) || today;
 
- // 품명이 같아도 규격이 다르면 다른 품목이므로, 매칭/신규등록 모두 품명+규격을 묶은 키로 구분한다.
+ // 품명이 같아도 규격이 다르면 다른 품목이므로, 매칭도 품명+규격을 묶은 키로 구분한다.
  function itemKey(name, spec) { return String(name || '').trim() + '|||' + String(spec || '').trim(); }
 
  const codeMap = {};
- const missingKeys = [];
-
  parsed.items.forEach(function (it) {
  const key = itemKey(it.name, it.spec);
  if (codeMap[key] !== undefined) return;
  const match = findMasterItem(masterData, vendorName, it.name, it.price, it.spec);
- if (match) {
- codeMap[key] = match;
- } else if (missingKeys.indexOf(key) === -1) {
- missingKeys.push(key);
- }
+ if (match) codeMap[key] = match;
  });
-
- if (vendorInfo && missingKeys.length) {
- const toRegister = missingKeys.map(function (key) {
- const src = parsed.items.filter(function (it) { return itemKey(it.name, it.spec) === key; })[0];
- // 타일(사이즈*사이즈포셀린... 접두어가 붙은 품목명)은 규격을 이름에서 떼어 spec에 두는 정식 표기로 등록한다.
- let finalName = src.name, finalSpec = src.spec || '';
- if (!finalSpec) {
- const split = splitTileSizePrefix(src.name);
- if (split) { finalName = split.name; finalSpec = split.spec; }
- }
- return {
- name: finalName,
- spec: finalSpec,
- price: src.price,
- unit: src.unit || 'EA'
- };
- });
- const sharedMax = getMaxLastUsedForPrefix(vendorInfo.prefix);
- const startNumber = Math.max(vendorInfo.lastUsed, sharedMax) + 1;
- const newRows = assignCodesAndPrices(toRegister, vendorInfo.prefix, startNumber, vendorName);
- appendToMasterSheet(vendorName, newRows);
- newRows.forEach(function (r) { ecountSyncItem(r); }); // 실패해도 로컬 등록은 이미 끝났으니 무시하고 진행
- // codeMap은 원본(추출된 그대로의) 품명+규격 키로 조회하므로, 타일 표기 정리로 이름이 바뀌었어도
- // missingKeys[i]<->newRows[i]는 순서가 그대로 대응되니 원본 키로 매핑해준다.
- newRows.forEach(function (r, i) { codeMap[missingKeys[i]] = { code: r.code, name: r.name, spec: r.spec }; });
- saveLastUsedByPrefix(vendorInfo.prefix, Math.max(startNumber + newRows.length - 1, sharedMax));
- }
 
  return parsed.items.map(function (it, i) {
  const key = itemKey(it.name, it.spec);
@@ -266,7 +313,6 @@
  const code = match ? match.code : '';
  const finalName = match ? match.name : it.name;
  const finalSpec = match && match.spec ? match.spec : (it.spec || '');
- const autoRegistered = !!(vendorInfo && missingKeys.indexOf(key) !== -1);
  const unitPrice = Math.round(Number(it.price) || 0);
  const qty = Number(it.qty) || 0;
  const supply = Math.round((unitPrice * qty) / 1.1);
@@ -290,7 +336,7 @@
  foreignAmount: '',
  supply: supply,
  vat: vat,
- note: code ? (autoRegistered ? '신규 품목 자동등록됨' : '') : '품목코드 미매칭 - 거래처 미등록으로 자동등록 불가'
+ note: code ? '' : '신규/미확인 - 기존 품목이면 품목코드 칸에서 검색해 선택, 신규 품목이면 비워둔 채 확정하면 자동 채번됩니다'
  };
  });
  }
