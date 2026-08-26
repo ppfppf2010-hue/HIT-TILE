@@ -132,6 +132,7 @@
  const headerRange = sheet.getRange(1, 1, 1, SALE_REVIEW_HEADERS.length);
  headerRange.setFontWeight('bold').setBackground('#eef4ff');
 
+ // applyItemCodeDropdown은 Purchase.js에 정의된 공용 헬퍼(품목등록마스터 기준이라 구매/판매 공통 재사용 가능)
  if (rows.length) applyItemCodeDropdown(sheet, rows.length);
 
  SpreadsheetApp.flush();
@@ -255,8 +256,8 @@
 
  // ---- 품목코드 매칭 + 공급가액/부가세 계산해서 행 조립 ----
  // 품목등록마스터는 구매 때 등록된 것을 그대로 재사용한다 — 같은 품목을 사고 팔기 때문.
- // v2 변경점: 미매칭 품목을 여기서 바로 신규 채번/등록하지 않는다(구매입력과 동일 이유 — 인식 오류로
- // 미매칭된 품목이 계속 새 코드로 잘못 생성되는 문제 때문). 코드가 빈 채로 "판매확인중" 시트에 올려서
+ // 구매등록과 마찬가지로, 미매칭 품목을 여기서 바로 신규 채번/등록하지 않는다. 인식 오류로 미매칭된
+ // 품목이 계속 새 코드로 잘못 생성되는 문제 때문에, 코드가 빈 채로 "판매확인중" 시트에 올려서
  // 사람이 (a) 기존 코드로 지정하거나 (b) 그대로 둬서 confirm 시점에 신규 등록하게 한다.
  function buildSaleRows(parsed, vendorName) {
  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
