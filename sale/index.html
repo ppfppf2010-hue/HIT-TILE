@@ -499,6 +499,14 @@
       <input type="month" id="monthInput">
     </div>
 
+    <div class="month-field" id="photoVendorField">
+      <label for="photoVendorName">거래처명 <span>(선택, 문서에 거래처명이 없거나 자동 인식이 틀릴 때 직접 입력)</span></label>
+      <div class="ac-wrap">
+        <input type="text" id="photoVendorName" placeholder="비워두면 자동으로 인식해요" autocomplete="off">
+        <div class="ac-list" id="photoVendorAcList"></div>
+      </div>
+    </div>
+
     <button class="submit" id="submitBtn" disabled>업로드해서 분석하기</button>
 
     <div class="status" id="statusBox">
@@ -639,6 +647,9 @@
   const fileClear = document.getElementById('fileClear');
   const monthField = document.getElementById('monthField');
   const monthInput = document.getElementById('monthInput');
+  const photoVendorField = document.getElementById('photoVendorField');
+  const photoVendorName = document.getElementById('photoVendorName');
+  const photoVendorAcList = document.getElementById('photoVendorAcList');
   const tabPhoto = document.getElementById('tabPhoto');
   const tabManual = document.getElementById('tabManual');
   const photoPanel = document.getElementById('photoPanel');
@@ -808,6 +819,8 @@
     fileChip.classList.remove('show');
     monthField.classList.remove('show');
     monthInput.value = '';
+    photoVendorField.classList.remove('show');
+    photoVendorName.value = '';
     submitBtn.disabled = true;
     statusBox.classList.remove('show');
     errorBox.classList.remove('show');
@@ -830,7 +843,9 @@
     fileName.textContent = file.name;
     fileChip.classList.add('show');
     monthField.classList.add('show');
+    photoVendorField.classList.add('show');
     submitBtn.disabled = false;
+    loadVendorNames();
     errorBox.classList.remove('show');
     errorBox.classList.remove('credit-warn');
     prefixBox.classList.remove('show');
@@ -971,7 +986,8 @@
           action: 'sale_extract',
           fileBase64: base64,
           mimeType: mimeType,
-          targetMonth: monthInput.value || ''
+          targetMonth: monthInput.value || '',
+          vendorNameOverride: photoVendorName.value.trim()
         })
       });
 
@@ -1086,6 +1102,11 @@
     function () { return vendorNamesCache.map(function (n) { return { name: n }; }); },
     function (it) { return escapeHtml(it.name); },
     function (it) { manualVendorName.value = it.name; });
+
+  setupAutocomplete(photoVendorName, photoVendorAcList,
+    function () { return vendorNamesCache.map(function (n) { return { name: n }; }); },
+    function (it) { return escapeHtml(it.name); },
+    function (it) { photoVendorName.value = it.name; });
 
   let vendorMatched = false;
 

@@ -29,9 +29,11 @@
  const fileBase64 = body.fileBase64;
  const mimeType = body.mimeType || 'application/pdf';
  const targetMonth = String(body.targetMonth || '').trim(); // 'YYYY-MM', 선택 시 그 달 품목만 등록
+ const vendorNameOverride = String(body.vendorNameOverride || '').trim(); // 문서에 거래처명이 없거나 인식이 틀렸을 때 사람이 직접 지정
  if (!fileBase64) throw new Error('파일이 없습니다.');
 
  const parsed = extractSaleWithClaude(fileBase64, mimeType, targetMonth);
+ if (vendorNameOverride) parsed.vendorName = vendorNameOverride;
  if (!parsed.vendorName) throw new Error('문서에서 거래처명을 인식하지 못했습니다.');
  if (!parsed.items || parsed.items.length === 0) throw new Error('문서에서 품목을 찾지 못했습니다.');
 
