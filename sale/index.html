@@ -434,6 +434,32 @@
     transition:border-color .15s ease, color .15s ease;
   }
   button.add-row-btn:hover{ border-color:var(--brass); color:var(--brass-deep); }
+
+  .ac-wrap{ position:relative; flex:1; min-width:0; }
+  .ac-list{
+    position:absolute;
+    left:0; right:0; top:100%;
+    margin-top:4px;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:10px;
+    box-shadow:0 6px 20px rgba(17,17,17,0.12);
+    max-height:240px;
+    overflow-y:auto;
+    z-index:30;
+    display:none;
+  }
+  .ac-list.show{ display:block; }
+  .ac-item{
+    padding:11px 12px;
+    font-size:14px;
+    cursor:pointer;
+    border-bottom:1px solid var(--line);
+  }
+  .ac-item:last-child{ border-bottom:none; }
+  .ac-item:hover, .ac-item.active{ background:#f2f5ff; }
+  .ac-item .ac-sub{ color:var(--muted); font-size:12px; margin-left:6px; }
+  .ac-empty{ padding:11px 12px; font-size:13px; color:var(--muted); }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -486,7 +512,10 @@
   <div class="manual-panel" id="manualPanel">
     <div class="month-field show">
       <label for="manualVendorName">거래처명</label>
-      <input type="text" id="manualVendorName" placeholder="거래처명" list="vendorNameList" autocomplete="off">
+      <div class="ac-wrap">
+        <input type="text" id="manualVendorName" placeholder="거래처명" autocomplete="off">
+        <div class="ac-list" id="manualVendorAcList"></div>
+      </div>
     </div>
 
     <div class="item-rows" id="itemRows"></div>
@@ -502,8 +531,6 @@
 
     <div class="error-box" id="manualErrorBox"></div>
   </div>
-
-  <datalist id="itemNameList"></datalist>
 
   <div class="result" id="prefixBox">
     <div class="result-head">
@@ -622,7 +649,6 @@
   const manualSubmitBtn = document.getElementById('manualSubmitBtn');
   const manualStatusBox = document.getElementById('manualStatusBox');
   const manualErrorBox = document.getElementById('manualErrorBox');
-  const itemNameList = document.getElementById('itemNameList');
 
   const submitBtn = document.getElementById('submitBtn');
   const statusBox = document.getElementById('statusBox');
@@ -688,20 +714,43 @@
     try {
       const res = await fetch(ENDPOINT, { method: 'POST', body: JSON.stringify({ action: 'list_item_master' }) });
       const data = await res.json();
-      if (data.ok && data.items) {
-        itemMasterCache = data.items;
-        const seenNames = {};
-        itemNameList.innerHTML = itemMasterCache.filter(function (it) {
-          if (seenNames[it.name]) return false;
-          seenNames[it.name] = true;
-          return true;
-        }).map(function (it) {
-          return '<option value="' + it.name.replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '">';
-        }).join('');
-      }
+      if (data.ok && data.items) itemMasterCache = data.items;
     } catch (e) {
       itemMasterLoaded = false; // 실패하면 다음에 다시 시도
     }
+  }
+
+  // ---- 직접 그려주는 자동완성 드롭다운 (모바일 브라우저는 <datalist> 지원이 부실해서 직접 구현) ----
+  // getItems()는 후보 배열(각 항목에 최소 .name 필드 필요)을, renderLabel(it)는 목록 항목 HTML을 돌려줘야 함.
+  function setupAutocomplete(inputEl, listEl, getItems, renderLabel, onSelect) {
+    function render(items) {
+      listEl.innerHTML = '';
+      if (!items.length) { listEl.classList.remove('show'); return; }
+      items.slice(0, 30).forEach(function (it) {
+        const div = document.createElement('div');
+        div.className = 'ac-item';
+        div.innerHTML = renderLabel(it);
+        div.addEventListener('mousedown', function (e) {
+          e.preventDefault(); // blur보다 먼저 처리되게 해서 클릭이 씹히지 않도록 함
+          listEl.classList.remove('show');
+          onSelect(it);
+        });
+        listEl.appendChild(div);
+      });
+      listEl.classList.add('show');
+    }
+
+    inputEl.addEventListener('input', function () {
+      const q = inputEl.value.trim().toLowerCase();
+      if (!q) { listEl.classList.remove('show'); return; }
+      render(getItems().filter(function (it) { return it.name.toLowerCase().indexOf(q) !== -1; }));
+    });
+    inputEl.addEventListener('focus', function () {
+      if (inputEl.value.trim()) inputEl.dispatchEvent(new Event('input'));
+    });
+    inputEl.addEventListener('blur', function () {
+      setTimeout(function () { listEl.classList.remove('show'); }, 150);
+    });
   }
 
   // ---- 직접 입력 탭: 품목 행 하나 생성 ----
@@ -710,7 +759,10 @@
     row.className = 'item-row';
     row.innerHTML =
       '<div class="item-row-main">' +
-        '<input type="text" class="item-name" placeholder="품목명" list="itemNameList" autocomplete="off">' +
+        '<div class="ac-wrap">' +
+          '<input type="text" class="item-name" placeholder="품목명" autocomplete="off">' +
+          '<div class="ac-list"></div>' +
+        '</div>' +
         '<input type="number" class="item-qty" placeholder="수량" min="0">' +
       '</div>' +
       '<div class="item-row-sub">' +
@@ -720,16 +772,25 @@
       '</div>';
 
     const nameInput = row.querySelector('.item-name');
+    const acList = row.querySelector('.ac-list');
     const specInput = row.querySelector('.item-spec');
     const priceInput = row.querySelector('.item-price');
     const removeBtn = row.querySelector('.item-remove');
 
-    nameInput.addEventListener('input', () => {
-      const match = itemMasterCache.find(function (it) { return it.name === nameInput.value.trim(); });
-      if (match) {
-        specInput.value = match.spec || '';
-        priceInput.value = match.outPrice || '';
-      }
+    function fillFromMatch(it) {
+      nameInput.value = it.name;
+      specInput.value = it.spec || '';
+      priceInput.value = it.outPrice || '';
+    }
+
+    setupAutocomplete(nameInput, acList, function () { return itemMasterCache; },
+      function (it) { return escapeHtml(it.name) + (it.spec ? '<span class="ac-sub">' + escapeHtml(it.spec) + '</span>' : ''); },
+      fillFromMatch);
+
+    // 드롭다운에서 고르지 않고 정확한 품목명을 직접 타이핑해서 마쳤을 때도 규격/단가를 자동으로 채운다.
+    nameInput.addEventListener('blur', () => {
+      const exact = itemMasterCache.find(function (it) { return it.name === nameInput.value.trim(); });
+      if (exact && !specInput.value && !priceInput.value) fillFromMatch(exact);
     });
     removeBtn.addEventListener('click', () => row.remove());
 
@@ -1002,6 +1063,7 @@
   });
 
   let vendorNamesLoaded = false;
+  let vendorNamesCache = [];
   async function loadVendorNames() {
     if (vendorNamesLoaded) return;
     vendorNamesLoaded = true;
@@ -1009,6 +1071,7 @@
       const res = await fetch(ENDPOINT, { method: 'POST', body: JSON.stringify({ action: 'list_vendor_names' }) });
       const data = await res.json();
       if (data.ok && data.names) {
+        vendorNamesCache = data.names;
         vendorNameList.innerHTML = data.names.map(function (n) {
           return '<option value="' + n.replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '">';
         }).join('');
@@ -1017,6 +1080,12 @@
       vendorNamesLoaded = false; // 실패하면 다음에 다시 시도
     }
   }
+
+  const manualVendorAcList = document.getElementById('manualVendorAcList');
+  setupAutocomplete(manualVendorName, manualVendorAcList,
+    function () { return vendorNamesCache.map(function (n) { return { name: n }; }); },
+    function (it) { return escapeHtml(it.name); },
+    function (it) { manualVendorName.value = it.name; });
 
   let vendorMatched = false;
 
