@@ -74,7 +74,6 @@
  if (action === 'list_vendor_names') return handleListVendorNames();
  if (action === 'list_item_master') return handleListItemMaster();
  if (action === 'check_vendor') return handleCheckVendor(body);
- if (action === 'sale_extract') return handleSaleExtract(body);
  if (action === 'sale_register_vendor') return handleSaleRegisterVendor(body);
  if (action === 'sale_manual_entry') return handleSaleManualEntry(body);
  if (action === 'sale_confirm') return handleSaleConfirm();
@@ -535,6 +534,23 @@
  // 무관한 값이라, 거래처로 좁히지 않고 마스터 전체에서 findMasterItem과 같은 유사매칭을 적용한다. ----
  function findMasterItemAnyVendor(masterData, itemName, price, spec) {
  return matchItemInRows(masterData, itemName, price, spec);
+ }
+
+ // ---- 판매용: matchItemInRows가 편집거리 한도를 넘겨서 후보를 못 찾았어도, 마스터 전체에서
+ // 편집거리가 가장 가까운 하나를 무조건 골라준다 (판매는 신규 품목 등록이 없어 항상 기존 품목
+ // 코드가 필요하기 때문 - 정확도가 떨어지는 경우엔 검토 화면에서 사람이 확인/수정한다). ----
+ function findClosestMasterItemAnyVendor(masterData, itemName, spec) {
+ const targetNorm = normalizeItemName(tileCoreName(itemName));
+ if (!targetNorm) return null;
+ let best = null, bestDist = Infinity;
+ for (let i = 0; i < masterData.length; i++) {
+ const row = masterData[i];
+ const rowNorm = normalizeItemName(tileCoreName(row[1]));
+ if (!rowNorm) continue;
+ const dist = levenshteinDistance(targetNorm, rowNorm);
+ if (dist < bestDist) { best = row; bestDist = dist; }
+ }
+ return best ? normalizeMasterMatch(best) : null;
  }
 
  // ---- 배송용: 추출된 품목명/규격을 마스터 등록 품목과 대조해서 이미 알려진 표기로 자동 보정 ----

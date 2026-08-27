@@ -45,48 +45,9 @@
     padding:0 6vw;
   }
 
-  .upload-panel{}
-
-  .drop{
-    border:2px dashed var(--line);
-    border-radius:14px;
-    padding:40px 20px;
-    text-align:center;
-    background:var(--card);
-    cursor:pointer;
-    transition:border-color .15s ease, background .15s ease;
-  }
-  .drop.drag{
-    border-color:var(--brass);
-    background:#f2f5ff;
-  }
-  .drop p{ margin:6px 0; color:var(--muted); font-size:14px; }
-  .drop .big{ font-size:16px; color:var(--ink); font-weight:600; }
-  .drop input{ display:none; }
-
-  .file-chip{
-    margin-top:14px;
-    display:none;
-    align-items:center;
-    justify-content:space-between;
-    gap:10px;
-    background:var(--card);
-    border:1px solid var(--line);
-    border-radius:10px;
-    padding:10px 14px;
-    font-size:13px;
-  }
-  .file-chip.show{ display:flex; }
-  .file-chip .name{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .file-chip button{
-    border:none; background:none; color:var(--muted); cursor:pointer; font-size:13px;
-  }
-
   .month-field{
     margin-top:14px;
-    display:none;
   }
-  .month-field.show{ display:block; }
   .month-field label{
     display:block;
     font-size:12.5px;
@@ -217,9 +178,6 @@
   .badge.ok{ background:rgba(92,122,94,0.12); color:var(--ok); }
   .badge.warn{ background:rgba(176,130,79,0.14); color:var(--warn); }
 
-  .no-code{ color:var(--warn); font-size:11px; }
-  .blank-cell{ color:rgba(17,17,17,0.28); }
-
   .error-box{
     margin-top:18px;
     display:none;
@@ -232,13 +190,6 @@
     line-height:1.5;
   }
   .error-box.show{ display:block; }
-  .error-box.credit-warn{
-    background:#fff4e5;
-    border-color:rgba(176,130,79,0.5);
-    color:#8a5a1f;
-    font-weight:700;
-    font-size:14px;
-  }
 
   .again{
     margin-top:16px;
@@ -278,15 +229,6 @@
     background:#f2f5ff;
   }
   .action-btn svg{ width:15px; height:15px; }
-
-  .note-tag{
-    font-size:10.5px;
-    padding:2px 6px;
-    border-radius:5px;
-    white-space:nowrap;
-  }
-  .note-tag.new{ background:rgba(92,122,94,0.12); color:var(--ok); }
-  .note-tag.miss{ background:rgba(177,80,63,0.12); color:var(--err); }
 
   .flag-section{
     margin-bottom:14px;
@@ -341,48 +283,6 @@
     line-height:1.6;
   }
 
-  button.camera-btn{
-    margin-top:10px;
-    width:100%;
-    padding:12px;
-    border:1px solid var(--line);
-    border-radius:10px;
-    background:var(--card);
-    color:var(--ink);
-    font-size:14px;
-    font-weight:600;
-    cursor:pointer;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    gap:6px;
-    transition:border-color .15s ease, background .15s ease;
-  }
-  button.camera-btn:hover{ border-color:var(--brass); background:#f2f5ff; }
-
-  .tabs{ display:flex; gap:8px; margin-bottom:18px; }
-  .tab-btn{
-    flex:1;
-    padding:11px;
-    border:1px solid var(--line);
-    border-radius:10px;
-    background:var(--card);
-    color:var(--muted);
-    font-size:14px;
-    font-weight:600;
-    cursor:pointer;
-    font-family:inherit;
-    transition:border-color .15s ease, background .15s ease, color .15s ease;
-  }
-  .tab-btn.active{
-    border-color:var(--brass);
-    background:#eef4ff;
-    color:var(--brass-deep);
-  }
-
-  .manual-panel{ display:none; }
-  .manual-panel.show{ display:block; }
-
   .item-rows{ display:flex; flex-direction:column; gap:10px; margin-top:14px; }
   .item-row{
     background:var(--card);
@@ -391,7 +291,6 @@
     padding:10px 12px;
   }
   .item-row-main{ display:flex; gap:8px; }
-  .item-row-main .item-name{ flex:1; min-width:0; }
   .item-row-main .item-qty{ width:76px; text-align:right; }
   .item-row-sub{ display:flex; align-items:center; gap:8px; margin-top:6px; }
   .item-row-sub .item-spec{ flex:1; min-width:0; font-size:12.5px; color:var(--muted); }
@@ -459,7 +358,6 @@
   .ac-item:last-child{ border-bottom:none; }
   .ac-item:hover, .ac-item.active{ background:#f2f5ff; }
   .ac-item .ac-sub{ color:var(--muted); font-size:12px; margin-left:6px; }
-  .ac-empty{ padding:11px 12px; font-size:13px; color:var(--muted); }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -467,78 +365,39 @@
 
 <header>
   <h1>히트타일 판매등록</h1>
-  <p>판매 거래명세서·세금계산서(PDF 또는 사진)를 올리면 거래처(고객)와 품목을 자동으로 인식해서 "판매확인중" 시트에 미리 채워둡니다. 시트에서 확인/수정한 뒤 확정하면 판매입력 시트에 등록돼요.</p>
+  <p>거래처(고객)와 판매 품목을 직접 입력하면 "판매확인중" 시트에 준비됩니다. 이미 등록된 품목 중에서만 매칭되며(신규 품목은 만들지 않아요), 애매하게 매칭된 품목은 표시해드리니 확인 후 등록해주세요.</p>
 </header>
 
 <main>
 
-  <div class="tabs" id="modeTabs">
-    <button type="button" class="tab-btn active" id="tabPhoto" data-mode="photo">📷 사진으로 올리기</button>
-    <button type="button" class="tab-btn" id="tabManual" data-mode="manual">✏️ 직접 입력</button>
+  <div class="month-field">
+    <label for="manualVendorName">거래처명</label>
+    <div class="ac-wrap">
+      <input type="text" id="manualVendorName" placeholder="거래처명" autocomplete="off">
+      <div class="ac-list" id="manualVendorAcList"></div>
+    </div>
   </div>
 
-  <div class="upload-panel" id="photoPanel">
-    <div class="drop" id="dropZone">
-      <div class="big">클릭해서 파일 선택</div>
-      <p>또는 이 영역에 파일을 끌어다 놓으세요</p>
-      <p>캡쳐한 사진은 Ctrl+V로 붙여넣기도 가능해요</p>
-      <p>PDF, JPG, PNG 지원</p>
-      <input type="file" id="fileInput" accept="application/pdf,image/*">
-    </div>
+  <div class="item-rows" id="itemRows"></div>
 
-    <button type="button" class="camera-btn" id="cameraBtn">📷 사진으로 촬영해서 올리기</button>
-    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+  <button type="button" class="add-row-btn" id="addRowBtn">+ 품목 추가</button>
 
-    <div class="file-chip" id="fileChip">
-      <span class="name" id="fileName"></span>
-      <button type="button" id="fileClear">지우기</button>
-    </div>
+  <button class="submit" id="manualSubmitBtn">판매확인중 시트에 준비하기</button>
 
-    <div class="month-field" id="monthField">
-      <label for="monthInput">특정 월만 등록 <span>(선택, 거래처원장처럼 여러 달이 섞인 문서일 때)</span></label>
-      <input type="month" id="monthInput">
-    </div>
-
-    <button class="submit" id="submitBtn" disabled>업로드해서 분석하기</button>
-
-    <div class="status" id="statusBox">
-      <span class="spinner"></span>
-      <span id="statusText">문서를 분석하는 중이에요...</span>
-    </div>
-
-    <div class="error-box" id="errorBox"></div>
+  <div class="status" id="manualStatusBox">
+    <span class="spinner"></span>
+    <span>거래처·품목을 확인해서 판매확인중 시트에 준비하는 중이에요...</span>
   </div>
 
-  <div class="manual-panel" id="manualPanel">
-    <div class="month-field show">
-      <label for="manualVendorName">거래처명</label>
-      <div class="ac-wrap">
-        <input type="text" id="manualVendorName" placeholder="거래처명" autocomplete="off">
-        <div class="ac-list" id="manualVendorAcList"></div>
-      </div>
-    </div>
-
-    <div class="item-rows" id="itemRows"></div>
-
-    <button type="button" class="add-row-btn" id="addRowBtn">+ 품목 추가</button>
-
-    <button class="submit" id="manualSubmitBtn">판매확인중 시트에 준비하기</button>
-
-    <div class="status" id="manualStatusBox">
-      <span class="spinner"></span>
-      <span>거래처·품목을 확인해서 판매확인중 시트에 준비하는 중이에요...</span>
-    </div>
-
-    <div class="error-box" id="manualErrorBox"></div>
-  </div>
+  <div class="error-box" id="manualErrorBox"></div>
 
   <div class="result" id="prefixBox">
     <div class="result-head">
       <span class="badge warn">신규 거래처</span>
-      <p class="summary">처음 등록되는 거래처예요. 인식된 이름이 틀렸다면 아래에서 정확히 고친 뒤 진행해주세요(이름이 기존 거래처와 정확히 같아지면 새로 만들지 않고 기존 거래처로 등록됩니다).</p>
+      <p class="summary">처음 등록되는 거래처예요. 이름이 틀렸다면 아래에서 정확히 고친 뒤 진행해주세요(이름이 기존 거래처와 정확히 같아지면 새로 만들지 않고 기존 거래처로 등록됩니다).</p>
     </div>
-    <div class="month-field show">
-      <label for="prefixVendorName">거래처명 <span>(인식이 틀렸으면 여기서 수정)</span></label>
+    <div class="month-field">
+      <label for="prefixVendorName">거래처명 <span>(틀렸으면 여기서 수정)</span></label>
       <div class="vendor-check-row">
         <input type="text" id="prefixVendorName" placeholder="거래처명" list="vendorNameList" autocomplete="off">
         <button type="button" class="vendor-check-btn" id="vendorCheckBtn">확인</button>
@@ -546,11 +405,11 @@
       <datalist id="vendorNameList"></datalist>
       <div class="vendor-check-result" id="vendorCheckResult"></div>
     </div>
-    <div class="month-field show" id="prefixFieldWrap">
+    <div class="month-field" id="prefixFieldWrap">
       <label for="prefixInput">코드 접두어 <span>(영문 2~4자, 예: VG)</span></label>
       <input type="text" id="prefixInput" maxlength="4" placeholder="VG">
     </div>
-    <div class="month-field show" id="businessNoFieldWrap">
+    <div class="month-field" id="businessNoFieldWrap">
       <label for="businessNoInput">사업자등록번호 <span>(이카운트 거래처 등록용, 모르면 비워둬도 됩니다)</span></label>
       <input type="text" id="businessNoInput" placeholder="123-45-67890">
     </div>
@@ -570,7 +429,7 @@
     </div>
 
     <div class="flag-section" id="missSection">
-      <h3>🆕 확인 필요 품목 <span class="flag-sub">기존 품목이면 시트 품목코드 칸에서 검색해 선택, 신규 품목이면 그대로 두면 확정 시 자동 등록</span></h3>
+      <h3>⚠ 확인 필요 품목 <span class="flag-sub">정확히 일치하지 않아 가장 비슷한 기존 품목으로 자동 매칭됐어요 - 맞는지 확인해주세요</span></h3>
       <ul class="flag-list miss" id="missList"></ul>
     </div>
 
@@ -588,7 +447,7 @@
     </div>
 
     <div class="again">
-      <a id="againLinkReview">다른 파일 업로드하기</a>
+      <a id="againLinkReview">다시 입력하기</a>
     </div>
   </div>
 
@@ -612,13 +471,13 @@
     </div>
 
     <div class="again">
-      <a id="againLink">다른 파일 업로드하기</a>
+      <a id="againLink">다시 입력하기</a>
     </div>
   </div>
 
   <p class="note">
-    거래처코드(Ecount)·담당자·거래유형은 자동으로 채워지지 않아요. 출하창고는 "본사창고"로 통일 등록됩니다. "판매확인중" 시트에서 품목명·규격·단가 등을 확인/수정한 뒤 등록하기를 눌러주세요 — 고친 내용은 다음 인식부터 자동으로 참고합니다.
-    품목코드가 비어있는 행은 그 칸을 클릭하면 드롭다운으로 기존 품목을 검색해서 선택할 수 있어요. 기존 품목이 아니라면 비워둔 채로 등록하기를 누르면 그때 새 코드가 자동으로 발급돼요.
+    거래처코드(Ecount)·담당자·거래유형은 자동으로 채워지지 않아요. 출하창고는 "본사창고"로 통일 등록됩니다. "판매확인중" 시트에서 품목명·규격·단가 등을 확인/수정한 뒤 등록하기를 눌러주세요.
+    품목코드 칸을 클릭하면 드롭다운으로 기존 품목을 검색해서 다른 걸로 바꿀 수 있어요. 판매는 신규 품목을 자동 등록하지 않으니, 코드가 비어있는 행이 있으면 반드시 골라서 채워주세요.
   </p>
 
 </main>
@@ -630,19 +489,6 @@
 
   let lastResult = null;
 
-  const dropZone = document.getElementById('dropZone');
-  const fileInput = document.getElementById('fileInput');
-  const cameraBtn = document.getElementById('cameraBtn');
-  const cameraInput = document.getElementById('cameraInput');
-  const fileChip = document.getElementById('fileChip');
-  const fileName = document.getElementById('fileName');
-  const fileClear = document.getElementById('fileClear');
-  const monthField = document.getElementById('monthField');
-  const monthInput = document.getElementById('monthInput');
-  const tabPhoto = document.getElementById('tabPhoto');
-  const tabManual = document.getElementById('tabManual');
-  const photoPanel = document.getElementById('photoPanel');
-  const manualPanel = document.getElementById('manualPanel');
   const manualVendorName = document.getElementById('manualVendorName');
   const itemRows = document.getElementById('itemRows');
   const addRowBtn = document.getElementById('addRowBtn');
@@ -650,10 +496,6 @@
   const manualStatusBox = document.getElementById('manualStatusBox');
   const manualErrorBox = document.getElementById('manualErrorBox');
 
-  const submitBtn = document.getElementById('submitBtn');
-  const statusBox = document.getElementById('statusBox');
-  const statusText = document.getElementById('statusText');
-  const errorBox = document.getElementById('errorBox');
   const reviewBox = document.getElementById('reviewBox');
   const resultVendor = document.getElementById('resultVendor');
   const vendorBadge = document.getElementById('vendorBadge');
@@ -685,27 +527,29 @@
   const sheetLink = document.getElementById('sheetLink');
   const excelBtn = document.getElementById('excelBtn');
 
-  let selectedFile = null;
   let pendingParsed = null;
-  let pendingTargetMonth = '';
   let pendingVendorName = '';
 
-  // ---- 탭 전환 (사진으로 올리기 / 직접 입력) ----
-  function setMode(mode) {
-    tabPhoto.classList.toggle('active', mode === 'photo');
-    tabManual.classList.toggle('active', mode === 'manual');
-    photoPanel.style.display = mode === 'photo' ? '' : 'none';
-    manualPanel.classList.toggle('show', mode === 'manual');
-    if (mode === 'manual') {
-      loadVendorNames();
-      loadItemMaster();
-      if (!itemRows.children.length) { for (let i = 0; i < 6; i++) addItemRow(); }
-    }
+  function resetAll() {
+    pendingParsed = null;
+    pendingVendorName = '';
+    prefixBox.classList.remove('show');
+    prefixErrorBox.classList.remove('show');
+    prefixInput.value = '';
+    reviewBox.classList.remove('show');
+    doneBox.classList.remove('show');
+    missSection.classList.remove('show');
+    manualErrorBox.classList.remove('show');
+    manualVendorName.value = '';
+    itemRows.innerHTML = '';
+    for (let i = 0; i < 6; i++) addItemRow();
   }
-  tabPhoto.addEventListener('click', () => setMode('photo'));
-  tabManual.addEventListener('click', () => setMode('manual'));
 
-  // ---- 직접 입력 탭: 품목마스터 목록(자동완성 + 단가 자동채움용) ----
+  function isCreditError(msg) {
+    return /credit balance is too low|insufficient_quota/i.test(String(msg || ''));
+  }
+
+  // ---- 품목마스터 목록(자동완성 + 단가 자동채움용) ----
   let itemMasterCache = [];
   let itemMasterLoaded = false;
   async function loadItemMaster() {
@@ -753,7 +597,7 @@
     });
   }
 
-  // ---- 직접 입력 탭: 품목 행 하나 생성 ----
+  // ---- 품목 행 하나 생성 ----
   function addItemRow() {
     const row = document.createElement('div');
     row.className = 'item-row';
@@ -799,213 +643,16 @@
   }
   addRowBtn.addEventListener('click', () => addItemRow());
 
-  function resetAll() {
-    selectedFile = null;
-    pendingParsed = null;
-    pendingTargetMonth = '';
-    pendingVendorName = '';
-    fileInput.value = '';
-    fileChip.classList.remove('show');
-    monthField.classList.remove('show');
-    monthInput.value = '';
-    submitBtn.disabled = true;
-    statusBox.classList.remove('show');
-    errorBox.classList.remove('show');
-    errorBox.classList.remove('credit-warn');
-    prefixBox.classList.remove('show');
-    prefixErrorBox.classList.remove('show');
-    prefixInput.value = '';
-    reviewBox.classList.remove('show');
-    doneBox.classList.remove('show');
-    missSection.classList.remove('show');
-    manualErrorBox.classList.remove('show');
-    manualVendorName.value = '';
-    itemRows.innerHTML = '';
-    for (let i = 0; i < 6; i++) addItemRow();
-  }
-
-  function pickFile(file) {
-    if (!file) return;
-    selectedFile = file;
-    fileName.textContent = file.name;
-    fileChip.classList.add('show');
-    monthField.classList.add('show');
-    submitBtn.disabled = false;
-    errorBox.classList.remove('show');
-    errorBox.classList.remove('credit-warn');
-    prefixBox.classList.remove('show');
-    reviewBox.classList.remove('show');
-    doneBox.classList.remove('show');
-  }
-
-  dropZone.addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', (e) => pickFile(e.target.files[0]));
-
-  cameraBtn.addEventListener('click', () => cameraInput.click());
-  cameraInput.addEventListener('change', (e) => {
-    pickFile(e.target.files[0]);
-    cameraInput.value = '';
-  });
-
-  ['dragenter', 'dragover'].forEach(evt => {
-    dropZone.addEventListener(evt, (e) => {
-      e.preventDefault();
-      dropZone.classList.add('drag');
-    });
-  });
-  ['dragleave', 'drop'].forEach(evt => {
-    dropZone.addEventListener(evt, (e) => {
-      e.preventDefault();
-      dropZone.classList.remove('drag');
-    });
-  });
-  dropZone.addEventListener('drop', (e) => {
-    const file = e.dataTransfer.files[0];
-    pickFile(file);
-  });
-
-  document.addEventListener('paste', (e) => {
-    const items = (e.clipboardData && e.clipboardData.items) || [];
-    for (const item of items) {
-      if (item.type.indexOf('image') !== -1) {
-        const file = item.getAsFile();
-        if (file) { pickFile(file); e.preventDefault(); }
-        break;
-      }
-    }
-  });
-
-  fileClear.addEventListener('click', (e) => {
-    e.stopPropagation();
-    resetAll();
-  });
-
   againLink.addEventListener('click', resetAll);
   againLinkReview.addEventListener('click', resetAll);
 
-  function isCreditError(msg) {
-    return /credit balance is too low|insufficient_quota/i.test(String(msg || ''));
-  }
-
-  function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
-
-  // 휴대폰 카메라로 찍은 사진은 원본이 수십 MB라 Claude API 10MB 제한을 넘기기 쉬움.
-  // 캔버스로 리사이즈+재압축해서 base64로 반환(글자 읽기엔 충분한 해상도로 단계적으로 줄여감).
-  function loadImage(file) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.src = URL.createObjectURL(file);
-    });
-  }
-
-  function canvasToBase64(canvas, quality) {
-    const dataUrl = canvas.toDataURL('image/jpeg', quality);
-    return dataUrl.split(',')[1];
-  }
-
-  async function compressImageForUpload(file) {
-    const MAX_BASE64_BYTES = 9.5 * 1024 * 1024; // Claude 10MB 제한에 여유를 둠
-    const img = await loadImage(file);
-    URL.revokeObjectURL(img.src);
-
-    const attempts = [
-      { maxSide: 2400, quality: 0.85 },
-      { maxSide: 2000, quality: 0.8 },
-      { maxSide: 1600, quality: 0.75 },
-      { maxSide: 1200, quality: 0.7 },
-      { maxSide: 1000, quality: 0.6 }
-    ];
-
-    let base64 = null;
-    for (const { maxSide, quality } of attempts) {
-      const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      base64 = canvasToBase64(canvas, quality);
-      if (base64.length <= MAX_BASE64_BYTES) break;
-    }
-    return { base64: base64, mimeType: 'image/jpeg' };
-  }
-
-  submitBtn.addEventListener('click', async () => {
-    if (!selectedFile) return;
-
-    submitBtn.disabled = true;
-    statusBox.classList.add('show');
-    errorBox.classList.remove('show');
-    errorBox.classList.remove('credit-warn');
-    reviewBox.classList.remove('show');
-    doneBox.classList.remove('show');
-    statusText.textContent = '문서를 분석하는 중이에요...';
-
-    try {
-      const isImage = (selectedFile.type || '').indexOf('image/') === 0;
-      let base64, mimeType;
-      if (isImage) {
-        statusText.textContent = '사진 용량을 줄이는 중이에요...';
-        const compressed = await compressImageForUpload(selectedFile);
-        base64 = compressed.base64;
-        mimeType = compressed.mimeType;
-      } else {
-        base64 = await fileToBase64(selectedFile);
-        mimeType = selectedFile.type || 'application/pdf';
-      }
-
-      statusText.textContent = '거래처·품목을 인식해서 판매확인중 시트에 준비하는 중이에요...';
-
-      const res = await fetch(ENDPOINT, {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'sale_extract',
-          fileBase64: base64,
-          mimeType: mimeType,
-          targetMonth: monthInput.value || ''
-        })
-      });
-
-      const data = await res.json();
-
-      if (!data.ok && !data.needsPrefix) {
-        throw new Error(data.error || '처리 중 오류가 발생했어요.');
-      }
-
-      applySaleResponse(data);
-    } catch (err) {
-      const msg = err.message || String(err);
-      if (isCreditError(msg)) {
-        errorBox.textContent = '⚠️ Claude API 크레딧이 부족해요. console.anthropic.com에서 충전한 뒤 다시 시도해주세요.';
-        errorBox.classList.add('credit-warn');
-      } else {
-        errorBox.textContent = msg;
-        errorBox.classList.remove('credit-warn');
-      }
-      errorBox.classList.add('show');
-    } finally {
-      statusBox.classList.remove('show');
-      submitBtn.disabled = false;
-    }
-  });
-
-  // ---- sale_extract / sale_manual_entry 공통 응답 처리 (needsPrefix면 접두어 입력 화면, 아니면 바로 검토 화면) ----
+  // ---- sale_manual_entry 응답 처리 (needsPrefix면 접두어 입력 화면, 아니면 바로 검토 화면) ----
   function applySaleResponse(data) {
     if (!data.ok && !data.needsPrefix) {
       throw new Error(data.error || '처리 중 오류가 발생했어요.');
     }
     if (data.needsPrefix) {
       pendingParsed = data.parsed;
-      pendingTargetMonth = data.targetMonth || '';
       pendingVendorName = data.vendorName || '';
       prefixVendorName.value = data.vendorName || '';
       prefixInput.value = data.suggestedPrefix || '';
@@ -1020,7 +667,6 @@
     }
   }
 
-  // ---- 직접 입력 탭: 제출 ----
   manualSubmitBtn.addEventListener('click', async () => {
     const vendorName = manualVendorName.value.trim();
     if (!vendorName) { manualVendorName.focus(); return; }
@@ -1054,7 +700,8 @@
       const data = await res.json();
       applySaleResponse(data);
     } catch (err) {
-      manualErrorBox.textContent = err.message || String(err);
+      const msg = err.message || String(err);
+      manualErrorBox.textContent = isCreditError(msg) ? msg : msg;
       manualErrorBox.classList.add('show');
     } finally {
       manualStatusBox.classList.remove('show');
@@ -1091,8 +738,8 @@
 
   function setVendorMatched(matched) {
     vendorMatched = matched;
-    prefixFieldWrap.classList.toggle('show', !matched);
-    businessNoFieldWrap.classList.toggle('show', !matched);
+    prefixFieldWrap.style.display = matched ? 'none' : '';
+    businessNoFieldWrap.style.display = matched ? 'none' : '';
     prefixSubmitBtn.textContent = matched ? '이 거래처로 등록하고 계속하기' : '이 접두어로 등록하고 계속하기';
   }
 
@@ -1139,7 +786,7 @@
     if (!vendorName) { prefixVendorName.focus(); return; }
     const prefix = prefixInput.value.trim().toUpperCase();
     if (!vendorMatched && !prefix) { prefixInput.focus(); return; }
-    if (!pendingParsed) { prefixErrorBox.textContent = '문서 인식 정보가 없어졌어요. 다시 업로드해주세요.'; prefixErrorBox.classList.add('show'); return; }
+    if (!pendingParsed) { prefixErrorBox.textContent = '입력한 품목 정보가 없어졌어요. 다시 입력해주세요.'; prefixErrorBox.classList.add('show'); return; }
 
     prefixSubmitBtn.disabled = true;
     prefixStatusBox.classList.add('show');
@@ -1153,8 +800,7 @@
           vendorName: vendorName,
           prefix: prefix,
           businessNo: businessNoInput.value.trim(),
-          parsed: pendingParsed,
-          targetMonth: pendingTargetMonth
+          parsed: pendingParsed
         })
       });
       const data = await res.json();
@@ -1185,18 +831,14 @@
     }
 
     const rows = data.rows || [];
-    const pendingCount = rows.filter(r => !r.itemCode).length;
-    let summary = `${rows.length}개 품목이 판매확인중 시트에 준비됐어요. 확인/수정 후 등록해주세요.`;
-    if (data.filteredByMonth && data.totalExtracted) {
-      summary = `문서에서 인식된 ${data.totalExtracted}개 품목 중 선택한 월 품목 ${rows.length}개가 판매확인중 시트에 준비됐어요.`;
-    }
-    if (pendingCount) summary += ` 확인 필요 품목 ${pendingCount}건 — 기존 품목이면 시트에서 코드 선택, 신규면 그대로 두고 확정해주세요.`;
+    const flagged = rows.filter(r => r.note && r.note.indexOf('⚠') !== -1);
+    let summary = `${rows.length}개 품목이 판매확인중 시트에 준비됐어요. 확인 후 등록해주세요.`;
+    if (flagged.length) summary += ` 확인 필요 품목 ${flagged.length}건 — 자동으로 가장 비슷한 기존 품목에 매칭됐어요.`;
     resultSummary.textContent = summary;
 
-    renderFlagList(missList, missSection, rows.filter(r => !r.itemCode), (r) => `수량 ${r.qty}`);
+    renderFlagList(missList, missSection, flagged, (r) => `${r.itemCode ? '코드 ' + r.itemCode : '미매칭'} · 수량 ${r.qty}`);
 
     reviewBox.classList.add('show');
-    if (data.reviewUrl) window.open(data.reviewUrl, '_blank', 'noopener');
   }
 
   confirmBtn.addEventListener('click', async () => {
@@ -1278,6 +920,11 @@
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     XLSX.writeFile(wb, `판매입력_${lastResult.vendorName}_${today}.xlsx`);
   });
+
+  // 페이지 열자마자 바로 입력할 수 있게 초기 품목 행/자동완성 데이터를 미리 준비해둔다.
+  loadVendorNames();
+  loadItemMaster();
+  for (let i = 0; i < 6; i++) addItemRow();
 </script>
 
 </body>
