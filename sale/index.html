@@ -908,10 +908,32 @@
     XLSX.writeFile(wb, `판매입력_${lastResult.vendorName}_${today}.xlsx`);
   });
 
+  // ---- 상담 체크리스트에서 "최종본 확인" 후 넘어온 경우, localStorage에 담아둔 거래처/품목을 채워준다 ----
+  function applyChecklistHandoff() {
+    const params = new URLSearchParams(location.search);
+    if (params.get('from') !== 'checklist') return false;
+    let payload = null;
+    try { payload = JSON.parse(localStorage.getItem('hittile_sale_handoff') || 'null'); } catch (e) { payload = null; }
+    if (!payload || !payload.items || !payload.items.length) return false;
+    try { localStorage.removeItem('hittile_sale_handoff'); } catch (e) { /* ignore */ }
+
+    manualVendorName.value = payload.company || '';
+    itemRows.innerHTML = '';
+    payload.items.forEach(function (it) {
+      const row = addItemRow();
+      row.querySelector('.item-name').value = it.name || '';
+      row.querySelector('.item-qty').value = it.qty || '';
+    });
+    addItemRow();
+    return true;
+  }
+
   // 페이지 열자마자 바로 입력할 수 있게 초기 품목 행/자동완성 데이터를 미리 준비해둔다.
   loadVendorNames();
   loadItemMaster();
-  for (let i = 0; i < 6; i++) addItemRow();
+  if (!applyChecklistHandoff()) {
+    for (let i = 0; i < 6; i++) addItemRow();
+  }
 </script>
 
 </body>

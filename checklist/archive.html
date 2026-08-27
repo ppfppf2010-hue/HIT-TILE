@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HIT TILE 상담 체크리스트 보관함</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F5F6F8;
+    --paper-line:#E5E7EB;
+    --ink:#1A1A1A;
+    --muted:#6B7280;
+    --red:#2563EB;
+    --red-dark:#1D4ED8;
+    --err:#DC2626;
+    --green:#16803C;
+    --card:#FFFFFF;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    font-family:'Noto Sans KR', sans-serif;
+    color:var(--ink);
+    padding-bottom:80px;
+  }
+  header.top{ background:var(--ink); padding:18px 20px; }
+  .clip{ width:80px; height:26px; background:#2b2a28; border-radius:6px 6px 3px 3px; margin:0 auto 8px auto; position:relative; box-shadow:0 3px 6px rgba(0,0,0,.35); }
+  .clip:after{ content:''; position:absolute; left:50%; top:6px; transform:translateX(-50%); width:34px; height:10px; background:#111; border-radius:2px; }
+  .brand{ text-align:center; font-family:'Black Han Sans', sans-serif; color:#fff; letter-spacing:1px; }
+  .brand .hit{color:var(--red); font-size:26px;}
+  .brand .rest{font-size:26px;}
+  .brand .sub{ display:block; font-family:'Noto Sans KR', sans-serif; font-weight:500; font-size:12px; color:#C9C4B6; letter-spacing:2px; margin-top:-2px; }
+
+  main{ max-width:720px; margin:22px auto; padding:0 16px; }
+  .view{display:none;}
+  .view.active{display:block;}
+
+  .back-link{ display:inline-block; font-size:12.5px; color:var(--muted); text-decoration:underline; margin-bottom:14px; cursor:pointer; }
+
+  .card{ background:var(--card); border:1px solid var(--paper-line); border-radius:var(--radius); padding:18px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+  .card h3{ margin:0 0 12px 0; font-size:14px; color:var(--red-dark); letter-spacing:.5px; display:flex; align-items:center; gap:8px; }
+  .card h3:before{ content:''; width:4px; height:14px; background:var(--red); border-radius:2px; display:inline-block; }
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  @media(max-width:520px){ .grid2{grid-template-columns:1fr;} }
+  .field{margin-bottom:10px;}
+  label{ display:block; font-size:11px; color:var(--muted); font-weight:700; margin-bottom:4px; letter-spacing:.3px; }
+
+  input[type=text]{
+    width:100%; border:1px solid var(--paper-line); border-radius:6px; padding:9px 10px;
+    font-family:'Noto Sans KR'; font-size:13px; color:var(--ink); background:#fff;
+  }
+  input:focus{ outline:none; border-color:var(--red); box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+
+  .search-wrap{ margin-bottom:16px; }
+
+  .group{ margin-bottom:10px; border:1px solid var(--paper-line); border-radius:var(--radius); background:var(--card); overflow:hidden; }
+  .group-head{
+    padding:13px 16px; display:flex; justify-content:space-between; align-items:center;
+    cursor:pointer; font-weight:700; font-size:14px;
+  }
+  .group-head .cnt{ font-size:12px; color:var(--muted); font-weight:500; }
+  .group-body{ display:none; border-top:1px solid var(--paper-line); }
+  .group.open .group-body{ display:block; }
+  .group.open .group-head{ background:#F8FAFC; }
+
+  .entry{
+    padding:11px 16px; border-top:1px solid var(--paper-line); cursor:pointer;
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+  }
+  .entry:first-child{ border-top:none; }
+  .entry:hover{ background:#EFF6FF; }
+  .entry .addr{ font-size:12.5px; color:var(--muted); }
+  .entry .date{ font-size:11.5px; color:var(--muted); white-space:nowrap; }
+
+  .empty-msg{ text-align:center; color:var(--muted); font-size:13px; padding:30px 0; }
+
+  table.tile-table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.tile-table th{ background:#F1F5F9; color:var(--muted); font-weight:700; padding:8px 6px; border:1px solid var(--paper-line); font-size:11px; }
+  table.tile-table td{ border:1px solid var(--paper-line); padding:6px; vertical-align:middle; }
+  table.tile-table td.rowlabel{ background:#F8FAFC; font-weight:700; font-size:12px; white-space:nowrap; text-align:center; }
+  .table-scroll{ overflow-x:auto; }
+
+  .fixture-block{margin-bottom:14px;}
+  .fixture-block .label-row{ display:flex; justify-content:space-between; align-items:center; background:#F1F5F9; padding:6px 10px; border-radius:6px 6px 0 0; font-size:12px; font-weight:700; color:var(--red-dark); border:1px solid var(--paper-line); border-bottom:none; }
+  .fixture-row{ display:grid; grid-template-columns:88px 1fr; border:1px solid var(--paper-line); border-top:none; }
+  .fixture-row:last-child{ border-radius:0 0 6px 6px; }
+  .fixture-row .name{ background:#F8FAFC; padding:7px 8px; font-size:12px; font-weight:600; border-right:1px solid var(--paper-line); display:flex; align-items:center; }
+  .fixture-row .value{ padding:7px 8px; font-size:12.5px; display:flex; align-items:center; }
+
+  button.primary{ width:100%; background:var(--red); color:#fff; border:none; padding:14px; border-radius:8px; font-size:15px; font-weight:700; cursor:pointer; font-family:'Noto Sans KR'; }
+  button.primary:active{ background:var(--red-dark); }
+
+  .status-msg{ text-align:center; font-size:13px; margin-top:10px; font-weight:600; color:var(--muted); }
+  .share-toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:10px 18px; border-radius:20px; font-size:13px; font-weight:600; z-index:50; box-shadow:0 4px 14px rgba(0,0,0,.25); }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="clip"></div>
+  <div class="brand">
+    <span class="hit">HIT</span><span class="rest"> TILE</span>
+    <span class="sub">상담 체크리스트 · 보관함</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- ===================== 목록(목차별) 화면 ===================== -->
+  <section id="view-list" class="view active">
+    <a class="back-link" href="index.html">← 새 상담 입력으로</a>
+
+    <div class="search-wrap">
+      <input type="text" id="searchInput" placeholder="업체명으로 검색">
+    </div>
+
+    <div id="groupContainer"></div>
+    <div id="listStatus" class="status-msg">불러오는 중...</div>
+  </section>
+
+  <!-- ===================== 상세 화면 ===================== -->
+  <section id="view-detail" class="view">
+    <a class="back-link" onclick="showView('list')">← 목록으로</a>
+    <div id="detailContainer"></div>
+    <button class="primary" id="handoffBtn" onclick="goToSaleEntry(currentRecord)">✓ 최종본 확인 · 판매입력으로 이동</button>
+  </section>
+
+</main>
+
+<script>
+const MAIN_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec';
+
+const DEFAULT_TILE_ROWS = [
+  { key:'entrance', label:'현관' },
+  { key:'kitchen', label:'주방' },
+  { key:'veranda', label:'베란다' },
+  { key:'commonWall', label:'공동욕실\n(벽체)' },
+  { key:'commonFloor', label:'공동욕실\n(바닥)' },
+  { key:'masterWall', label:'안방욕실\n(벽체)' },
+  { key:'masterFloor', label:'안방욕실\n(바닥)' },
+  { key:'floor', label:'바닥' },
+  { key:'artwall', label:'아트월' },
+];
+
+const FIXTURE_ITEMS = [
+  { key:'toilet', label:'양변기' },
+  { key:'sink', label:'세면대' },
+  { key:'sinkFaucet', label:'세면 수전' },
+  { key:'showerFaucet', label:'샤워 수전' },
+  { key:'slideBar', label:'슬라이드바' },
+  { key:'towelBar', label:'수건걸이' },
+  { key:'hanger', label:'옷걸이' },
+  { key:'tissue', label:'휴지걸이' },
+  { key:'shelf', label:'코너선반' },
+  { key:'cabinet', label:'욕실장', hint:'*사이즈' },
+  { key:'mirror', label:'거울' },
+  { key:'sprayGun', label:'스프레이건', hint:'샤워줄 / 코일' },
+  { key:'tub', label:'욕조', hint:'아크릴 / SMC' },
+  { key:'partition', label:'파티션' },
+  { key:'ventilator', label:'환풍기' },
+  { key:'kitchenFaucet', label:'주방수전' },
+];
+
+const FIXTURE_ZONES = [
+  { key:'common', label:'공용욕실' },
+  { key:'master', label:'안방욕실' },
+];
+
+let allRecords = [];
+let currentRecord = null;
+const detailCache = {};
+
+function showView(name){
+  document.getElementById('view-list').classList.toggle('active', name==='list');
+  document.getElementById('view-detail').classList.toggle('active', name==='detail');
+  window.scrollTo(0,0);
+}
+
+async function loadList(){
+  const statusEl = document.getElementById('listStatus');
+  try{
+    const res = await fetch(MAIN_ENDPOINT, { method:'POST', body: JSON.stringify({ action:'list_consultations' }) });
+    const data = await res.json();
+    if(!data.ok) throw new Error(data.error || '목록을 불러오지 못했습니다.');
+    allRecords = data.list || [];
+    statusEl.textContent = '';
+    renderGroups(allRecords);
+  } catch(err){
+    statusEl.textContent = '불러오기 실패: ' + err.message;
+  }
+}
+
+function renderGroups(records){
+  const container = document.getElementById('groupContainer');
+  if(!records.length){
+    container.innerHTML = '<div class="empty-msg">저장된 상담 체크리스트가 없습니다.</div>';
+    return;
+  }
+
+  // ---- 목차별(업체별) 그룹핑 ----
+  const byCompany = {};
+  const order = [];
+  records.forEach(rec => {
+    const company = rec.company || '(업체명 없음)';
+    if(!byCompany[company]){ byCompany[company] = []; order.push(company); }
+    byCompany[company].push(rec);
+  });
+  order.sort((a,b) => a.localeCompare(b, 'ko'));
+
+  container.innerHTML = order.map(company => {
+    const entries = byCompany[company];
+    const groupId = 'g-' + company.replace(/[^a-zA-Z0-9가-힣]/g, '_');
+    return `
+      <div class="group" id="${groupId}">
+        <div class="group-head" onclick="toggleGroup('${groupId}')">
+          <span>${escapeHtml(company)}</span>
+          <span class="cnt">${entries.length}건</span>
+        </div>
+        <div class="group-body">
+          ${entries.map(e => `
+            <div class="entry" onclick="openDetail('${e.id}')">
+              <span class="addr">${escapeHtml(e.address || '주소 미입력')}</span>
+              <span class="date">${escapeHtml((e.tileDate || e.timestamp || '').slice(0,10))}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleGroup(groupId){
+  document.getElementById(groupId).classList.toggle('open');
+}
+
+document.getElementById('searchInput').addEventListener('input', (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  if(!q){ renderGroups(allRecords); return; }
+  renderGroups(allRecords.filter(r => (r.company||'').toLowerCase().indexOf(q) !== -1));
+});
+
+async function openDetail(id){
+  showView('detail');
+  document.getElementById('detailContainer').innerHTML = '<div class="status-msg">불러오는 중...</div>';
+  try{
+    let rec = detailCache[id];
+    if(!rec){
+      const res = await fetch(MAIN_ENDPOINT, { method:'POST', body: JSON.stringify({ action:'get_consultation', id }) });
+      const data = await res.json();
+      if(!data.ok) throw new Error(data.error || '상세 정보를 불러오지 못했습니다.');
+      rec = data.record;
+      detailCache[id] = rec;
+    }
+    renderDetail(rec);
+  } catch(err){
+    document.getElementById('detailContainer').innerHTML = `<div class="status-msg">불러오기 실패: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderDetail(rec){
+  currentRecord = rec;
+  const tile = safeParse(rec['tile_json']);
+  const fixture = safeParse(rec['fixture_json']);
+
+  let html = `
+    <div class="card">
+      <h3>현장 기본정보</h3>
+      <div class="grid2">
+        <div class="field"><label>업체</label><div>${escapeHtml(rec['업체'])}</div></div>
+        <div class="field"><label>현장주소</label><div>${escapeHtml(rec['현장주소'])}</div></div>
+        <div class="field"><label>연락처</label><div>${escapeHtml(rec['연락처'])}</div></div>
+        <div class="field"><label>현장비번</label><div>${escapeHtml(rec['현장비번'])}</div></div>
+        <div class="field"><label>타일시공일</label><div>${escapeHtml(rec['타일시공일'])}</div></div>
+        <div class="field"><label>도기시공일</label><div>${escapeHtml(rec['도기시공일'])}</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>타일 종류 / 컬러 &amp; 물량</h3>
+      <div class="table-scroll">
+      <table class="tile-table">
+        <thead><tr><th>공간</th><th>타일 종류 / 컬러</th><th>가로(mm)</th><th>세로(mm)</th><th>박스수량</th><th>비고</th></tr></thead>
+        <tbody>
+          ${Object.keys(tile).map(key => {
+            const d = tile[key] || {};
+            const rowDef = DEFAULT_TILE_ROWS.find(r => r.key === key);
+            const label = d.label || (rowDef ? rowDef.label : key);
+            return `<tr>
+              <td class="rowlabel">${(label||'').replace('\n','<br>')}</td>
+              <td>${escapeHtml(d.name||'-')}</td>
+              <td>${escapeHtml(d.width||'-')}</td>
+              <td>${escapeHtml(d.height||'-')}</td>
+              <td>${escapeHtml(d.boxQty||'-')}</td>
+              <td>${escapeHtml(d.memo||'-')}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>욕실 집기류</h3>
+      ${FIXTURE_ZONES.map(zone => `
+        <div class="fixture-block">
+          <div class="label-row">${zone.label}</div>
+          ${FIXTURE_ITEMS.map(item => {
+            const val = (fixture[zone.key] || {})[item.key] || '-';
+            return `<div class="fixture-row">
+              <div class="name">${item.label}</div>
+              <div class="value">${escapeHtml(val)}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="card">
+      <h3>특이사항</h3>
+      <div>${escapeHtml(rec['특이사항']) || '없음'}</div>
+    </div>
+  `;
+
+  document.getElementById('detailContainer').innerHTML = html;
+}
+
+// ---- 최종본 확인 -> 판매입력으로 넘기기 (checklist/index.html과 동일한 방식) ----
+function buildSaleHandoffPayload(rec){
+  const tile = safeParse(rec['tile_json']);
+  const items = Object.keys(tile)
+    .map(key => tile[key])
+    .filter(d => d && d.name && d.name.trim())
+    .map(d => ({ name: d.name.trim(), qty: d.boxQty || '' }));
+  return { company: rec['업체'] || '', items: items };
+}
+
+function goToSaleEntry(rec){
+  if(!rec){ showToast('상담 기록을 먼저 선택해주세요.'); return; }
+  const payload = buildSaleHandoffPayload(rec);
+  if(!payload.items.length){
+    showToast('타일 종류가 입력된 품목이 없습니다.');
+    return;
+  }
+  try { localStorage.setItem('hittile_sale_handoff', JSON.stringify(payload)); } catch(e){}
+  location.href = '../sale/index.html?from=checklist';
+}
+
+function showToast(msg){
+  const el = document.createElement('div');
+  el.className = 'share-toast';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+}
+
+function safeParse(str){
+  try { return JSON.parse(str) || {}; } catch(e){ return {}; }
+}
+function escapeHtml(str){
+  if(str === undefined || str === null) return '';
+  return String(str).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+}
+
+loadList();
+</script>
+
+</body>
+</html>

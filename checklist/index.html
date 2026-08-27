@@ -211,6 +211,14 @@
   .ac-item:hover, .ac-item.active{ background:#EFF6FF; }
   .ac-item .ac-sub{ color:var(--muted); font-size:11.5px; margin-left:6px; }
   td.tilename-cell{ position:relative; }
+  .table-scroll{ overflow-x:auto; }
+  table.tile-table input.dim-input{ text-align:right; }
+  table.tile-table input.boxqty-input{ text-align:right; font-weight:700; color:var(--red-dark); background:#F8FAFC; }
+
+  .archive-link{
+    display:block; text-align:center; font-size:12.5px; color:var(--muted);
+    margin:-8px 0 16px; text-decoration:underline;
+  }
 
   .fixture-block{margin-bottom:14px;}
   .fixture-block .label-row{
@@ -280,11 +288,6 @@
     margin-bottom:16px; text-align:center;
   }
 
-  .config-warning{
-    background:#FFF3E0; border:1px solid #FFCC80; color:#8A5A00;
-    padding:10px 12px; border-radius:8px; font-size:12.5px; margin-bottom:14px;
-  }
-
   .share-toast{
     position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
     background:var(--ink); color:#fff; padding:10px 18px; border-radius:20px;
@@ -304,10 +307,7 @@
 
 <main>
 
-  <div id="configWarning" class="config-warning" style="display:none;">
-    ⚠ 아직 저장소(Apps Script 웹앱) 주소가 연결되지 않았어요. index.html 상단의
-    <code>WEBAPP_URL</code> 값을 배포된 웹 앱 URL로 바꿔주세요.
-  </div>
+  <a class="archive-link" href="archive.html">📁 저장된 상담 체크리스트 모아보기</a>
 
   <!-- ===================== 입력 화면 ===================== -->
   <section id="view-input" class="view active">
@@ -331,13 +331,23 @@
     </div>
 
     <div class="card">
-      <h3>타일 종류 / 컬러</h3>
+      <h3>타일 종류 / 컬러 &amp; 물량 계산기</h3>
+      <p style="margin:-4px 0 10px; font-size:11.5px; color:var(--muted);">가로/세로 치수를 입력하면 박스수량 칸이 자동으로 계산돼요. (계산 공식은 준비 중이라 지금은 칸만 비어있어요)</p>
+      <div class="table-scroll">
       <table class="tile-table" id="tileTable">
         <thead>
-          <tr><th style="width:18%">공간</th><th>타일 종류 / 컬러</th><th style="width:28%">비고</th></tr>
+          <tr>
+            <th style="width:12%">공간</th>
+            <th>타일 종류 / 컬러</th>
+            <th style="width:11%">가로(mm)</th>
+            <th style="width:11%">세로(mm)</th>
+            <th style="width:12%">박스수량</th>
+            <th style="width:18%">비고</th>
+          </tr>
         </thead>
         <tbody><!-- JS로 렌더링 --></tbody>
       </table>
+      </div>
     </div>
 
     <div class="card">
@@ -358,21 +368,18 @@
   <section id="view-detail" class="view">
     <div class="success-banner">✓ 저장 완료 &amp; 이대한님 이메일로 발송되었습니다</div>
     <div id="detailContainer"></div>
+    <button class="primary" id="handoffBtn" onclick="goToSaleEntry(currentRecord)">✓ 최종본 확인 · 판매입력으로 이동</button>
     <button class="secondary" id="imageBtn" onclick="saveAsImage()">🖼 이미지로 저장</button>
-    <button class="primary" style="margin-top:10px;" onclick="startNewEntry()">+ 새 상담 입력하기</button>
+    <button class="secondary" onclick="startNewEntry()">+ 새 상담 입력하기</button>
   </section>
 
 </main>
 
 <script>
 /* ============ 설정 ============
-   아래 URL을 Apps Script 배포 후 받은 "웹 앱 URL"로 교체하세요.
-   예: https://script.google.com/macros/s/AKfycb.../exec
+   히트타일 메인 Apps Script(품목등록마스터/판매거래처/상담기록 등을 갖고 있는 그 스프레드시트) 주소.
+   상담 체크리스트 저장, 타일 종류/컬러 자동완성, 업체명+연락처 자동완성에 모두 이 주소를 쓴다.
 */
-const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyGTRMKSfiTQvhAeFDH0BUtFYjhaLal8ba_S9rFGDi2JhiRn49Dp4OR7tQ3GGkmeHze/exec';
-
-// 히트타일 메인 Apps Script(품목등록마스터/배송일정 등을 갖고 있는 그 스프레드시트) 주소.
-// 타일 종류/컬러 자동완성(품목등록마스터), 업체명+연락처 자동완성(배송일정 이력)에 사용한다.
 const MAIN_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec';
 
 const DEFAULT_TILE_ROWS = [
@@ -534,11 +541,10 @@ function removeVerandaRow(key){
 function restoreTileData(savedTile){
   Object.keys(savedTile).forEach(key => {
     const entry = savedTile[key];
-    const nameInput = document.querySelector(`input[data-tile="${key}"][data-field="name"]`);
-    const memoInput = document.querySelector(`input[data-tile="${key}"][data-field="memo"]`);
-
-    if(memoInput) memoInput.value = entry.memo || '';
-    if(nameInput) nameInput.value = entry.name || '';
+    ['name','memo','width','height','boxQty'].forEach(field => {
+      const input = document.querySelector(`input[data-tile="${key}"][data-field="${field}"]`);
+      if(input) input.value = entry[field] || '';
+    });
   });
 }
 
@@ -560,12 +566,44 @@ function renderTileTable(){
         <input type="text" data-tile="${row.key}" data-field="name" placeholder="타일명/컬러" autocomplete="off">
         <div class="ac-list"></div>
       </td>
+      <td><input type="number" inputmode="decimal" class="dim-input" data-tile="${row.key}" data-field="width" placeholder="가로"></td>
+      <td><input type="number" inputmode="decimal" class="dim-input" data-tile="${row.key}" data-field="height" placeholder="세로"></td>
+      <td><input type="text" class="boxqty-input" data-tile="${row.key}" data-field="boxQty" placeholder="-" readonly></td>
       <td><input type="text" data-tile="${row.key}" data-field="memo" placeholder="비고"></td>
     </tr>
   `;
   }).join('');
 
   attachTileNameAutocomplete();
+  attachDimensionListeners();
+}
+
+// ---- 물량 계산기(틀만) ----
+// 가로/세로 치수(mm)를 넣으면 박스수량을 자동으로 채워주는 자리. 실제 면적->박스수량 환산 공식과
+// 로스율 계산은 별도로 전달받아 여기에 채워 넣을 예정이라, 지금은 빈 값을 돌려주는 뼈대만 만들어둔다.
+function calcBoxQuantity(ctx){
+  // ctx = { width, height, itemName }
+  // TODO: 공식 전달받으면 여기서 박스수량 계산해서 return
+  return '';
+}
+
+function recalcRowBoxQty(key){
+  const widthInput = document.querySelector(`input[data-tile="${key}"][data-field="width"]`);
+  const heightInput = document.querySelector(`input[data-tile="${key}"][data-field="height"]`);
+  const boxInput = document.querySelector(`input[data-tile="${key}"][data-field="boxQty"]`);
+  const nameInput = document.querySelector(`input[data-tile="${key}"][data-field="name"]`);
+  if(!widthInput || !heightInput || !boxInput) return;
+  const width = parseFloat(widthInput.value);
+  const height = parseFloat(heightInput.value);
+  if(!width || !height){ boxInput.value = ''; return; }
+  const result = calcBoxQuantity({ width, height, itemName: nameInput ? nameInput.value.trim() : '' });
+  boxInput.value = (result === '' || result === null || result === undefined) ? '' : result;
+}
+
+function attachDimensionListeners(){
+  document.querySelectorAll('#tileTable input[data-field="width"], #tileTable input[data-field="height"]').forEach(inp => {
+    inp.addEventListener('input', () => recalcRowBoxQty(inp.getAttribute('data-tile')));
+  });
 }
 
 // ---- 타일 종류/컬러 칸마다 품목등록마스터 기반 자동완성을 건다 ----
@@ -623,11 +661,6 @@ function collectFixtureData(){
 }
 
 async function saveConsultation(){
-  if(WEBAPP_URL === 'YOUR_WEBAPP_URL_HERE'){
-    document.getElementById('configWarning').style.display = 'block';
-    window.scrollTo(0,0);
-    return;
-  }
   const btn = document.getElementById('saveBtn');
   const statusEl = document.getElementById('saveStatus');
   const company = document.getElementById('f-company').value.trim();
@@ -655,16 +688,15 @@ async function saveConsultation(){
   statusEl.textContent = '';
 
   try {
-    const res = await fetch(WEBAPP_URL, {
+    const res = await fetch(MAIN_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(Object.assign({ action: 'save_consultation' }, payload))
     });
     const json = await res.json();
-    if(json.success){
+    if(json.ok){
       const rec = {
         id: json.id,
-        timestamp: new Date().toISOString(),
+        timestamp: json.timestamp || new Date().toISOString(),
         '업체': payload.company,
         '현장주소': payload.address,
         '연락처': payload.contact,
@@ -724,9 +756,10 @@ function renderDetail(rec){
     </div>
 
     <div class="card">
-      <h3>타일 종류 / 컬러</h3>
+      <h3>타일 종류 / 컬러 &amp; 물량</h3>
+      <div class="table-scroll">
       <table class="tile-table">
-        <thead><tr><th>공간</th><th>타일 종류 / 컬러</th><th>비고</th></tr></thead>
+        <thead><tr><th>공간</th><th>타일 종류 / 컬러</th><th>가로(mm)</th><th>세로(mm)</th><th>박스수량</th><th>비고</th></tr></thead>
         <tbody>
           ${Object.keys(tile).map(key => {
             const d = tile[key] || {};
@@ -735,11 +768,15 @@ function renderDetail(rec){
             return `<tr>
               <td class="rowlabel">${(label||'').replace('\n','<br>')}</td>
               <td>${escapeHtml(d.name||'-')}</td>
+              <td>${escapeHtml(d.width||'-')}</td>
+              <td>${escapeHtml(d.height||'-')}</td>
+              <td>${escapeHtml(d.boxQty||'-')}</td>
               <td>${escapeHtml(d.memo||'-')}</td>
             </tr>`;
           }).join('')}
         </tbody>
       </table>
+      </div>
     </div>
 
     <div class="card">
@@ -826,6 +863,29 @@ async function saveAsImage(){
   }
 }
 
+// ---- 최종본 확인 -> 판매입력으로 넘기기 ----
+// 타일 항목 중 품목명이 있는 것만 골라서 {업체, 품목목록}으로 만들고, sale/index.html이 읽어갈 수 있게
+// localStorage에 잠깐 담아둔 뒤 판매등록 페이지로 이동한다(수량은 박스수량이 계산되어 있으면 같이 넘어감).
+function buildSaleHandoffPayload(rec){
+  const tile = safeParse(rec['tile_json']);
+  const items = Object.keys(tile)
+    .map(key => tile[key])
+    .filter(d => d && d.name && d.name.trim())
+    .map(d => ({ name: d.name.trim(), qty: d.boxQty || '' }));
+  return { company: rec['업체'] || '', items: items };
+}
+
+function goToSaleEntry(rec){
+  if(!rec){ showToast('저장된 상담 기록이 없습니다.'); return; }
+  const payload = buildSaleHandoffPayload(rec);
+  if(!payload.items.length){
+    showToast('타일 종류가 입력된 품목이 없습니다.');
+    return;
+  }
+  try { localStorage.setItem('hittile_sale_handoff', JSON.stringify(payload)); } catch(e){}
+  location.href = '../sale/index.html?from=checklist';
+}
+
 function safeParse(str){
   try { return JSON.parse(str) || {}; } catch(e){ return {}; }
 }
@@ -840,9 +900,6 @@ renderTileTable();
 renderFixtures();
 loadItemMaster();
 loadCompanyContacts();
-if(WEBAPP_URL === 'YOUR_WEBAPP_URL_HERE'){
-  document.getElementById('configWarning').style.display = 'block';
-}
 </script>
 
 </body>
