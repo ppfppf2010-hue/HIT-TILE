@@ -78,6 +78,7 @@
  if (action === 'sale_manual_entry') return handleSaleManualEntry(body);
  if (action === 'sale_confirm') return handleSaleConfirm();
  if (action === 'list_sale_vendor_names') return handleListSaleVendorNames();
+ if (action === 'list_sale_vendor_contacts') return handleListSaleVendorContacts();
  if (action === 'sale_check_vendor') return handleCheckSaleVendor(body);
  throw new Error('알 수 없는 action: ' + action);
  } catch (err) {

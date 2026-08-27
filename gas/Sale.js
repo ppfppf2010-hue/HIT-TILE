@@ -224,6 +224,21 @@
  return jsonOut({ ok: true, names: names });
  }
 
+ // ---- 판매거래처명+연락처 목록 (다른 페이지의 업체명 자동완성용, 예: 상담체크리스트) ----
+ // 배송일정 이력 기반 추측(getDeliveryVendorContacts)과 달리, 이건 실제 등록된 판매거래처 원장이라 더 정확하다.
+ function handleListSaleVendorContacts() {
+ const sheet = setupSaleVendorSheet();
+ const data = sheet.getDataRange().getValues();
+ const contacts = [];
+ for (let i = 1; i < data.length; i++) {
+ const name = String(data[i][0] || '').trim();
+ if (!name) continue;
+ contacts.push({ name: name, phone: String(data[i][3] || '').trim() });
+ }
+ contacts.sort(function (a, b) { return a.name.localeCompare(b.name); });
+ return jsonOut({ ok: true, contacts: contacts });
+ }
+
  // ---- 확인 버튼: 입력한 판매거래처명이 기존 거래처와 매칭되는지 즉시 조회 ----
  // handleCheckVendor(매입용, Code.js)와 동일한 패턴이지만 판매거래처 시트를 조회한다.
  function handleCheckSaleVendor(body) {

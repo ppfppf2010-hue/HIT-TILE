@@ -435,7 +435,7 @@ async function loadItemMaster(){
   }
 }
 
-// ---- 업체명+연락처 목록(배송일정 이력 기반 자동완성용) ----
+// ---- 업체명+연락처 목록(판매거래처 원장 기반 자동완성용) ----
 let companyContactsCache = [];
 let companyPhoneByName = {};
 let companyContactsLoaded = false;
@@ -443,7 +443,7 @@ async function loadCompanyContacts(){
   if(companyContactsLoaded) return;
   companyContactsLoaded = true;
   try {
-    const res = await fetch(MAIN_ENDPOINT + '?action=delivery_vendor_contacts');
+    const res = await fetch(MAIN_ENDPOINT, { method: 'POST', body: JSON.stringify({ action: 'list_sale_vendor_contacts' }) });
     const data = await res.json();
     if(data.ok && data.contacts){
       companyContactsCache = data.contacts;
