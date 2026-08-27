@@ -186,25 +186,31 @@
   }
   table.tile-table input:focus{ box-shadow:none; background:#EFF6FF; }
 
-  .size-cell{ padding:3px !important; }
-  .size-cell select{
-    width:100%;
-    border:none;
-    background:transparent;
-    padding:6px 4px;
-    font-size:12.5px;
-    font-family:'Noto Sans KR';
-    color:var(--ink);
-  }
-  .size-cell select:focus{ outline:none; background:#EFF6FF; }
-  .size-cell .size-custom{
+  .ac-wrap{ position:relative; }
+  .ac-list{
+    position:absolute;
+    left:0; right:0; top:100%;
+    margin-top:4px;
+    background:#fff;
+    border:1px solid var(--paper-line);
+    border-radius:8px;
+    box-shadow:0 6px 20px rgba(17,17,17,0.12);
+    max-height:220px;
+    overflow-y:auto;
+    z-index:30;
     display:none;
-    border-top:1px solid var(--paper-line) !important;
   }
-  table.tile-table input:read-only{
-    background:#F1F5F9 !important;
-    color:var(--muted);
+  .ac-list.show{ display:block; }
+  .ac-item{
+    padding:9px 10px;
+    font-size:13px;
+    cursor:pointer;
+    border-bottom:1px solid var(--paper-line);
   }
+  .ac-item:last-child{ border-bottom:none; }
+  .ac-item:hover, .ac-item.active{ background:#EFF6FF; }
+  .ac-item .ac-sub{ color:var(--muted); font-size:11.5px; margin-left:6px; }
+  td.tilename-cell{ position:relative; }
 
   .fixture-block{margin-bottom:14px;}
   .fixture-block .label-row{
@@ -309,7 +315,13 @@
     <div class="card">
       <h3>현장 기본정보</h3>
       <div class="grid2">
-        <div class="field"><label>업체</label><input type="text" id="f-company" placeholder="예: 예담"></div>
+        <div class="field">
+          <label>업체</label>
+          <div class="ac-wrap">
+            <input type="text" id="f-company" placeholder="예: 예담" autocomplete="off">
+            <div class="ac-list" id="companyAcList"></div>
+          </div>
+        </div>
         <div class="field"><label>현장주소</label><input type="text" id="f-address" placeholder="예: 동시타운"></div>
         <div class="field"><label>연락처</label><input type="tel" id="f-contact" placeholder="010-0000-0000"></div>
         <div class="field"><label>현장비번</label><input type="text" id="f-sitepw" placeholder="현장 출입 비밀번호"></div>
@@ -319,10 +331,10 @@
     </div>
 
     <div class="card">
-      <h3>TILE NUMBER / SIZE</h3>
+      <h3>타일 종류 / 컬러</h3>
       <table class="tile-table" id="tileTable">
         <thead>
-          <tr><th style="width:15%">공간</th><th style="width:18%">사이즈</th><th>타일 종류 / 컬러</th><th style="width:24%">비고</th></tr>
+          <tr><th style="width:18%">공간</th><th>타일 종류 / 컬러</th><th style="width:28%">비고</th></tr>
         </thead>
         <tbody><!-- JS로 렌더링 --></tbody>
       </table>
@@ -358,6 +370,10 @@
    예: https://script.google.com/macros/s/AKfycb.../exec
 */
 const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyGTRMKSfiTQvhAeFDH0BUtFYjhaLal8ba_S9rFGDi2JhiRn49Dp4OR7tQ3GGkmeHze/exec';
+
+// 히트타일 메인 Apps Script(품목등록마스터/배송일정 등을 갖고 있는 그 스프레드시트) 주소.
+// 타일 종류/컬러 자동완성(품목등록마스터), 업체명+연락처 자동완성(배송일정 이력)에 사용한다.
+const MAIN_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec';
 
 const DEFAULT_TILE_ROWS = [
   { key:'entrance', label:'현관' },
@@ -404,20 +420,87 @@ function showView(name){
   document.getElementById('view-detail').classList.toggle('active', name==='detail');
 }
 
-const SIZE_PRESETS = ['600*600', '800*800', '300*600', '300*300', '600*1200'];
+// ---- 품목등록마스터 목록(타일 종류/컬러 자동완성용) - 히트타일 메인 Apps Script에서 가져온다 ----
+let itemMasterCache = [];
+let itemMasterLoaded = false;
+async function loadItemMaster(){
+  if(itemMasterLoaded) return;
+  itemMasterLoaded = true;
+  try {
+    const res = await fetch(MAIN_ENDPOINT, { method: 'POST', body: JSON.stringify({ action: 'list_item_master' }) });
+    const data = await res.json();
+    if(data.ok && data.items) itemMasterCache = data.items;
+  } catch(e){
+    itemMasterLoaded = false; // 실패하면 다음에 다시 시도
+  }
+}
 
-// 바닥 행 -> 대응하는 벽체 행 (세트 선택 시 사이즈를 매핑, 이름은 벽체와 동일 + (세트))
-const FLOOR_WALL_PAIR = {
-  commonFloor: 'commonWall',
-  masterFloor: 'masterWall',
-};
+// ---- 업체명+연락처 목록(배송일정 이력 기반 자동완성용) ----
+let companyContactsCache = [];
+let companyPhoneByName = {};
+let companyContactsLoaded = false;
+async function loadCompanyContacts(){
+  if(companyContactsLoaded) return;
+  companyContactsLoaded = true;
+  try {
+    const res = await fetch(MAIN_ENDPOINT + '?action=delivery_vendor_contacts');
+    const data = await res.json();
+    if(data.ok && data.contacts){
+      companyContactsCache = data.contacts;
+      companyPhoneByName = {};
+      data.contacts.forEach(c => { if(c.phone) companyPhoneByName[c.name] = c.phone; });
+    }
+  } catch(e){
+    companyContactsLoaded = false; // 실패하면 다음에 다시 시도
+  }
+}
 
-// 벽체 사이즈 -> 가능한 바닥 세트 사이즈 (여러 개면 선택지로 노출)
-const SET_SIZE_MAP = {
-  '300*600': ['300*300'],
-  '600*600': ['600*600'],
-  '600*1200': ['600*600', '600*1200'],
-};
+// ---- 직접 그려주는 자동완성 드롭다운 (모바일 브라우저는 <datalist> 지원이 부실해서 직접 구현) ----
+function setupAutocomplete(inputEl, listEl, getItems, renderLabel, onSelect){
+  function render(items){
+    listEl.innerHTML = '';
+    if(!items.length){ listEl.classList.remove('show'); return; }
+    items.slice(0, 30).forEach(it => {
+      const div = document.createElement('div');
+      div.className = 'ac-item';
+      div.innerHTML = renderLabel(it);
+      div.addEventListener('mousedown', e => {
+        e.preventDefault(); // blur보다 먼저 처리되게 해서 클릭이 씹히지 않도록 함
+        listEl.classList.remove('show');
+        onSelect(it);
+      });
+      listEl.appendChild(div);
+    });
+    listEl.classList.add('show');
+  }
+  inputEl.addEventListener('input', () => {
+    const q = inputEl.value.trim().toLowerCase();
+    if(!q){ listEl.classList.remove('show'); return; }
+    render(getItems().filter(it => it.name.toLowerCase().indexOf(q) !== -1));
+  });
+  inputEl.addEventListener('focus', () => {
+    if(inputEl.value.trim()) inputEl.dispatchEvent(new Event('input'));
+  });
+  inputEl.addEventListener('blur', () => {
+    setTimeout(() => listEl.classList.remove('show'), 150);
+  });
+}
+
+// ---- 업체명 자동완성 + 연락처 자동 연동 ----
+const companyInput = document.getElementById('f-company');
+const companyAcList = document.getElementById('companyAcList');
+setupAutocomplete(companyInput, companyAcList,
+  () => companyContactsCache,
+  (it) => escapeHtml(it.name),
+  (it) => {
+    companyInput.value = it.name;
+    if(it.phone) document.getElementById('f-contact').value = it.phone;
+  });
+companyInput.addEventListener('blur', () => {
+  const phone = companyPhoneByName[companyInput.value.trim()];
+  const contactEl = document.getElementById('f-contact');
+  if(phone && !contactEl.value) contactEl.value = phone;
+});
 
 function isVerandaKey(key){
   return /^veranda\d*$/.test(key);
@@ -451,35 +534,17 @@ function removeVerandaRow(key){
 function restoreTileData(savedTile){
   Object.keys(savedTile).forEach(key => {
     const entry = savedTile[key];
-    const sizeInput = document.querySelector(`input[data-tile="${key}"][data-field="size"]`);
     const nameInput = document.querySelector(`input[data-tile="${key}"][data-field="name"]`);
     const memoInput = document.querySelector(`input[data-tile="${key}"][data-field="memo"]`);
-    const selectEl = document.querySelector(`select[data-tile="${key}"][data-field="sizeSelect"]`);
 
     if(memoInput) memoInput.value = entry.memo || '';
     if(nameInput) nameInput.value = entry.name || '';
-
-    if(sizeInput && selectEl){
-      const sizeVal = entry.size || '';
-      if(sizeVal && SIZE_PRESETS.includes(sizeVal)){
-        selectEl.value = sizeVal;
-        sizeInput.value = sizeVal;
-        sizeInput.style.display = 'none';
-      } else if(sizeVal){
-        selectEl.value = '__custom__';
-        sizeInput.value = sizeVal;
-        sizeInput.style.display = 'block';
-      }
-    }
   });
-
-  Object.keys(FLOOR_WALL_PAIR).forEach(floorKey => refreshSetOptions(floorKey));
 }
 
 function renderTileTable(){
   const tbody = document.querySelector('#tileTable tbody');
   tbody.innerHTML = tileRows.map(row => {
-    const hasSetOption = !!FLOOR_WALL_PAIR[row.key];
     const veranda = isVerandaKey(row.key);
     const showAddBtn = veranda && isLastVerandaRow(row.key);
     const showRemoveBtn = veranda && row.key !== 'veranda';
@@ -491,134 +556,27 @@ function renderTileTable(){
         ${showAddBtn ? `<button type="button" class="row-btn add" onclick="addVerandaRow('${row.key}')" title="베란다 추가">+</button>` : ''}
         ${showRemoveBtn ? `<button type="button" class="row-btn remove" onclick="removeVerandaRow('${row.key}')" title="삭제">×</button>` : ''}
       </td>
-      <td class="size-cell">
-        <select data-tile="${row.key}" data-field="sizeSelect" onchange="handleSizeSelect(this)">
-          <option value="">선택</option>
-          ${hasSetOption ? getSetOptionsHtml(row.key) : ''}
-          ${SIZE_PRESETS.map(s => `<option value="${s}">${s}</option>`).join('')}
-          <option value="__custom__">기타</option>
-        </select>
-        <input type="text" data-tile="${row.key}" data-field="size" class="size-custom" placeholder="직접 입력">
+      <td class="tilename-cell">
+        <input type="text" data-tile="${row.key}" data-field="name" placeholder="타일명/컬러" autocomplete="off">
+        <div class="ac-list"></div>
       </td>
-      <td><input type="text" data-tile="${row.key}" data-field="name" placeholder="타일명/컬러"></td>
       <td><input type="text" data-tile="${row.key}" data-field="memo" placeholder="비고"></td>
     </tr>
   `;
   }).join('');
 
-  attachFloorWallSync();
+  attachTileNameAutocomplete();
 }
 
-function getSetOptionsHtml(floorKey){
-  const wallKey = FLOOR_WALL_PAIR[floorKey];
-  if(!wallKey) return '';
-  const wallSizeInput = document.querySelector(`input[data-tile="${wallKey}"][data-field="size"]`);
-  const wallSize = wallSizeInput ? wallSizeInput.value : '';
-  const mapped = SET_SIZE_MAP[wallSize];
-  if(!mapped) return '';
-  return mapped.map(sz => `<option value="SET:${sz}">세트 (${sz})</option>`).join('');
-}
-
-function refreshSetOptions(floorKey){
-  const selectEl = document.querySelector(`select[data-tile="${floorKey}"][data-field="sizeSelect"]`);
-  if(!selectEl) return;
-  const prevValue = selectEl.value;
-  const setOptionsHtml = getSetOptionsHtml(floorKey);
-
-  selectEl.innerHTML = `
-    <option value="">선택</option>
-    ${setOptionsHtml}
-    ${SIZE_PRESETS.map(s => `<option value="${s}">${s}</option>`).join('')}
-    <option value="__custom__">기타</option>
-  `;
-
-  const stillValid = Array.from(selectEl.options).some(o => o.value === prevValue);
-  if(stillValid){
-    selectEl.value = prevValue;
-    if(prevValue.startsWith('SET:')){
-      applySetSize(floorKey, prevValue.slice(4));
-      applySetName(floorKey);
-    }
-  } else if(prevValue.startsWith('SET:')){
-    // 이전에 세트로 맞춰뒀던 사이즈가 더 이상 유효하지 않으면 선택 해제 + 잠금 해제
-    selectEl.value = '';
-    const row = selectEl.closest('tr');
-    const cell = selectEl.closest('.size-cell');
-    const customInput = cell.querySelector('.size-custom');
-    const nameInput = row.querySelector('input[data-field="name"]');
-    customInput.style.display = 'none';
-    customInput.readOnly = false;
-    customInput.value = '';
-    if(nameInput){
-      nameInput.readOnly = false;
-    }
-  }
-}
-
-function handleSizeSelect(selectEl){
-  const row = selectEl.closest('tr');
-  const rowKey = row.getAttribute('data-row-key');
-  const cell = selectEl.closest('.size-cell');
-  const customInput = cell.querySelector('.size-custom');
-  const nameInput = row.querySelector('input[data-field="name"]');
-  const val = selectEl.value;
-
-  if(val.startsWith('SET:')){
-    const targetSize = val.slice(4);
-    customInput.style.display = 'block';
-    customInput.readOnly = true;
-    if(nameInput) nameInput.readOnly = true;
-    applySetSize(rowKey, targetSize);
-    applySetName(rowKey);
-  } else if(val === '__custom__'){
-    customInput.style.display = 'block';
-    customInput.readOnly = false;
-    customInput.value = '';
-    customInput.focus();
-    if(nameInput) nameInput.readOnly = false;
-  } else {
-    customInput.style.display = 'none';
-    customInput.readOnly = false;
-    customInput.value = val;
-    customInput.dispatchEvent(new Event('input'));
-    if(nameInput) nameInput.readOnly = false;
-  }
-}
-
-function applySetSize(floorKey, size){
-  const floorSizeInput = document.querySelector(`input[data-tile="${floorKey}"][data-field="size"]`);
-  if(floorSizeInput) floorSizeInput.value = size;
-}
-
-function applySetName(floorKey){
-  const wallKey = FLOOR_WALL_PAIR[floorKey];
-  if(!wallKey) return;
-  const wallNameInput = document.querySelector(`input[data-tile="${wallKey}"][data-field="name"]`);
-  const floorNameInput = document.querySelector(`input[data-tile="${floorKey}"][data-field="name"]`);
-  if(floorNameInput){
-    const baseName = (wallNameInput ? wallNameInput.value.trim() : '');
-    floorNameInput.value = baseName ? (baseName + ' (세트)') : '(세트)';
-  }
-}
-
-// 벽체 사이즈/이름이 바뀌면, 세트로 설정된 바닥의 선택지와 값을 자동으로 다시 맞춤
-function attachFloorWallSync(){
-  Object.keys(FLOOR_WALL_PAIR).forEach(floorKey => {
-    const wallKey = FLOOR_WALL_PAIR[floorKey];
-    const wallSizeInput = document.querySelector(`input[data-tile="${wallKey}"][data-field="size"]`);
-    const wallNameInput = document.querySelector(`input[data-tile="${wallKey}"][data-field="name"]`);
-
-    if(wallSizeInput){
-      wallSizeInput.addEventListener('input', () => refreshSetOptions(floorKey));
-    }
-    if(wallNameInput){
-      wallNameInput.addEventListener('input', () => {
-        const floorSelect = document.querySelector(`select[data-tile="${floorKey}"][data-field="sizeSelect"]`);
-        if(floorSelect && floorSelect.value.startsWith('SET:')){
-          applySetName(floorKey);
-        }
-      });
-    }
+// ---- 타일 종류/컬러 칸마다 품목등록마스터 기반 자동완성을 건다 ----
+function attachTileNameAutocomplete(){
+  document.querySelectorAll('#tileTable input[data-field="name"]').forEach(nameInput => {
+    const acList = nameInput.parentElement.querySelector('.ac-list');
+    if(!acList) return;
+    setupAutocomplete(nameInput, acList,
+      () => itemMasterCache,
+      (it) => escapeHtml(it.name) + (it.spec ? `<span class="ac-sub">${escapeHtml(it.spec)}</span>` : ''),
+      (it) => { nameInput.value = it.name; });
   });
 }
 
@@ -766,9 +724,9 @@ function renderDetail(rec){
     </div>
 
     <div class="card">
-      <h3>TILE NUMBER / SIZE</h3>
+      <h3>타일 종류 / 컬러</h3>
       <table class="tile-table">
-        <thead><tr><th>공간</th><th>사이즈</th><th>타일 종류 / 컬러</th><th>비고</th></tr></thead>
+        <thead><tr><th>공간</th><th>타일 종류 / 컬러</th><th>비고</th></tr></thead>
         <tbody>
           ${Object.keys(tile).map(key => {
             const d = tile[key] || {};
@@ -776,7 +734,6 @@ function renderDetail(rec){
             const label = d.label || (rowDef ? rowDef.label : key);
             return `<tr>
               <td class="rowlabel">${(label||'').replace('\n','<br>')}</td>
-              <td>${escapeHtml(d.size||'-')}</td>
               <td>${escapeHtml(d.name||'-')}</td>
               <td>${escapeHtml(d.memo||'-')}</td>
             </tr>`;
@@ -881,6 +838,8 @@ function escapeHtml(str){
 // 초기 렌더링
 renderTileTable();
 renderFixtures();
+loadItemMaster();
+loadCompanyContacts();
 if(WEBAPP_URL === 'YOUR_WEBAPP_URL_HERE'){
   document.getElementById('configWarning').style.display = 'block';
 }
