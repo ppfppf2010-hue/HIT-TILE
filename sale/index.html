@@ -405,15 +405,11 @@
       <datalist id="vendorNameList"></datalist>
       <div class="vendor-check-result" id="vendorCheckResult"></div>
     </div>
-    <div class="month-field" id="prefixFieldWrap">
-      <label for="prefixInput">코드 접두어 <span>(영문 2~4자, 예: VG)</span></label>
-      <input type="text" id="prefixInput" maxlength="4" placeholder="VG">
-    </div>
     <div class="month-field" id="businessNoFieldWrap">
       <label for="businessNoInput">사업자등록번호 <span>(이카운트 거래처 등록용, 모르면 비워둬도 됩니다)</span></label>
       <input type="text" id="businessNoInput" placeholder="123-45-67890">
     </div>
-    <button class="submit" id="prefixSubmitBtn">이 접두어로 등록하고 계속하기</button>
+    <button class="submit" id="prefixSubmitBtn">이 거래처로 등록하고 계속하기</button>
     <div class="status" id="prefixStatusBox">
       <span class="spinner"></span>
       <span>거래처 등록하고 품목 준비하는 중이에요...</span>
@@ -507,9 +503,6 @@
   const vendorNameList = document.getElementById('vendorNameList');
   const vendorCheckBtn = document.getElementById('vendorCheckBtn');
   const vendorCheckResult = document.getElementById('vendorCheckResult');
-  const prefixFieldWrap = document.getElementById('prefixFieldWrap');
-  const businessNoFieldWrap = document.getElementById('businessNoFieldWrap');
-  const prefixInput = document.getElementById('prefixInput');
   const businessNoInput = document.getElementById('businessNoInput');
   const prefixSubmitBtn = document.getElementById('prefixSubmitBtn');
   const prefixStatusBox = document.getElementById('prefixStatusBox');
@@ -535,7 +528,7 @@
     pendingVendorName = '';
     prefixBox.classList.remove('show');
     prefixErrorBox.classList.remove('show');
-    prefixInput.value = '';
+    businessNoInput.value = '';
     reviewBox.classList.remove('show');
     doneBox.classList.remove('show');
     missSection.classList.remove('show');
@@ -655,7 +648,6 @@
       pendingParsed = data.parsed;
       pendingVendorName = data.vendorName || '';
       prefixVendorName.value = data.vendorName || '';
-      prefixInput.value = data.suggestedPrefix || '';
       prefixErrorBox.classList.remove('show');
       vendorCheckResult.classList.remove('show', 'match', 'new', 'err');
       setVendorMatched(false);
@@ -715,7 +707,7 @@
     if (vendorNamesLoaded) return;
     vendorNamesLoaded = true;
     try {
-      const res = await fetch(ENDPOINT, { method: 'POST', body: JSON.stringify({ action: 'list_vendor_names' }) });
+      const res = await fetch(ENDPOINT, { method: 'POST', body: JSON.stringify({ action: 'list_sale_vendor_names' }) });
       const data = await res.json();
       if (data.ok && data.names) {
         vendorNamesCache = data.names;
@@ -738,9 +730,7 @@
 
   function setVendorMatched(matched) {
     vendorMatched = matched;
-    prefixFieldWrap.style.display = matched ? 'none' : '';
     businessNoFieldWrap.style.display = matched ? 'none' : '';
-    prefixSubmitBtn.textContent = matched ? '이 거래처로 등록하고 계속하기' : '이 접두어로 등록하고 계속하기';
   }
 
   prefixVendorName.addEventListener('input', () => {
@@ -757,12 +747,12 @@
     try {
       const res = await fetch(ENDPOINT, {
         method: 'POST',
-        body: JSON.stringify({ action: 'check_vendor', vendorName: name, originalVendorName: pendingVendorName })
+        body: JSON.stringify({ action: 'sale_check_vendor', vendorName: name, originalVendorName: pendingVendorName })
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || '확인 중 오류가 발생했어요.');
       if (data.matched) {
-        vendorCheckResult.textContent = '✓ 기존 거래처와 일치해요 (코드 접두어: ' + data.vendorInfo.prefix + ')' +
+        vendorCheckResult.textContent = '✓ 기존 거래처와 일치해요' +
           (data.corrected ? ' — 이 표기 차이는 교정사전에 저장했어요, 다음부터는 자동으로 잡힐 거예요.' : '');
         vendorCheckResult.classList.add('show', 'match');
         setVendorMatched(true);
@@ -784,8 +774,6 @@
   prefixSubmitBtn.addEventListener('click', async () => {
     const vendorName = prefixVendorName.value.trim();
     if (!vendorName) { prefixVendorName.focus(); return; }
-    const prefix = prefixInput.value.trim().toUpperCase();
-    if (!vendorMatched && !prefix) { prefixInput.focus(); return; }
     if (!pendingParsed) { prefixErrorBox.textContent = '입력한 품목 정보가 없어졌어요. 다시 입력해주세요.'; prefixErrorBox.classList.add('show'); return; }
 
     prefixSubmitBtn.disabled = true;
@@ -798,7 +786,6 @@
         body: JSON.stringify({
           action: 'sale_register_vendor',
           vendorName: vendorName,
-          prefix: prefix,
           businessNo: businessNoInput.value.trim(),
           parsed: pendingParsed
         })
