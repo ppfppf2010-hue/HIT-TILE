@@ -215,6 +215,23 @@
   table.tile-table input.dim-input{ text-align:right; }
   table.tile-table input.boxqty-input{ text-align:right; font-weight:700; color:var(--red-dark); background:#F8FAFC; }
 
+  .sub-badge{
+    display:inline-block; font-size:10px; font-weight:700; color:var(--muted);
+    background:#F1F5F9; border-radius:4px; padding:1px 5px; margin-bottom:3px;
+  }
+  .name-mezi-wrap{ display:flex; align-items:center; gap:4px; }
+  .mezi-sep{ color:var(--muted); font-size:12px; }
+  .mezi-input{ width:52px; flex-shrink:0; }
+
+  .memo-cell{ display:flex; flex-direction:column; gap:3px; align-items:flex-start; }
+  .memo-cell input{ width:100%; }
+  .tag-btn{
+    font-size:10.5px; font-weight:700; color:var(--red-dark);
+    background:#EFF6FF; border:1px solid #DBEAFE; border-radius:10px;
+    padding:2px 8px; cursor:pointer; font-family:'Noto Sans KR';
+  }
+  .tag-btn:active{ background:#DBEAFE; }
+
   .archive-link{
     display:block; text-align:center; font-size:12.5px; color:var(--muted);
     margin:-8px 0 16px; text-decoration:underline;
@@ -382,14 +399,19 @@
 */
 const MAIN_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec';
 
+// 공동욕실/안방욕실은 벽체+바닥이 한 쌍으로 묶여서(rowspan) 표시되고, 베란다처럼 +버튼으로 쌍째로 추가할 수 있다.
+const GROUP_LABELS = { common:'공동욕실', master:'안방욕실' };
+const GROUP_SUBS = [ { suffix:'Wall', label:'벽체' }, { suffix:'Floor', label:'바닥' } ];
+const GROUP_MEMO_TAG = '유가'; // 공동/안방욕실 바닥 비고란 빠른입력 버튼
+
 const DEFAULT_TILE_ROWS = [
   { key:'entrance', label:'현관' },
-  { key:'kitchen', label:'주방' },
+  { key:'kitchen', label:'주방', memoTag:'주방수전' },
   { key:'veranda', label:'베란다' },
-  { key:'commonWall', label:'공동욕실\n(벽체)' },
-  { key:'commonFloor', label:'공동욕실\n(바닥)' },
-  { key:'masterWall', label:'안방욕실\n(벽체)' },
-  { key:'masterFloor', label:'안방욕실\n(바닥)' },
+  { key:'commonWall1', label:'벽체', group:'common', groupIndex:1 },
+  { key:'commonFloor1', label:'바닥', group:'common', groupIndex:1, memoTag:GROUP_MEMO_TAG },
+  { key:'masterWall1', label:'벽체', group:'master', groupIndex:1 },
+  { key:'masterFloor1', label:'바닥', group:'master', groupIndex:1, memoTag:GROUP_MEMO_TAG },
   { key:'floor', label:'바닥' },
   { key:'artwall', label:'아트월' },
 ];
@@ -412,7 +434,6 @@ const FIXTURE_ITEMS = [
   { key:'tub', label:'욕조', hint:'아크릴 / SMC' },
   { key:'partition', label:'파티션' },
   { key:'ventilator', label:'환풍기' },
-  { key:'kitchenFaucet', label:'주방수전' },
 ];
 
 const FIXTURE_ZONES = [
@@ -538,44 +559,140 @@ function removeVerandaRow(key){
   restoreTileData(savedTile);
 }
 
+// ---- 공동욕실/안방욕실: 벽체+바닥 한 쌍을 베란다처럼 +버튼으로 추가/삭제 ----
+function groupIndices(group){
+  const idxSet = new Set();
+  tileRows.filter(r => r.group === group).forEach(r => idxSet.add(r.groupIndex));
+  return Array.from(idxSet).sort((a,b) => a - b);
+}
+
+function addGroupRow(group){
+  const savedTile = collectTileData();
+  const idxs = groupIndices(group);
+  const lastIdx = idxs.length ? Math.max(...idxs) : 0;
+  const nextIdx = lastIdx + 1;
+  const insertAfterKey = group + 'Floor' + lastIdx;
+  const insertIndex = tileRows.findIndex(r => r.key === insertAfterKey) + 1;
+  const newRows = GROUP_SUBS.map(s => ({
+    key: group + s.suffix + nextIdx, label: s.label, group: group, groupIndex: nextIdx,
+    memoTag: s.suffix === 'Floor' ? GROUP_MEMO_TAG : undefined
+  }));
+  tileRows.splice(insertIndex, 0, ...newRows);
+  renderTileTable();
+  restoreTileData(savedTile);
+}
+
+function removeGroupRow(group, idx){
+  const savedTile = collectTileData();
+  GROUP_SUBS.forEach(s => { delete savedTile[group + s.suffix + idx]; });
+  tileRows = tileRows.filter(r => !(r.group === group && r.groupIndex === idx));
+  renderTileTable();
+  restoreTileData(savedTile);
+}
+
 function restoreTileData(savedTile){
   Object.keys(savedTile).forEach(key => {
     const entry = savedTile[key];
-    ['name','memo','width','height','boxQty'].forEach(field => {
+    ['name','memo','width','height','boxQty','mezi'].forEach(field => {
       const input = document.querySelector(`input[data-tile="${key}"][data-field="${field}"]`);
       if(input) input.value = entry[field] || '';
     });
+    const nameInput = document.querySelector(`input[data-tile="${key}"][data-field="name"]`);
+    if(nameInput) toggleMeziVisibility(nameInput);
   });
+}
+
+// ---- 이름/치수/박스수량/비고 칸(공통) - 일반 행과 그룹(공동/안방욕실) 행이 같이 쓴다 ----
+function tileRowCellsHtml(row){
+  return `
+    <td class="tilename-cell">
+      ${row.group ? `<span class="sub-badge">${row.label}</span>` : ''}
+      <div class="name-mezi-wrap">
+        <input type="text" data-tile="${row.key}" data-field="name" placeholder="타일명/컬러" autocomplete="off">
+        <span class="mezi-sep" style="display:none;">/</span>
+        <input type="text" class="mezi-input" data-tile="${row.key}" data-field="mezi" placeholder="메지" style="display:none;">
+      </div>
+      <div class="ac-list"></div>
+    </td>
+    <td><input type="number" inputmode="decimal" class="dim-input" data-tile="${row.key}" data-field="width" placeholder="가로"></td>
+    <td><input type="number" inputmode="decimal" class="dim-input" data-tile="${row.key}" data-field="height" placeholder="세로"></td>
+    <td><input type="text" class="boxqty-input" data-tile="${row.key}" data-field="boxQty" placeholder="-" readonly></td>
+    <td class="memo-cell">
+      <input type="text" data-tile="${row.key}" data-field="memo" placeholder="비고">
+      ${row.memoTag ? `<button type="button" class="tag-btn" onclick="appendMemoTag('${row.key}','${row.memoTag}')">+ ${row.memoTag}</button>` : ''}
+    </td>
+  `;
 }
 
 function renderTileTable(){
   const tbody = document.querySelector('#tileTable tbody');
-  tbody.innerHTML = tileRows.map(row => {
+  let html = '';
+
+  for(let i = 0; i < tileRows.length; i++){
+    const row = tileRows[i];
+
+    if(row.group){
+      const isFirstOfPair = i === 0 || tileRows[i-1].group !== row.group || tileRows[i-1].groupIndex !== row.groupIndex;
+      if(isFirstOfPair){
+        const idxs = groupIndices(row.group);
+        const isLastPair = row.groupIndex === Math.max(...idxs);
+        const showAddBtn = isLastPair;
+        const showRemoveBtn = row.groupIndex !== 1;
+        const labelText = idxs.length > 1 ? `${GROUP_LABELS[row.group]} ${row.groupIndex}` : GROUP_LABELS[row.group];
+        html += `
+        <tr data-row-key="${row.key}">
+          <td class="rowlabel" rowspan="${GROUP_SUBS.length}">
+            <span>${labelText}</span>
+            ${showAddBtn ? `<button type="button" class="row-btn add" onclick="addGroupRow('${row.group}')" title="${GROUP_LABELS[row.group]} 추가">+</button>` : ''}
+            ${showRemoveBtn ? `<button type="button" class="row-btn remove" onclick="removeGroupRow('${row.group}', ${row.groupIndex})" title="삭제">×</button>` : ''}
+          </td>
+          ${tileRowCellsHtml(row)}
+        </tr>`;
+      } else {
+        html += `<tr data-row-key="${row.key}">${tileRowCellsHtml(row)}</tr>`;
+      }
+      continue;
+    }
+
     const veranda = isVerandaKey(row.key);
     const showAddBtn = veranda && isLastVerandaRow(row.key);
     const showRemoveBtn = veranda && row.key !== 'veranda';
-
-    return `
+    html += `
     <tr data-row-key="${row.key}">
       <td class="rowlabel">
         <span>${row.label.replace('\n','<br>')}</span>
         ${showAddBtn ? `<button type="button" class="row-btn add" onclick="addVerandaRow('${row.key}')" title="베란다 추가">+</button>` : ''}
         ${showRemoveBtn ? `<button type="button" class="row-btn remove" onclick="removeVerandaRow('${row.key}')" title="삭제">×</button>` : ''}
       </td>
-      <td class="tilename-cell">
-        <input type="text" data-tile="${row.key}" data-field="name" placeholder="타일명/컬러" autocomplete="off">
-        <div class="ac-list"></div>
-      </td>
-      <td><input type="number" inputmode="decimal" class="dim-input" data-tile="${row.key}" data-field="width" placeholder="가로"></td>
-      <td><input type="number" inputmode="decimal" class="dim-input" data-tile="${row.key}" data-field="height" placeholder="세로"></td>
-      <td><input type="text" class="boxqty-input" data-tile="${row.key}" data-field="boxQty" placeholder="-" readonly></td>
-      <td><input type="text" data-tile="${row.key}" data-field="memo" placeholder="비고"></td>
-    </tr>
-  `;
-  }).join('');
+      ${tileRowCellsHtml(row)}
+    </tr>`;
+  }
 
+  tbody.innerHTML = html;
   attachTileNameAutocomplete();
   attachDimensionListeners();
+}
+
+// ---- 비고란 빠른입력 버튼 (주방수전/유가) ----
+function appendMemoTag(key, tag){
+  const input = document.querySelector(`input[data-tile="${key}"][data-field="memo"]`);
+  if(!input) return;
+  const parts = input.value.trim() ? input.value.trim().split(',').map(s => s.trim()).filter(Boolean) : [];
+  if(parts.includes(tag)) return;
+  parts.push(tag);
+  input.value = parts.join(', ');
+  input.focus();
+}
+
+// ---- 타일명을 채우면 옆에 "/ 메지" 칸이 나타난다 (틀만: 메지 값은 직접 입력) ----
+function toggleMeziVisibility(nameInput){
+  const wrap = nameInput.closest('.name-mezi-wrap');
+  if(!wrap) return;
+  const show = !!nameInput.value.trim();
+  const sep = wrap.querySelector('.mezi-sep');
+  const mezi = wrap.querySelector('.mezi-input');
+  if(sep) sep.style.display = show ? '' : 'none';
+  if(mezi) mezi.style.display = show ? '' : 'none';
 }
 
 // ---- 물량 계산기(틀만) ----
@@ -606,18 +723,21 @@ function attachDimensionListeners(){
   });
 }
 
-// ---- 타일 종류/컬러 칸마다 품목등록마스터 기반 자동완성을 건다 ----
+// ---- 타일 종류/컬러 칸마다 품목등록마스터 기반 자동완성을 건다. 타일을 고르면 옆에 "/ 메지" 칸이 나타난다 ----
 function attachTileNameAutocomplete(){
   document.querySelectorAll('#tileTable input[data-field="name"]').forEach(nameInput => {
-    const acList = nameInput.parentElement.querySelector('.ac-list');
+    const acList = nameInput.closest('.tilename-cell').querySelector('.ac-list');
     if(!acList) return;
     setupAutocomplete(nameInput, acList,
       () => itemMasterCache,
       (it) => escapeHtml(it.name) + (it.spec ? `<span class="ac-sub">${escapeHtml(it.spec)}</span>` : ''),
-      (it) => { nameInput.value = it.name; });
+      (it) => { nameInput.value = it.name; toggleMeziVisibility(nameInput); });
+    nameInput.addEventListener('input', () => toggleMeziVisibility(nameInput));
+    toggleMeziVisibility(nameInput);
   });
 }
 
+// ---- 욕실 집기류(도기/수전 등)도 품목등록마스터 기반 자동완성을 건다 ----
 function renderFixtures(){
   const container = document.getElementById('fixtureContainer');
   container.innerHTML = FIXTURE_ZONES.map(zone => `
@@ -626,12 +746,27 @@ function renderFixtures(){
       ${FIXTURE_ITEMS.map(item => `
         <div class="fixture-row">
           <div class="name">${item.label}</div>
-          <input type="text" data-zone="${zone.key}" data-fixture="${item.key}"
-                 placeholder="${item.hint ? item.hint : ''}">
+          <div class="ac-wrap">
+            <input type="text" data-zone="${zone.key}" data-fixture="${item.key}"
+                   placeholder="${item.hint ? item.hint : ''}" autocomplete="off">
+            <div class="ac-list"></div>
+          </div>
         </div>
       `).join('')}
     </div>
   `).join('');
+  attachFixtureAutocomplete();
+}
+
+function attachFixtureAutocomplete(){
+  document.querySelectorAll('#fixtureContainer input').forEach(inp => {
+    const acList = inp.parentElement.querySelector('.ac-list');
+    if(!acList) return;
+    setupAutocomplete(inp, acList,
+      () => itemMasterCache,
+      (it) => escapeHtml(it.name) + (it.spec ? `<span class="ac-sub">${escapeHtml(it.spec)}</span>` : ''),
+      (it) => { inp.value = it.name; });
+  });
 }
 
 function collectTileData(){
@@ -644,7 +779,11 @@ function collectTileData(){
   });
   Object.keys(data).forEach(key => {
     const rowDef = tileRows.find(r => r.key === key);
-    data[key].label = rowDef ? rowDef.label.replace('\n', ' ') : key;
+    if(rowDef && rowDef.group){
+      data[key].label = `${GROUP_LABELS[rowDef.group]} ${rowDef.groupIndex} - ${rowDef.label}`;
+    } else {
+      data[key].label = rowDef ? rowDef.label.replace('\n', ' ') : key;
+    }
   });
   return data;
 }
@@ -759,7 +898,7 @@ function renderDetail(rec){
       <h3>타일 종류 / 컬러 &amp; 물량</h3>
       <div class="table-scroll">
       <table class="tile-table">
-        <thead><tr><th>공간</th><th>타일 종류 / 컬러</th><th>가로(mm)</th><th>세로(mm)</th><th>박스수량</th><th>비고</th></tr></thead>
+        <thead><tr><th>공간</th><th>타일 종류 / 컬러</th><th>메지</th><th>가로(mm)</th><th>세로(mm)</th><th>박스수량</th><th>비고</th></tr></thead>
         <tbody>
           ${Object.keys(tile).map(key => {
             const d = tile[key] || {};
@@ -768,6 +907,7 @@ function renderDetail(rec){
             return `<tr>
               <td class="rowlabel">${(label||'').replace('\n','<br>')}</td>
               <td>${escapeHtml(d.name||'-')}</td>
+              <td>${escapeHtml(d.mezi||'-')}</td>
               <td>${escapeHtml(d.width||'-')}</td>
               <td>${escapeHtml(d.height||'-')}</td>
               <td>${escapeHtml(d.boxQty||'-')}</td>

@@ -135,14 +135,16 @@
 <script>
 const MAIN_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec';
 
+const GROUP_LABELS = { common:'공동욕실', master:'안방욕실' };
+
 const DEFAULT_TILE_ROWS = [
   { key:'entrance', label:'현관' },
   { key:'kitchen', label:'주방' },
   { key:'veranda', label:'베란다' },
-  { key:'commonWall', label:'공동욕실\n(벽체)' },
-  { key:'commonFloor', label:'공동욕실\n(바닥)' },
-  { key:'masterWall', label:'안방욕실\n(벽체)' },
-  { key:'masterFloor', label:'안방욕실\n(바닥)' },
+  { key:'commonWall1', label:'벽체', group:'common', groupIndex:1 },
+  { key:'commonFloor1', label:'바닥', group:'common', groupIndex:1 },
+  { key:'masterWall1', label:'벽체', group:'master', groupIndex:1 },
+  { key:'masterFloor1', label:'바닥', group:'master', groupIndex:1 },
   { key:'floor', label:'바닥' },
   { key:'artwall', label:'아트월' },
 ];
@@ -163,7 +165,6 @@ const FIXTURE_ITEMS = [
   { key:'tub', label:'욕조', hint:'아크릴 / SMC' },
   { key:'partition', label:'파티션' },
   { key:'ventilator', label:'환풍기' },
-  { key:'kitchenFaucet', label:'주방수전' },
 ];
 
 const FIXTURE_ZONES = [
@@ -284,7 +285,7 @@ function renderDetail(rec){
       <h3>타일 종류 / 컬러 &amp; 물량</h3>
       <div class="table-scroll">
       <table class="tile-table">
-        <thead><tr><th>공간</th><th>타일 종류 / 컬러</th><th>가로(mm)</th><th>세로(mm)</th><th>박스수량</th><th>비고</th></tr></thead>
+        <thead><tr><th>공간</th><th>타일 종류 / 컬러</th><th>메지</th><th>가로(mm)</th><th>세로(mm)</th><th>박스수량</th><th>비고</th></tr></thead>
         <tbody>
           ${Object.keys(tile).map(key => {
             const d = tile[key] || {};
@@ -293,6 +294,7 @@ function renderDetail(rec){
             return `<tr>
               <td class="rowlabel">${(label||'').replace('\n','<br>')}</td>
               <td>${escapeHtml(d.name||'-')}</td>
+              <td>${escapeHtml(d.mezi||'-')}</td>
               <td>${escapeHtml(d.width||'-')}</td>
               <td>${escapeHtml(d.height||'-')}</td>
               <td>${escapeHtml(d.boxQty||'-')}</td>
