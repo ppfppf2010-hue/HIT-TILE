@@ -897,13 +897,17 @@
  const name = String(data[i][1] || '').trim();
  if (!name) continue;
  const spec = String(data[i][3] || '').trim();
- const key = name + '|||' + spec;
+ const vendor = String(data[i][12] || '').trim();
+ // 거래처까지 키에 포함시켜서, 같은 품명+규격이라도 거래처가 다르면 별도 항목으로 남긴다
+ // (자동완성에서 어느 거래처 물건인지 구분해서 보여주기 위함).
+ const key = name + '|||' + spec + '|||' + vendor;
  if (seen[key]) continue;
  seen[key] = true;
  items.push({
  code: String(data[i][0] || '').trim(),
  name: name,
  spec: spec,
+ vendor: vendor,
  unit: String(data[i][6] || 'EA').trim(),
  outPrice: Number(data[i][10]) || 0
  });

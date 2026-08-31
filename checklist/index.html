@@ -328,15 +328,29 @@
     cursor:pointer;
   }
   .consult-card:active{ background:#F8FAFC; }
+  .consult-card.cancelled{ opacity:.55; cursor:default; }
   .consult-card .row1{
-    display:flex; justify-content:space-between; align-items:center; gap:8px;
+    display:flex; justify-content:space-between; align-items:flex-start; gap:8px;
   }
   .consult-card .company{ font-size:14.5px; font-weight:700; color:var(--ink); }
+  .consult-card .badge-col{
+    display:flex; flex-direction:column; align-items:flex-end; gap:5px;
+  }
   .consult-card .badge{
     font-size:11px; font-weight:700; color:var(--green);
     background:#EAF6EC; border:1px solid #BFE3C4;
     padding:3px 8px; border-radius:12px; white-space:nowrap;
   }
+  .consult-card .badge.badge-muted{
+    color:var(--muted); background:#F1F5F9; border-color:var(--paper-line);
+  }
+  .consult-card .cancel-btn{
+    font-size:11px; font-weight:700; color:var(--err);
+    background:#FEF2F2; border:1px solid #FECACA;
+    padding:3px 8px; border-radius:12px; white-space:nowrap; cursor:pointer;
+    font-family:'Noto Sans KR';
+  }
+  .consult-card .cancel-btn:active{ background:#FEE2E2; }
   .consult-card .row2{
     margin-top:4px; font-size:12.5px; color:var(--muted);
     display:flex; flex-wrap:wrap; gap:4px 12px;
@@ -520,6 +534,17 @@ function pickField(rec, candidates){
   return '';
 }
 
+// 구글시트 날짜 셀은 JSON으로 넘어오면 UTC 타임스탬프("2026-08-30T15:00:00.000Z")가 되는데,
+// 단순히 앞 10자만 자르면 한국시간 기준 날짜보다 하루 앞선 값이 나온다(스프레드시트는 KST 자정
+// 기준으로 저장했으므로). +9시간 보정 후 날짜만 뽑아야 실제 저장된 날짜와 맞는다.
+function formatDateOnly(v){
+  if(!v) return '';
+  const d = new Date(v);
+  if(isNaN(d.getTime())) return String(v);
+  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  return kst.toISOString().slice(0, 10);
+}
+
 function renderConsultationList(records){
   const container = document.getElementById('consultationListContainer');
   if(!records.length){
@@ -529,13 +554,17 @@ function renderConsultationList(records){
   container.innerHTML = records.map((rec, idx) => {
     const company = pickField(rec, ['업체','company']);
     const address = pickField(rec, ['현장주소','address']);
-    const deliveryDate = pickField(rec, ['배송일정','deliveryDate','타일시공일','tileDate']);
+    const deliveryDate = formatDateOnly(pickField(rec, ['배송일정','deliveryDate','타일시공일','tileDate']));
     const status = pickField(rec, ['상태']) || '상담완료 발주대기';
+    const isCancelled = status.indexOf('취소') !== -1;
     return `
-      <div class="consult-card" onclick='showConsultationDetail(${idx})'>
+      <div class="consult-card ${isCancelled ? 'cancelled' : ''}" ${isCancelled ? '' : `onclick='showConsultationDetail(${idx})'`}>
         <div class="row1">
           <span class="company">${escapeHtml(company || '(업체명 없음)')}</span>
-          <span class="badge">${escapeHtml(status)}</span>
+          <div class="badge-col">
+            <span class="badge ${isCancelled ? 'badge-muted' : ''}">${escapeHtml(status)}</span>
+            ${isCancelled ? '' : `<button type="button" class="cancel-btn" onclick="event.stopPropagation(); cancelConsultation(${idx})">상담 취소</button>`}
+          </div>
         </div>
         <div class="row2">
           ${address ? `<span>${escapeHtml(address)}</span>` : ''}
@@ -547,6 +576,27 @@ function renderConsultationList(records){
   window._consultationRecords = records;
 }
 
+async function cancelConsultation(idx){
+  const rec = (window._consultationRecords || [])[idx];
+  if(!rec) return;
+  const row = rec['_row'];
+  if(!row){
+    showToast('취소할 수 없습니다 (행 정보 없음 — 백엔드를 최신 버전으로 갱신해주세요)');
+    return;
+  }
+  const company = pickField(rec, ['업체','company']) || '이 상담';
+  if(!confirm(company + ' 상담을 취소 처리할까요?')) return;
+  try {
+    const res = await fetch(WEBAPP_URL + '?action=cancel&row=' + encodeURIComponent(row));
+    const data = await res.json();
+    if(!data.success) throw new Error(data.error || '취소 처리에 실패했습니다.');
+    showToast('상담이 취소 처리되었습니다.');
+    loadConsultationList();
+  } catch(err){
+    showToast('취소 실패: ' + err.message);
+  }
+}
+
 function showConsultationDetail(idx){
   const rec = (window._consultationRecords || [])[idx];
   if(!rec) return;
@@ -556,7 +606,7 @@ function showConsultationDetail(idx){
     '현장주소': pickField(rec, ['현장주소','address']),
     '연락처': pickField(rec, ['연락처','contact']),
     '현장비번': pickField(rec, ['현장비번','sitePw']),
-    '배송일정': pickField(rec, ['배송일정','deliveryDate','타일시공일','tileDate']),
+    '배송일정': formatDateOnly(pickField(rec, ['배송일정','deliveryDate','타일시공일','tileDate'])),
     'tile_json': pickField(rec, ['tile_json']) || '{}',
     'fixture_json': pickField(rec, ['fixture_json']) || '{}',
     '특이사항': pickField(rec, ['특이사항','note']),
@@ -712,6 +762,16 @@ function renderTileTable(){
   attachTileNameAutocomplete();
 }
 
+// ---- 품목 자동완성 드롭다운에 규격/품목코드/거래처명을 같이 보여준다 (어디 거래처 물건인지 구분하기 위함) ----
+function renderItemLabel(it){
+  const subParts = [];
+  if(it.spec) subParts.push(it.spec);
+  if(it.code) subParts.push(it.code);
+  if(it.vendor) subParts.push(it.vendor);
+  const sub = subParts.join(' · ');
+  return escapeHtml(it.name) + (sub ? `<span class="ac-sub">${escapeHtml(sub)}</span>` : '');
+}
+
 // ---- 타일 종류/컬러 칸마다 품목등록마스터 기반 자동완성을 건다 ----
 function attachTileNameAutocomplete(){
   document.querySelectorAll('#tileTable input[data-field="name"]').forEach(nameInput => {
@@ -719,7 +779,7 @@ function attachTileNameAutocomplete(){
     if(!acList) return;
     setupAutocomplete(nameInput, acList,
       () => itemMasterCache,
-      (it) => escapeHtml(it.name) + (it.spec ? `<span class="ac-sub">${escapeHtml(it.spec)}</span>` : ''),
+      renderItemLabel,
       (it) => { nameInput.value = it.name; });
   });
 }
@@ -752,7 +812,7 @@ function attachFixtureAutocomplete(){
     if(!acList) return;
     setupAutocomplete(inputEl, acList,
       () => itemMasterCache,
-      (it) => escapeHtml(it.name) + (it.spec ? `<span class="ac-sub">${escapeHtml(it.spec)}</span>` : ''),
+      renderItemLabel,
       (it) => { inputEl.value = it.name; });
   });
 }

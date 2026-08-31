@@ -54,6 +54,17 @@ clasp push
 그 다음 Apps Script 편집기에서 **배포 → 배포 관리 → (연필 아이콘) → 새 버전 → 배포**
 (스킬 노하우: 배포 다이얼로그가 가끔 불안정해서 2~3회 시도가 필요할 수 있습니다).
 
+## 3-1. (업데이트) 이미 한 번 배포하셨다면
+
+`ConsultationList.js`에 **상담 취소** 기능(`?action=cancel&row=N`)과, 시트에 실제
+"상태" 컬럼이 있으면 그 값을 그대로 읽어오는 로직이 추가됐습니다. 이미
+`CONSULTATION_SHEET_ID`/`CONSULTATION_SHEET_NAME`을 채워서 배포해두신 상태라면:
+
+1. 로컬 `checklist-gas/ConsultationList.js`를 이 저장소의 최신 내용으로 덮어씁니다
+   (단, 채워두신 `CONSULTATION_SHEET_ID`/`CONSULTATION_SHEET_NAME` 값은 그대로 유지)
+2. `clasp push`
+3. 배포 → 배포 관리 → 연필 아이콘 → 새 버전으로 배포 (exec 주소는 그대로 유지됩니다)
+
 ## 4. 프론트엔드는 이미 준비되어 있습니다
 
 `checklist/index.html`은 이미 시작 화면이 "상담 목록"이고, 좌하단 **+ 새 상담** 버튼을
