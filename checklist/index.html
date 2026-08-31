@@ -534,6 +534,17 @@ function pickField(rec, candidates){
   return '';
 }
 
+// 구글시트 날짜 셀은 JSON으로 넘어오면 UTC 타임스탬프("2026-08-30T15:00:00.000Z")가 되는데,
+// 단순히 앞 10자만 자르면 한국시간 기준 날짜보다 하루 앞선 값이 나온다(스프레드시트는 KST 자정
+// 기준으로 저장했으므로). +9시간 보정 후 날짜만 뽑아야 실제 저장된 날짜와 맞는다.
+function formatDateOnly(v){
+  if(!v) return '';
+  const d = new Date(v);
+  if(isNaN(d.getTime())) return String(v);
+  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  return kst.toISOString().slice(0, 10);
+}
+
 function renderConsultationList(records){
   const container = document.getElementById('consultationListContainer');
   if(!records.length){
@@ -543,7 +554,7 @@ function renderConsultationList(records){
   container.innerHTML = records.map((rec, idx) => {
     const company = pickField(rec, ['업체','company']);
     const address = pickField(rec, ['현장주소','address']);
-    const deliveryDate = pickField(rec, ['배송일정','deliveryDate','타일시공일','tileDate']);
+    const deliveryDate = formatDateOnly(pickField(rec, ['배송일정','deliveryDate','타일시공일','tileDate']));
     const status = pickField(rec, ['상태']) || '상담완료 발주대기';
     const isCancelled = status.indexOf('취소') !== -1;
     return `
@@ -595,7 +606,7 @@ function showConsultationDetail(idx){
     '현장주소': pickField(rec, ['현장주소','address']),
     '연락처': pickField(rec, ['연락처','contact']),
     '현장비번': pickField(rec, ['현장비번','sitePw']),
-    '배송일정': pickField(rec, ['배송일정','deliveryDate','타일시공일','tileDate']),
+    '배송일정': formatDateOnly(pickField(rec, ['배송일정','deliveryDate','타일시공일','tileDate'])),
     'tile_json': pickField(rec, ['tile_json']) || '{}',
     'fixture_json': pickField(rec, ['fixture_json']) || '{}',
     '특이사항': pickField(rec, ['특이사항','note']),
