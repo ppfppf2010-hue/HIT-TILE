@@ -328,7 +328,6 @@
     cursor:pointer;
   }
   .consult-card:active{ background:#F8FAFC; }
-  .consult-card.cancelled{ opacity:.55; cursor:default; }
   .consult-card .row1{
     display:flex; justify-content:space-between; align-items:flex-start; gap:8px;
   }
@@ -340,9 +339,6 @@
     font-size:11px; font-weight:700; color:var(--green);
     background:#EAF6EC; border:1px solid #BFE3C4;
     padding:3px 8px; border-radius:12px; white-space:nowrap;
-  }
-  .consult-card .badge.badge-muted{
-    color:var(--muted); background:#F1F5F9; border-color:var(--paper-line);
   }
   .consult-card .cancel-btn{
     font-size:11px; font-weight:700; color:var(--err);
@@ -547,23 +543,28 @@ function formatDateOnly(v){
 
 function renderConsultationList(records){
   const container = document.getElementById('consultationListContainer');
-  if(!records.length){
+  // 취소된 상담은 목록 화면에 아예 남기지 않는다.
+  const visible = records.filter(rec => {
+    const status = pickField(rec, ['상태']) || '상담완료 발주대기';
+    return status.indexOf('취소') === -1;
+  });
+  if(!visible.length){
     container.innerHTML = '<div class="list-empty">아직 저장된 상담이 없습니다.</div>';
+    window._consultationRecords = visible;
     return;
   }
-  container.innerHTML = records.map((rec, idx) => {
+  container.innerHTML = visible.map((rec, idx) => {
     const company = pickField(rec, ['업체','company']);
     const address = pickField(rec, ['현장주소','address']);
     const deliveryDate = formatDateOnly(pickField(rec, ['배송일정','deliveryDate','타일시공일','tileDate']));
     const status = pickField(rec, ['상태']) || '상담완료 발주대기';
-    const isCancelled = status.indexOf('취소') !== -1;
     return `
-      <div class="consult-card ${isCancelled ? 'cancelled' : ''}" ${isCancelled ? '' : `onclick='showConsultationDetail(${idx})'`}>
+      <div class="consult-card" onclick='showConsultationDetail(${idx})'>
         <div class="row1">
           <span class="company">${escapeHtml(company || '(업체명 없음)')}</span>
           <div class="badge-col">
-            <span class="badge ${isCancelled ? 'badge-muted' : ''}">${escapeHtml(status)}</span>
-            ${isCancelled ? '' : `<button type="button" class="cancel-btn" onclick="event.stopPropagation(); cancelConsultation(${idx})">상담 취소</button>`}
+            <span class="badge">${escapeHtml(status)}</span>
+            <button type="button" class="cancel-btn" onclick="event.stopPropagation(); cancelConsultation(${idx})">상담 취소</button>
           </div>
         </div>
         <div class="row2">
@@ -573,7 +574,7 @@ function renderConsultationList(records){
       </div>
     `;
   }).join('');
-  window._consultationRecords = records;
+  window._consultationRecords = visible;
 }
 
 async function cancelConsultation(idx){
