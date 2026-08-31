@@ -325,8 +325,7 @@
         <div class="field"><label>현장주소</label><input type="text" id="f-address" placeholder="예: 동시타운"></div>
         <div class="field"><label>연락처</label><input type="tel" id="f-contact" placeholder="010-0000-0000"></div>
         <div class="field"><label>현장비번</label><input type="text" id="f-sitepw" placeholder="현장 출입 비밀번호"></div>
-        <div class="field"><label>타일시공일</label><input type="date" id="f-tiledate"></div>
-        <div class="field"><label>도기시공일</label><input type="date" id="f-ceramicdate"></div>
+        <div class="field"><label>배송일정</label><input type="date" id="f-deliverydate"></div>
       </div>
     </div>
 
@@ -588,12 +587,29 @@ function renderFixtures(){
       ${FIXTURE_ITEMS.map(item => `
         <div class="fixture-row">
           <div class="name">${item.label}</div>
-          <input type="text" data-zone="${zone.key}" data-fixture="${item.key}"
-                 placeholder="${item.hint ? item.hint : ''}">
+          <div class="ac-wrap">
+            <input type="text" data-zone="${zone.key}" data-fixture="${item.key}"
+                   placeholder="${item.hint ? item.hint : ''}" autocomplete="off">
+            <div class="ac-list"></div>
+          </div>
         </div>
       `).join('')}
     </div>
   `).join('');
+
+  attachFixtureAutocomplete();
+}
+
+// ---- 욕실 집기류 칸마다 품목등록마스터 기반 자동완성을 건다 ----
+function attachFixtureAutocomplete(){
+  document.querySelectorAll('#fixtureContainer input[data-fixture]').forEach(inputEl => {
+    const acList = inputEl.parentElement.querySelector('.ac-list');
+    if(!acList) return;
+    setupAutocomplete(inputEl, acList,
+      () => itemMasterCache,
+      (it) => escapeHtml(it.name) + (it.spec ? `<span class="ac-sub">${escapeHtml(it.spec)}</span>` : ''),
+      (it) => { inputEl.value = it.name; });
+  });
 }
 
 function collectTileData(){
@@ -638,13 +654,17 @@ async function saveConsultation(){
     return;
   }
 
+  const deliveryDate = document.getElementById('f-deliverydate').value;
+
   const payload = {
     company: company,
     address: document.getElementById('f-address').value.trim(),
     contact: document.getElementById('f-contact').value.trim(),
     sitePw: document.getElementById('f-sitepw').value.trim(),
-    tileDate: document.getElementById('f-tiledate').value,
-    ceramicDate: document.getElementById('f-ceramicdate').value,
+    deliveryDate: deliveryDate,
+    // 배송일정 한 칸으로 통합. 예전 시트 컬럼(타일시공일/도기시공일)과도 호환되도록 같은 값을 같이 보냄.
+    tileDate: deliveryDate,
+    ceramicDate: deliveryDate,
     tile: collectTileData(),
     fixture: collectFixtureData(),
     note: document.getElementById('f-note').value.trim(),
@@ -669,8 +689,7 @@ async function saveConsultation(){
         '현장주소': payload.address,
         '연락처': payload.contact,
         '현장비번': payload.sitePw,
-        '타일시공일': payload.tileDate,
-        '도기시공일': payload.ceramicDate,
+        '배송일정': payload.deliveryDate,
         'tile_json': JSON.stringify(payload.tile),
         'fixture_json': JSON.stringify(payload.fixture),
         '특이사항': payload.note,
@@ -690,7 +709,7 @@ async function saveConsultation(){
 }
 
 function resetForm(){
-  ['f-company','f-address','f-contact','f-sitepw','f-tiledate','f-ceramicdate','f-note'].forEach(id => {
+  ['f-company','f-address','f-contact','f-sitepw','f-deliverydate','f-note'].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.value = '';
   });
@@ -718,8 +737,7 @@ function renderDetail(rec){
         <div class="field"><label>현장주소</label><div>${escapeHtml(rec['현장주소'])}</div></div>
         <div class="field"><label>연락처</label><div>${escapeHtml(rec['연락처'])}</div></div>
         <div class="field"><label>현장비번</label><div>${escapeHtml(rec['현장비번'])}</div></div>
-        <div class="field"><label>타일시공일</label><div>${escapeHtml(rec['타일시공일'])}</div></div>
-        <div class="field"><label>도기시공일</label><div>${escapeHtml(rec['도기시공일'])}</div></div>
+        <div class="field"><label>배송일정</label><div>${escapeHtml(rec['배송일정'])}</div></div>
       </div>
     </div>
 
