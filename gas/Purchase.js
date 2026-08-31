@@ -322,8 +322,12 @@
  const ecountItemResults = ecountSyncItemsByCode(codesToSync);
 
  const whCd = PropertiesService.getScriptProperties().getProperty('ECOUNT_DEFAULT_WH_CD') || '';
+ // 이카운트 거래처코드 = 사업자등록번호(숫자만)다. CUST_DES(이름)만 보내면 이카운트가 이름으로
+ // 알아서 매칭을 시도하다 기존 등록된 거래처를 못 찾고 새 거래처로 잡거나 실패할 수 있어서,
+ // 이미 등록된 사업자등록번호가 있으면 CUST_CD로 명시해서 정확히 그 거래처에 붙게 한다.
+ const custCd = vendorInfo && vendorInfo.businessNo ? String(vendorInfo.businessNo).replace(/\D/g, '') : '';
  const pushRows = finalRows.filter(function (r) { return r.itemCode; }).map(function (r) {
- return { date: r.date, custDes: vendorName, whCd: whCd, prodCd: r.itemCode, prodDes: r.itemName, qty: r.qty, unitPriceVat: r.unitPrice, supply: r.supply, vat: r.vat, remarks: r.note || '' };
+ return { date: r.date, custCd: custCd, custDes: vendorName, whCd: whCd, prodCd: r.itemCode, prodDes: r.itemName, qty: r.qty, unitPriceVat: r.unitPrice, supply: r.supply, vat: r.vat, remarks: r.note || '' };
  });
  let ecountPurchaseResult;
  if (!pushRows.length) {
