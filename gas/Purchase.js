@@ -175,6 +175,45 @@
  sheet.getRange(2, 10, rowCount, 1).setDataValidation(rule);
  }
 
+ // ---- 품목코드로 품목등록마스터에서 이름/규격을 찾는다 (코드를 바꿨을 때 이름을 그 코드 기준으로 맞추는 데 사용) ----
+ function lookupMasterItemByCode(masterData, code) {
+ if (!code) return null;
+ for (let i = 1; i < masterData.length; i++) {
+ if (String(masterData[i][0] || '').trim() === code) {
+ return { name: String(masterData[i][1] || '').trim(), spec: String(masterData[i][3] || '').trim() };
+ }
+ }
+ return null;
+ }
+
+ // ---- "구매확인중" 시트에서 품목코드(J열)를 드롭다운으로 바꾸면, 품목명/규격(K/L열)도 그 코드 기준으로
+ //      바로 맞춰준다. (그냥 두면 코드만 바뀌고 이름은 원래 인식된 값 그대로 남아서 혼동을 준다.)
+ function onEdit(e) {
+ try {
+ const range = e.range;
+ const sheet = range.getSheet();
+ if (sheet.getName() !== PURCHASE_REVIEW_SHEET) return;
+ if (range.getColumn() !== 10 || range.getRow() < 2) return; // J열(품목코드), 헤더 제외
+ if (range.getNumRows() !== 1 || range.getNumColumns() !== 1) return; // 단일 셀 수정만 처리
+
+ const ss = e.source;
+ const masterSheet = ss.getSheetByName(MASTER_SHEET);
+ if (!masterSheet) return;
+ const masterData = masterSheet.getDataRange().getValues();
+
+ const raw = String(range.getValue() || '').trim();
+ const pipeIdx = raw.indexOf('|');
+ const code = (pipeIdx === -1 ? raw : raw.slice(0, pipeIdx)).trim();
+ const match = lookupMasterItemByCode(masterData, code);
+ if (!match) return;
+
+ sheet.getRange(range.getRow(), 11).setValue(match.name); // K열 품목명
+ sheet.getRange(range.getRow(), 12).setValue(match.spec); // L열 규격명
+ } catch (err) {
+ // onEdit은 실패해도 조용히 넘어간다 (사용자 편집 흐름을 막지 않기 위함)
+ }
+ }
+
  // ---- "구매확인중" 시트 내용을 그대로 읽어와 "구매입력"에 확정 저장 ----
  function handlePurchaseConfirm() {
  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -208,10 +247,20 @@
  return (pipeIdx === -1 ? s : s.slice(0, pipeIdx)).trim();
  }
 
+ // 확정 시점에도 한 번 더: 품목코드가 있는 행은 K/L열에 남아있는 텍스트가 아니라 그 코드로
+ // 품목등록마스터에 등록된 이름/규격을 최종값으로 쓴다. (onEdit으로 못 잡은 경우의 안전망)
+ const masterSheetForConfirm = ss.getSheetByName(MASTER_SHEET);
+ const masterDataForConfirm = masterSheetForConfirm ? masterSheetForConfirm.getDataRange().getValues() : [];
+
  const finalRows = rows.map(function (r) {
+ const code = parseItemCode(r[9]);
+ const masterMatch = code ? lookupMasterItemByCode(masterDataForConfirm, code) : null;
  return {
  date: r[0], seq: r[1], vendorCode: r[2], vendorName: r[3], manager: r[4], warehouse: r[5],
- dealType: r[6], currency: r[7], rate: r[8], itemCode: parseItemCode(r[9]), itemName: r[10], spec: r[11],
+ dealType: r[6], currency: r[7], rate: r[8],
+ itemCode: code,
+ itemName: masterMatch ? masterMatch.name : r[10],
+ spec: masterMatch ? masterMatch.spec : r[11],
  qty: r[12], unitPrice: r[13], foreignAmount: r[14], supply: r[15], vat: r[16], note: r[17]
  };
  });
