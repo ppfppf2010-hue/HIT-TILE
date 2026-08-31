@@ -322,10 +322,14 @@
  const ecountItemResults = ecountSyncItemsByCode(codesToSync);
 
  const whCd = PropertiesService.getScriptProperties().getProperty('ECOUNT_DEFAULT_WH_CD') || '';
- // 이카운트 거래처코드 = 사업자등록번호(숫자만)다. CUST_DES(이름)만 보내면 이카운트가 이름으로
- // 알아서 매칭을 시도하다 기존 등록된 거래처를 못 찾고 새 거래처로 잡거나 실패할 수 있어서,
- // 이미 등록된 사업자등록번호가 있으면 CUST_CD로 명시해서 정확히 그 거래처에 붙게 한다.
- const custCd = vendorInfo && vendorInfo.businessNo ? String(vendorInfo.businessNo).replace(/\D/g, '') : '';
+ // CUST_DES(이름)만 보내면 이카운트가 이름으로 알아서 매칭을 시도하다, 표기가 조금만 달라도
+ // 기존 등록된 거래처를 못 찾고 새 거래처로 잡거나 실패할 수 있다. 이카운트 거래처코드는
+ // 사업자등록번호가 아니라 내부 임의 코드인 경우가 많으므로(예: 신양상사=00122 — 확인은
+ // importPurchaseVendorEcountCodes/이카운트 "거래처등록" 내보내기로 채워둔 E열 참고),
+ // 거래처코드관리에 실제 이카운트거래처코드(E열)가 채워져 있으면 그걸 최우선으로 쓰고,
+ // 없으면 사업자등록번호로 대신한다(그마저 없으면 이름 매칭에 맡긴다).
+ const custCd = vendorInfo && vendorInfo.ecountCode ? vendorInfo.ecountCode
+ : (vendorInfo && vendorInfo.businessNo ? String(vendorInfo.businessNo).replace(/\D/g, '') : '');
  const pushRows = finalRows.filter(function (r) { return r.itemCode; }).map(function (r) {
  return { date: r.date, custCd: custCd, custDes: vendorName, whCd: whCd, prodCd: r.itemCode, prodDes: r.itemName, qty: r.qty, unitPriceVat: r.unitPrice, supply: r.supply, vat: r.vat, remarks: r.note || '' };
  });
