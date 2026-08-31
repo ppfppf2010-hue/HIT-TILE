@@ -290,6 +290,58 @@
     background:var(--ink); color:#fff; padding:10px 18px; border-radius:20px;
     font-size:13px; font-weight:600; z-index:50; box-shadow:0 4px 14px rgba(0,0,0,.25);
   }
+
+  .back-link{
+    display:inline-block;
+    margin-bottom:12px;
+    font-size:13px;
+    font-weight:700;
+    color:var(--muted);
+    text-decoration:none;
+  }
+  .back-link:hover{ color:var(--red-dark); }
+
+  .fab-new{
+    position:fixed;
+    left:16px; bottom:16px;
+    z-index:40;
+    background:var(--red);
+    color:#fff;
+    border:none;
+    padding:13px 18px;
+    border-radius:24px;
+    font-size:14px;
+    font-weight:700;
+    font-family:'Noto Sans KR';
+    cursor:pointer;
+    box-shadow:0 4px 14px rgba(0,0,0,.25);
+  }
+  .fab-new:active{ background:var(--red-dark); }
+  .fab-new{ display:none; }
+  #view-list.active + .fab-new{ display:inline-block; }
+
+  .consult-card{
+    border:1px solid var(--paper-line);
+    border-radius:8px;
+    padding:12px 14px;
+    margin-bottom:10px;
+    cursor:pointer;
+  }
+  .consult-card:active{ background:#F8FAFC; }
+  .consult-card .row1{
+    display:flex; justify-content:space-between; align-items:center; gap:8px;
+  }
+  .consult-card .company{ font-size:14.5px; font-weight:700; color:var(--ink); }
+  .consult-card .badge{
+    font-size:11px; font-weight:700; color:var(--green);
+    background:#EAF6EC; border:1px solid #BFE3C4;
+    padding:3px 8px; border-radius:12px; white-space:nowrap;
+  }
+  .consult-card .row2{
+    margin-top:4px; font-size:12.5px; color:var(--muted);
+    display:flex; flex-wrap:wrap; gap:4px 12px;
+  }
+  .list-empty{ text-align:center; color:var(--muted); font-size:13px; padding:20px 0; }
 </style>
 </head>
 <body>
@@ -309,8 +361,19 @@
     <code>WEBAPP_URL</code> 값을 배포된 웹 앱 URL로 바꿔주세요.
   </div>
 
+  <!-- ===================== 상담 목록 화면 (처음 진입 시 화면) ===================== -->
+  <section id="view-list" class="view active">
+    <div class="card">
+      <h3>상담 목록</h3>
+      <div id="listStatus" class="status-msg"></div>
+      <div id="consultationListContainer"><!-- JS로 렌더링 --></div>
+    </div>
+  </section>
+  <button class="fab-new" onclick="goToNewEntry()">+ 새 상담</button>
+
   <!-- ===================== 입력 화면 ===================== -->
-  <section id="view-input" class="view active">
+  <section id="view-input" class="view">
+    <a href="#" class="back-link" onclick="showView('list'); return false;">← 목록으로</a>
 
     <div class="card">
       <h3>현장 기본정보</h3>
@@ -355,7 +418,8 @@
 
   <!-- ===================== 저장 완료 / 이미지 저장 화면 ===================== -->
   <section id="view-detail" class="view">
-    <div class="success-banner">✓ 저장 완료 &amp; 이대한님 이메일로 발송되었습니다</div>
+    <a href="#" class="back-link" onclick="showView('list'); return false;">← 목록으로</a>
+    <div class="success-banner">✓ 상담완료 · 발주대기로 저장되었습니다 (이대한님 이메일로 발송됨)</div>
     <div id="detailContainer"></div>
     <button class="secondary" id="imageBtn" onclick="saveAsImage()">🖼 이미지로 저장</button>
     <button class="primary" style="margin-top:10px;" onclick="startNewEntry()">+ 새 상담 입력하기</button>
@@ -415,8 +479,89 @@ const FIXTURE_ZONES = [
 let currentRecord = null;
 
 function showView(name){
+  document.getElementById('view-list').classList.toggle('active', name==='list');
   document.getElementById('view-input').classList.toggle('active', name==='input');
   document.getElementById('view-detail').classList.toggle('active', name==='detail');
+  window.scrollTo(0,0);
+  if(name === 'list') loadConsultationList();
+}
+
+function goToNewEntry(){
+  resetForm();
+  showView('input');
+}
+
+// ---- 상담 목록 화면: 저장된 상담들을 불러와서 카드로 그린다 ----
+// 백엔드에 ?action=list 를 추가해야 동작한다 (checklist-gas/ConsultationList.js 참고).
+async function loadConsultationList(){
+  const statusEl = document.getElementById('listStatus');
+  const container = document.getElementById('consultationListContainer');
+  if(WEBAPP_URL === 'YOUR_WEBAPP_URL_HERE') return;
+
+  statusEl.textContent = '불러오는 중...';
+  statusEl.className = 'status-msg';
+  try {
+    const res = await fetch(WEBAPP_URL + '?action=list');
+    const data = await res.json();
+    if(!data.success) throw new Error(data.error || '목록을 불러오지 못했습니다.');
+    renderConsultationList(data.records || []);
+    statusEl.textContent = '';
+  } catch(err){
+    container.innerHTML = '';
+    statusEl.textContent = '아직 상담 목록을 불러올 수 없습니다. (백엔드에 목록 조회 기능 추가 필요) — ' + err.message;
+    statusEl.className = 'status-msg err';
+  }
+}
+
+function pickField(rec, candidates){
+  for(const key of candidates){
+    if(rec[key] !== undefined && rec[key] !== '') return rec[key];
+  }
+  return '';
+}
+
+function renderConsultationList(records){
+  const container = document.getElementById('consultationListContainer');
+  if(!records.length){
+    container.innerHTML = '<div class="list-empty">아직 저장된 상담이 없습니다.</div>';
+    return;
+  }
+  container.innerHTML = records.map((rec, idx) => {
+    const company = pickField(rec, ['업체','company']);
+    const address = pickField(rec, ['현장주소','address']);
+    const deliveryDate = pickField(rec, ['배송일정','deliveryDate','타일시공일','tileDate']);
+    const status = pickField(rec, ['상태']) || '상담완료 발주대기';
+    return `
+      <div class="consult-card" onclick='showConsultationDetail(${idx})'>
+        <div class="row1">
+          <span class="company">${escapeHtml(company || '(업체명 없음)')}</span>
+          <span class="badge">${escapeHtml(status)}</span>
+        </div>
+        <div class="row2">
+          ${address ? `<span>${escapeHtml(address)}</span>` : ''}
+          ${deliveryDate ? `<span>배송 ${escapeHtml(deliveryDate)}</span>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+  window._consultationRecords = records;
+}
+
+function showConsultationDetail(idx){
+  const rec = (window._consultationRecords || [])[idx];
+  if(!rec) return;
+  // 목록 API가 돌려주는 컬럼명이 그대로 오므로, 기존 renderDetail이 기대하는 키로 최대한 맞춰준다.
+  const mapped = {
+    '업체': pickField(rec, ['업체','company']),
+    '현장주소': pickField(rec, ['현장주소','address']),
+    '연락처': pickField(rec, ['연락처','contact']),
+    '현장비번': pickField(rec, ['현장비번','sitePw']),
+    '배송일정': pickField(rec, ['배송일정','deliveryDate','타일시공일','tileDate']),
+    'tile_json': pickField(rec, ['tile_json']) || '{}',
+    'fixture_json': pickField(rec, ['fixture_json']) || '{}',
+    '특이사항': pickField(rec, ['특이사항','note']),
+  };
+  renderDetail(mapped);
 }
 
 // ---- 품목등록마스터 목록(타일 종류/컬러 자동완성용) - 히트타일 메인 Apps Script에서 가져온다 ----
@@ -721,6 +866,7 @@ function resetForm(){
 }
 
 function startNewEntry(){
+  resetForm();
   showView('input');
 }
 
@@ -858,6 +1004,7 @@ renderTileTable();
 renderFixtures();
 loadItemMaster();
 loadCompanyContacts();
+showView('list');
 if(WEBAPP_URL === 'YOUR_WEBAPP_URL_HERE'){
   document.getElementById('configWarning').style.display = 'block';
 }
