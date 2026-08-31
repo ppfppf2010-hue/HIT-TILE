@@ -1,20 +1,10 @@
 /**
  * 상담체크리스트 - 저장된 상담 목록 조회 + 취소 처리용 엔드포인트.
- * 기존 doPost/저장 로직은 건드리지 않고 새 파일로 얹는 초안입니다.
- * 로컬로 clasp clone 받은 뒤, 아래 두 상수만 채우면 됩니다.
- *
- * 주의: 프로젝트에 이미 doGet이 있다면 이름이 겹칩니다 — 그 경우 이 doGet의
- * 내용을 기존 doGet 안으로 옮겨 병합하세요 (README.md 참고).
- *
- * 이미 이 파일을 한 번 배포해서 CONSULTATION_SHEET_ID/NAME을 채워둔 상태라면,
- * 그 값은 그대로 두고 doGet / cancelConsultation / listConsultations 쪽만
- * 이 최신 버전 내용으로 바꿔주면 됩니다 (상담 취소 기능이 새로 추가됨).
+ * 기존 doPost/저장 로직(Code.js)은 건드리지 않고 새 파일로 얹었습니다.
  */
 
-// TODO: 상담체크리스트가 저장하는 스프레드시트 ID와 시트(탭) 이름을 채워주세요.
-// 스프레드시트 ID는 주소창 .../d/<이 부분>/edit 에서 확인할 수 있습니다.
-const CONSULTATION_SHEET_ID = 'PUT_SPREADSHEET_ID_HERE';
-const CONSULTATION_SHEET_NAME = 'PUT_SHEET_NAME_HERE'; // 비워두면(빈 문자열) 첫 번째 시트를 사용
+const CONSULTATION_SHEET_ID = '1ZHTkKtNHqEHfh4scCVtbUIBZDvbxKVXX28m7skWqpZw';
+const CONSULTATION_SHEET_NAME = 'Consultations';
 
 function doGet(e) {
   try {
