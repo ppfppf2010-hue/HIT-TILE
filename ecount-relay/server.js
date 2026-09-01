@@ -174,9 +174,11 @@ app.post('/register-item', async (req, res) => {
 });
 
 // ---- 매입전표 저장 (SavePurchases) ----
-// rows: [{ date(YYYYMMDD), custDes, whCd, prodCd, prodDes, qty, unitPriceVat, supply, vat, remarks }]
+// rows: [{ date(YYYYMMDD), custCd, custDes, whCd, prodCd, prodDes, qty, unitPriceVat, supply, vat, remarks }]
 // 한 번의 호출에 들어온 rows는 전부 같은 순번(UPLOAD_SER_NO)을 줘서 하나의 전표로 묶는다
 // (한 번의 구매확정 = 거래명세서 한 장 = 전표 한 장이라는 전제).
+// custCd(=사업자등록번호, register-vendor에서 이카운트 거래처코드로 쓰는 값)가 있으면 CUST_CD로
+// 명시해서 이름 매칭에 기대지 않고 정확히 그 거래처에 붙게 한다. 없으면 CUST_DES만으로 보낸다.
 app.post('/push-purchase', async (req, res) => {
   try {
     const { rows } = req.body;
@@ -187,6 +189,7 @@ app.post('/push-purchase', async (req, res) => {
       BulkDatas: {
         UPLOAD_SER_NO: '1',
         IO_DATE: r.date,
+        ...(r.custCd ? { CUST_CD: r.custCd } : {}),
         CUST_DES: r.custDes,
         WH_CD: r.whCd,
         PROD_CD: r.prodCd,
