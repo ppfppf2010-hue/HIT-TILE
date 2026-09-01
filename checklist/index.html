@@ -142,15 +142,17 @@
     background:#F1F5F9;
     color:var(--muted);
     font-weight:700;
-    padding:8px 6px;
+    padding:5px 4px;
     border:1px solid var(--paper-line);
-    font-size:11px;
+    font-size:10.5px;
   }
   table.tile-table td{
     border:1px solid var(--paper-line);
-    padding:5px;
+    padding:3px;
     vertical-align:middle;
   }
+  .card.tile-card{ padding:12px; }
+  .card.tile-card h3{ margin-bottom:6px; }
   table.tile-table td.rowlabel{
     background:#F8FAFC;
     font-weight:700;
@@ -180,11 +182,48 @@
   .row-btn.remove{ background:#E5E7EB; color:var(--muted); }
   table.tile-table input{
     border:none;
-    padding:6px 4px;
+    padding:4px;
     font-size:12.5px;
     background:transparent;
   }
   table.tile-table input:focus{ box-shadow:none; background:#EFF6FF; }
+
+  .qtycell{ padding:3px !important; }
+  .qty-input{
+    width:100%;
+    text-align:center;
+    border:1px solid var(--paper-line) !important;
+    border-radius:4px;
+    padding:4px !important;
+    font-size:12.5px;
+    margin-bottom:3px;
+    background:#fff !important;
+  }
+  .dim-btn{
+    display:block;
+    width:100%;
+    background:#EFF6FF; color:var(--red-dark);
+    border:1px solid #BFDBFE; border-radius:4px;
+    padding:4px 2px; font-size:10.5px; font-weight:700;
+    cursor:pointer; font-family:'Noto Sans KR';
+  }
+  .dim-btn:active{ background:#DBEAFE; }
+  .dim-summary{ font-size:10px; color:var(--muted); margin-top:2px; text-align:center; line-height:1.3; }
+
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.45);
+    display:none; align-items:center; justify-content:center;
+    z-index:200; padding:20px;
+  }
+  .modal-overlay.show{ display:flex; }
+  .modal-box{
+    background:#fff; border-radius:10px; padding:18px;
+    width:100%; max-width:300px;
+    box-shadow:0 10px 30px rgba(0,0,0,.25);
+  }
+  .modal-box h4{ margin:0 0 12px 0; font-size:14px; color:var(--red-dark); }
+  .modal-actions{ display:flex; gap:8px; margin-top:14px; }
+  .modal-actions button{ flex:1; width:auto; margin-top:0; padding:10px; font-size:13.5px; }
 
   .ac-wrap{ position:relative; }
   .ac-list{
@@ -402,11 +441,11 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card tile-card">
       <h3>타일 종류 / 컬러</h3>
       <table class="tile-table" id="tileTable">
         <thead>
-          <tr><th style="width:18%">공간</th><th>타일 종류 / 컬러</th><th style="width:28%">비고</th></tr>
+          <tr><th style="width:15%">공간</th><th>타일 종류 / 컬러</th><th style="width:18%">비고</th><th style="width:22%">수량 체크</th></tr>
         </thead>
         <tbody><!-- JS로 렌더링 --></tbody>
       </table>
@@ -437,6 +476,20 @@
 
 </main>
 
+<!-- ===================== 치수 입력 팝업 ===================== -->
+<div id="dimsModalOverlay" class="modal-overlay" onclick="if(event.target===this) closeDimsModal();">
+  <div class="modal-box">
+    <h4 id="dimsModalTitle">치수 입력 (mm)</h4>
+    <div class="field"><label>가로 (mm)</label><input type="number" inputmode="numeric" id="dimInputW" placeholder="예: 600"></div>
+    <div class="field"><label>세로 (mm)</label><input type="number" inputmode="numeric" id="dimInputD" placeholder="예: 600"></div>
+    <div class="field" id="dimsModalFieldH" style="display:none;"><label>높이 (mm)</label><input type="number" inputmode="numeric" id="dimInputH" placeholder="예: 2400"></div>
+    <div class="modal-actions">
+      <button type="button" class="secondary" onclick="closeDimsModal()">취소</button>
+      <button type="button" class="primary" onclick="saveDimsModal()">저장</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============ 설정 ============
    아래 URL을 Apps Script 배포 후 받은 "웹 앱 URL"로 교체하세요.
@@ -461,6 +514,16 @@ const DEFAULT_TILE_ROWS = [
 ];
 
 let tileRows = DEFAULT_TILE_ROWS.map(r => ({ ...r }));
+
+// 공동욕실/안방욕실 벽체·바닥 4칸은 벽 높이까지 필요해서 가로/세로/높이 3칸을 입력받고,
+// 나머지(현관/주방/베란다/바닥/아트월)는 가로/세로 2칸만 입력받는다.
+const DIM_HEIGHT_KEYS = ['commonWall', 'commonFloor', 'masterWall', 'masterFloor'];
+function needsHeightDim(key){
+  return DIM_HEIGHT_KEYS.indexOf(key) !== -1;
+}
+
+// key -> { w, d, h } (mm). 치수 팝업에서 입력한 값을 보관한다.
+let tileDims = {};
 
 const FIXTURE_ITEMS = [
   { key:'toilet', label:'양변기' },
@@ -721,6 +784,7 @@ function addVerandaRow(afterKey){
 function removeVerandaRow(key){
   const savedTile = collectTileData();
   delete savedTile[key];
+  delete tileDims[key];
   tileRows = tileRows.filter(r => r.key !== key);
   renderTileTable();
   restoreTileData(savedTile);
@@ -731,9 +795,11 @@ function restoreTileData(savedTile){
     const entry = savedTile[key];
     const nameInput = document.querySelector(`input[data-tile="${key}"][data-field="name"]`);
     const memoInput = document.querySelector(`input[data-tile="${key}"][data-field="memo"]`);
+    const qtyInput = document.querySelector(`input[data-tile="${key}"][data-field="qty"]`);
 
     if(memoInput) memoInput.value = entry.memo || '';
     if(nameInput) nameInput.value = entry.name || '';
+    if(qtyInput) qtyInput.value = entry.qty || '';
   });
 }
 
@@ -756,11 +822,17 @@ function renderTileTable(){
         <div class="ac-list"></div>
       </td>
       <td><input type="text" data-tile="${row.key}" data-field="memo" placeholder="비고"></td>
+      <td class="qtycell">
+        <input type="number" inputmode="numeric" min="0" class="qty-input" data-tile="${row.key}" data-field="qty" placeholder="수량">
+        <button type="button" class="dim-btn" onclick="openDimsModal('${row.key}')">치수넣기</button>
+        <div class="dim-summary" id="dimSummary-${row.key}"></div>
+      </td>
     </tr>
   `;
   }).join('');
 
   attachTileNameAutocomplete();
+  tileRows.forEach(row => updateDimSummary(row.key));
 }
 
 // ---- 품목 자동완성 드롭다운에 규격/품목코드/거래처명을 같이 보여준다 (어디 거래처 물건인지 구분하기 위함) ----
@@ -818,13 +890,70 @@ function attachFixtureAutocomplete(){
   });
 }
 
+// ---- 치수 입력 팝업: 시공 위치에 따라 가로/세로(2칸) 또는 가로/세로/높이(3칸)를 입력받는다 ----
+let dimsModalKey = null;
+
+function openDimsModal(key){
+  dimsModalKey = key;
+  const needsH = needsHeightDim(key);
+  document.getElementById('dimsModalFieldH').style.display = needsH ? 'block' : 'none';
+
+  const d = tileDims[key] || {};
+  document.getElementById('dimInputW').value = d.w || '';
+  document.getElementById('dimInputD').value = d.d || '';
+  document.getElementById('dimInputH').value = d.h || '';
+
+  const rowDef = tileRows.find(r => r.key === key);
+  const label = rowDef ? rowDef.label.replace('\n', ' ') : key;
+  document.getElementById('dimsModalTitle').textContent = label + ' 치수 입력 (mm)';
+
+  document.getElementById('dimsModalOverlay').classList.add('show');
+}
+
+function closeDimsModal(){
+  document.getElementById('dimsModalOverlay').classList.remove('show');
+  dimsModalKey = null;
+}
+
+function saveDimsModal(){
+  if(!dimsModalKey) return;
+  const key = dimsModalKey;
+  const w = document.getElementById('dimInputW').value.trim();
+  const d = document.getElementById('dimInputD').value.trim();
+  const h = needsHeightDim(key) ? document.getElementById('dimInputH').value.trim() : '';
+  tileDims[key] = { w, d, h };
+  updateDimSummary(key);
+  closeDimsModal();
+}
+
+function updateDimSummary(key){
+  const el = document.getElementById('dimSummary-' + key);
+  if(!el) return;
+  const d = tileDims[key];
+  if(!d || (!d.w && !d.d && !d.h)){ el.textContent = ''; return; }
+  const parts = [];
+  if(d.w) parts.push('가로' + d.w);
+  if(d.d) parts.push('세로' + d.d);
+  if(needsHeightDim(key) && d.h) parts.push('높이' + d.h);
+  el.textContent = parts.join('×') + 'mm';
+}
+
 function collectTileData(){
   const data = {};
   document.querySelectorAll('#tileTable input').forEach(inp => {
     const key = inp.getAttribute('data-tile');
     const field = inp.getAttribute('data-field');
+    if(!key || !field) return;
     if(!data[key]) data[key] = {};
     data[key][field] = inp.value;
+  });
+  Object.keys(tileDims).forEach(key => {
+    const d = tileDims[key];
+    if(!d) return;
+    if(!data[key]) data[key] = {};
+    data[key].dimW = d.w || '';
+    data[key].dimD = d.d || '';
+    if(needsHeightDim(key)) data[key].dimH = d.h || '';
   });
   Object.keys(data).forEach(key => {
     const rowDef = tileRows.find(r => r.key === key);
@@ -920,6 +1049,7 @@ function resetForm(){
     if(el) el.value = '';
   });
   tileRows = DEFAULT_TILE_ROWS.map(r => ({ ...r }));
+  tileDims = {};
   renderTileTable();
   renderFixtures();
   const statusEl = document.getElementById('saveStatus');
@@ -951,16 +1081,23 @@ function renderDetail(rec){
     <div class="card">
       <h3>타일 종류 / 컬러</h3>
       <table class="tile-table">
-        <thead><tr><th>공간</th><th>타일 종류 / 컬러</th><th>비고</th></tr></thead>
+        <thead><tr><th>공간</th><th>타일 종류 / 컬러</th><th>비고</th><th>수량</th><th>치수(mm)</th></tr></thead>
         <tbody>
           ${Object.keys(tile).map(key => {
             const d = tile[key] || {};
             const rowDef = tileRows.find(r => r.key === key);
             const label = d.label || (rowDef ? rowDef.label : key);
+            const dimParts = [];
+            if(d.dimW) dimParts.push('가로' + d.dimW);
+            if(d.dimD) dimParts.push('세로' + d.dimD);
+            if(d.dimH) dimParts.push('높이' + d.dimH);
+            const dimText = dimParts.length ? dimParts.join('×') + 'mm' : '-';
             return `<tr>
               <td class="rowlabel">${(label||'').replace('\n','<br>')}</td>
               <td>${escapeHtml(d.name||'-')}</td>
               <td>${escapeHtml(d.memo||'-')}</td>
+              <td>${escapeHtml(d.qty||'-')}</td>
+              <td>${dimText}</td>
             </tr>`;
           }).join('')}
         </tbody>
