@@ -8,7 +8,8 @@
  * v2 변경점: 품목등록마스터에 없는 품목은 해당 거래처의 기존 코드 접두어로
  * 자동 채번해서 품목등록마스터에도 함께 등록한다(거래처가 이미 등록되어 있을 때만).
  *
- * 주의: 거래처코드(Ecount 자체 코드)/담당자/입고창고/거래유형은
+ * 주의: 거래처코드관리 시트(E열)에 이카운트거래처코드가 등록돼 있으면 그걸,
+ * 없으면 사업자등록번호를 대신 거래처코드로 채운다. 담당자/입고창고/거래유형은
  * 이 시스템에 매핑 정보가 없어 빈 칸으로 남긴다. 업로드 전 확인 필요.
  *
  * doPost action="purchase_extract" 로 Code.gs의 doPost에서 라우팅됨.
@@ -24,6 +25,15 @@
  function normalizeDateYyyyMmDd(s) {
  const digits = String(s || '').replace(/\D/g, '');
  return digits.length === 8 ? digits : '';
+ }
+
+ // ---- 거래처코드관리 시트에 실제 이카운트거래처코드(E열)가 있으면 그걸, 없으면 사업자등록번호를 대신 쓴다
+ // (그마저 없으면 빈 채로 두고 사람이 확인 시트에서 직접 채우게 한다). custCd 계산과 동일한 우선순위.
+ function resolveVendorEcountCode(vendorInfo) {
+ if (!vendorInfo) return '';
+ if (vendorInfo.ecountCode) return vendorInfo.ecountCode;
+ if (vendorInfo.businessNo) return String(vendorInfo.businessNo).replace(/\D/g, '');
+ return '';
  }
 
  const PURCHASE_REVIEW_HEADERS = ['일자', '순번', '거래처코드', '거래처명', '담당자', '입고창고', '거래유형', '통화', '환율',
@@ -102,7 +112,7 @@
  const totalExtracted = parsed.items.length;
  const finalVendorName = vendorInfo.storedName;
 
- const rows = buildPurchaseRows(parsed, finalVendorName);
+ const rows = buildPurchaseRows(parsed, finalVendorName, vendorInfo);
  const reviewUrl = stageForPurchaseReview(rows);
 
  return jsonOut({
@@ -252,11 +262,17 @@
  const masterSheetForConfirm = ss.getSheetByName(MASTER_SHEET);
  const masterDataForConfirm = masterSheetForConfirm ? masterSheetForConfirm.getDataRange().getValues() : [];
 
+ const vendorName = String(rows[0][3] || '').trim();
+ const vendorInfo = findVendor(vendorName);
+
+ // 사람이 확인 시트 C열(거래처코드)을 비워뒀으면 거래처코드관리에 등록된 코드로 채운다(안전망).
+ const fallbackVendorCode = resolveVendorEcountCode(vendorInfo);
+
  const finalRows = rows.map(function (r) {
  const code = parseItemCode(r[9]);
  const masterMatch = code ? lookupMasterItemByCode(masterDataForConfirm, code) : null;
  return {
- date: r[0], seq: r[1], vendorCode: r[2], vendorName: r[3], manager: r[4], warehouse: r[5],
+ date: r[0], seq: r[1], vendorCode: String(r[2] || '').trim() || fallbackVendorCode, vendorName: r[3], manager: r[4], warehouse: r[5],
  dealType: r[6], currency: r[7], rate: r[8],
  itemCode: code,
  itemName: masterMatch ? masterMatch.name : r[10],
@@ -264,9 +280,6 @@
  qty: r[12], unitPrice: r[13], foreignAmount: r[14], supply: r[15], vat: r[16], note: r[17]
  };
  });
-
- const vendorName = String(rows[0][3] || '').trim();
- const vendorInfo = findVendor(vendorName);
 
  // ---- 품목코드가 여전히 비어있는(=신규 품목으로 그대로 확정된) 행은 이 시점에 비로소 채번+마스터 등록한다 ----
  // (미매칭 상태로 검토 화면까지 왔다가, 사람이 기존 코드로 지정하지 않고 그대로 둔 품목만 해당.)
@@ -323,13 +336,9 @@
 
  const whCd = PropertiesService.getScriptProperties().getProperty('ECOUNT_DEFAULT_WH_CD') || '';
  // CUST_DES(이름)만 보내면 이카운트가 이름으로 알아서 매칭을 시도하다, 표기가 조금만 달라도
- // 기존 등록된 거래처를 못 찾고 새 거래처로 잡거나 실패할 수 있다. 이카운트 거래처코드는
- // 사업자등록번호가 아니라 내부 임의 코드인 경우가 많으므로(예: 신양상사=00122 — 확인은
- // importPurchaseVendorEcountCodes/이카운트 "거래처등록" 내보내기로 채워둔 E열 참고),
- // 거래처코드관리에 실제 이카운트거래처코드(E열)가 채워져 있으면 그걸 최우선으로 쓰고,
- // 없으면 사업자등록번호로 대신한다(그마저 없으면 이름 매칭에 맡긴다).
- const custCd = vendorInfo && vendorInfo.ecountCode ? vendorInfo.ecountCode
- : (vendorInfo && vendorInfo.businessNo ? String(vendorInfo.businessNo).replace(/\D/g, '') : '');
+ // 기존 등록된 거래처를 못 찾고 새 거래처로 잡거나 실패할 수 있다. resolveVendorEcountCode()가
+ // 우선순위대로 고른 코드(fallbackVendorCode)를 그대로 재사용한다.
+ const custCd = fallbackVendorCode;
  const pushRows = finalRows.filter(function (r) { return r.itemCode; }).map(function (r) {
  return { date: r.date, custCd: custCd, custDes: vendorName, whCd: whCd, prodCd: r.itemCode, prodDes: r.itemName, qty: r.qty, unitPriceVat: r.unitPrice, supply: r.supply, vat: r.vat, remarks: r.note || '' };
  });
@@ -350,12 +359,13 @@
  // v3 변경점: 미매칭 품목을 여기서 바로 신규 채번/등록하지 않는다. 인식 오류로 미매칭된 품목이
  // 계속 새 코드로 잘못 생성되는 문제 때문에, 코드가 빈 채로 "구매확인중" 시트에 올려서
  // 사람이 (a) 기존 코드로 지정하거나 (b) 그대로 둬서 confirm 시점에 신규 등록하게 한다.
- function buildPurchaseRows(parsed, vendorName) {
+ function buildPurchaseRows(parsed, vendorName, vendorInfo) {
  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
  const masterSheet = ss.getSheetByName(MASTER_SHEET);
  const masterData = masterSheet.getDataRange().getValues();
  const today = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyyMMdd');
  const docDate = normalizeDateYyyyMmDd(parsed.docDate) || today;
+ const vendorCode = resolveVendorEcountCode(vendorInfo);
 
  // 품명이 같아도 규격이 다르면 다른 품목이므로, 매칭도 품명+규격을 묶은 키로 구분한다.
  function itemKey(name, spec) { return String(name || '').trim() + '|||' + String(spec || '').trim(); }
@@ -382,7 +392,7 @@
  return {
  date: normalizeDateYyyyMmDd(it.date) || docDate,
  seq: i + 1,
- vendorCode: '',
+ vendorCode: vendorCode,
  vendorName: vendorName,
  manager: '',
  warehouse: DEFAULT_WAREHOUSE,
