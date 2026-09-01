@@ -510,6 +510,8 @@
  return best ? normalizeMasterMatch(best) : null;
  }
 
+ // 같은 품명이라도 거래처(브랜드)가 다르면 다른 품목이라 코드를 공유하면 안 되므로,
+ // 반드시 같은 거래처로 등록된 행 안에서만 매칭한다(거래처 무관 매칭은 findMasterItemAnyVendor 참고).
  function findMasterItem(masterData, vendorName, itemName, price, spec) {
  const targetVendor = normalizeVendorName(vendorName);
  const sameVendorRows = [];
@@ -518,19 +520,7 @@
  if (normalizeVendorName(String(row[12] || '')) === targetVendor) sameVendorRows.push(row);
  }
 
- const scoped = matchItemInRows(sameVendorRows, itemName, price, spec);
- if (scoped) return scoped;
-
- // 거래처 무관 완전일치(최후 수단)
- const targetExact = String(itemName || '').trim();
- if (!targetExact) return null;
- for (let i = 0; i < masterData.length; i++) {
- const row = masterData[i];
- if (String(row[1] || '').trim() === targetExact && specsCompatible(spec, row[3])) {
- return normalizeMasterMatch(row);
- }
- }
- return null;
+ return matchItemInRows(sameVendorRows, itemName, price, spec);
  }
 
  // ---- 배송용: 배송일정의 "업체명"은 배송받는 고객사일 뿐 품목등록마스터의 거래처명(매입처)과는
