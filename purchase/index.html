@@ -472,11 +472,11 @@
     </div>
 
     <div class="month-field" id="ecountFixBox">
-      <label for="ecountFixCode">이카운트 거래처코드 <span>(이카운트에서 이 거래처의 실제 코드를 찾아 입력해주세요)</span></label>
+      <label for="ecountFixCode">이카운트 거래처코드 <span>(이카운트에서 이 거래처의 실제 코드를 찾아 입력해주세요 — 입력 후 다른 곳을 클릭하면 자동으로 저장되고 다시 올라가요)</span></label>
       <input type="text" id="ecountFixCode" placeholder="예: 00122" autocomplete="off">
       <label for="ecountFixBizNo" style="margin-top:10px;">사업자등록번호 <span>(거래처코드를 모르면 대신 입력해도 됩니다)</span></label>
       <input type="text" id="ecountFixBizNo" placeholder="123-45-67890" autocomplete="off">
-      <button class="submit" id="ecountFixBtn" style="margin-top:10px;">이 코드로 다시 올리기</button>
+      <button class="submit" id="ecountFixBtn" style="margin-top:10px;">지금 바로 다시 올리기</button>
       <div class="status" id="ecountFixStatusBox">
         <span class="spinner"></span>
         <span>이카운트에 다시 올리는 중이에요...</span>
@@ -592,6 +592,7 @@
     ecountFixCode.value = '';
     ecountFixBizNo.value = '';
     ecountFixErrorBox.classList.remove('show');
+    ecountFixLastSaved = { ecountCode: '', businessNo: '' };
   }
 
   function pickFile(file) {
@@ -962,15 +963,18 @@
     }
   }
 
-  ecountFixBtn.addEventListener('click', async () => {
-    if (!lastResult) return;
+  // 마지막으로 성공 저장한 값 - 같은 값을 blur마다 중복으로 다시 보내지 않기 위한 기준.
+  let ecountFixLastSaved = { ecountCode: '', businessNo: '' };
+  let ecountFixInFlight = false;
+
+  async function submitEcountFix() {
+    if (!lastResult || ecountFixInFlight) return;
     const ecountCode = ecountFixCode.value.trim();
     const businessNo = ecountFixBizNo.value.trim();
-    if (!ecountCode && !businessNo) {
-      ecountFixErrorBox.textContent = '이카운트 거래처코드나 사업자등록번호 중 하나는 입력해주세요.';
-      ecountFixErrorBox.classList.add('show');
-      return;
-    }
+    if (!ecountCode && !businessNo) return;
+    if (ecountCode === ecountFixLastSaved.ecountCode && businessNo === ecountFixLastSaved.businessNo) return;
+
+    ecountFixInFlight = true;
     ecountFixBtn.disabled = true;
     ecountFixStatusBox.classList.add('show');
     ecountFixErrorBox.classList.remove('show');
@@ -987,15 +991,32 @@
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || '처리 중 오류가 발생했어요.');
+      ecountFixLastSaved = { ecountCode: ecountCode, businessNo: businessNo };
       lastResult.ecount = data.ecount;
       renderEcountStatus(data.ecount);
     } catch (err) {
       ecountFixErrorBox.textContent = err.message || String(err);
       ecountFixErrorBox.classList.add('show');
     } finally {
+      ecountFixInFlight = false;
       ecountFixBtn.disabled = false;
       ecountFixStatusBox.classList.remove('show');
     }
+  }
+
+  // 입력칸에서 포커스를 벗어나면(다 입력했다고 보고) 버튼을 누르지 않아도 자동으로 저장+재전송한다.
+  ecountFixCode.addEventListener('blur', submitEcountFix);
+  ecountFixBizNo.addEventListener('blur', submitEcountFix);
+
+  ecountFixBtn.addEventListener('click', async () => {
+    const ecountCode = ecountFixCode.value.trim();
+    const businessNo = ecountFixBizNo.value.trim();
+    if (!ecountCode && !businessNo) {
+      ecountFixErrorBox.textContent = '이카운트 거래처코드나 사업자등록번호 중 하나는 입력해주세요.';
+      ecountFixErrorBox.classList.add('show');
+      return;
+    }
+    await submitEcountFix();
   });
 
   function renderFlagList(listEl, sectionEl, items, metaFn) {
