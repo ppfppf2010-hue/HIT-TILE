@@ -1176,9 +1176,14 @@
  const name = String(r[1] || '').trim();
  if (!code || !name) return;
  const norm = normalizeVendorName(name);
- const hit = byNorm[norm];
- if (!hit) return;
- matchedNorms[norm] = true;
+ // 이카운트 내보내기 이름에 "(주) 에스지세라 / SG", "탑세라믹 / TOP"처럼 담당자/코드 별칭이
+ // " / "로 덧붙어 있는 경우가 있어, 그대로 정규화하면 우리 쪽 순수 상호명("탑세라믹")과 매칭이
+ // 안 된다. 완전 매칭이 실패하면 " / " 뒤를 잘라내고 한 번 더 시도한다.
+ const strippedNorm = normalizeVendorName(name.split(' / ')[0]);
+ const matchedKey = byNorm[norm] ? norm : (byNorm[strippedNorm] ? strippedNorm : null);
+ if (!matchedKey) return;
+ const hit = byNorm[matchedKey];
+ matchedNorms[matchedKey] = true;
  if (hit.ecountCode === code && (hit.businessNo || !bizFormat.test(code))) { alreadySet++; return; }
  sheet.getRange(hit.rowIndex, 5).setValue(code);
  if (!hit.businessNo && bizFormat.test(code)) sheet.getRange(hit.rowIndex, 4).setValue(code);
