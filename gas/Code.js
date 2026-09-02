@@ -58,6 +58,7 @@
  if (action === 'purchase_extract') return handlePurchaseExtract(body);
  if (action === 'purchase_register_vendor') return handlePurchaseRegisterVendor(body);
  if (action === 'purchase_confirm') return handlePurchaseConfirm();
+ if (action === 'purchase_retry_ecount') return handlePurchaseRetryEcount(body);
  if (action === 'create_order') return handleCreateOrder(body);
  if (action === 'delivery_extract') return handleDeliveryExtract(body);
  if (action === 'save_invoice') return handleSaveInvoice(body);
