@@ -471,6 +471,19 @@
       <p class="summary" id="doneEcountStatus" style="display:none"></p>
     </div>
 
+    <div class="month-field" id="ecountFixBox">
+      <label for="ecountFixCode">이카운트 거래처코드 <span>(이카운트에서 이 거래처의 실제 코드를 찾아 입력해주세요 — 입력 후 다른 곳을 클릭하면 자동으로 저장되고 다시 올라가요)</span></label>
+      <input type="text" id="ecountFixCode" placeholder="예: 00122" autocomplete="off">
+      <label for="ecountFixBizNo" style="margin-top:10px;">사업자등록번호 <span>(거래처코드를 모르면 대신 입력해도 됩니다)</span></label>
+      <input type="text" id="ecountFixBizNo" placeholder="123-45-67890" autocomplete="off">
+      <button class="submit" id="ecountFixBtn" style="margin-top:10px;">지금 바로 다시 올리기</button>
+      <div class="status" id="ecountFixStatusBox">
+        <span class="spinner"></span>
+        <span>이카운트에 다시 올리는 중이에요...</span>
+      </div>
+      <div class="error-box" id="ecountFixErrorBox"></div>
+    </div>
+
     <div class="result-actions">
       <a class="action-btn" id="sheetLink" href="#" target="_blank" rel="noopener">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
@@ -541,6 +554,12 @@
   const doneVendorName = document.getElementById('doneVendorName');
   const doneSummary = document.getElementById('doneSummary');
   const doneEcountStatus = document.getElementById('doneEcountStatus');
+  const ecountFixBox = document.getElementById('ecountFixBox');
+  const ecountFixCode = document.getElementById('ecountFixCode');
+  const ecountFixBizNo = document.getElementById('ecountFixBizNo');
+  const ecountFixBtn = document.getElementById('ecountFixBtn');
+  const ecountFixStatusBox = document.getElementById('ecountFixStatusBox');
+  const ecountFixErrorBox = document.getElementById('ecountFixErrorBox');
   const againLink = document.getElementById('againLink');
   const sheetLink = document.getElementById('sheetLink');
   const excelBtn = document.getElementById('excelBtn');
@@ -569,6 +588,11 @@
     reviewBox.classList.remove('show');
     doneBox.classList.remove('show');
     missSection.classList.remove('show');
+    ecountFixBox.classList.remove('show');
+    ecountFixCode.value = '';
+    ecountFixBizNo.value = '';
+    ecountFixErrorBox.classList.remove('show');
+    ecountFixLastSaved = { ecountCode: '', businessNo: '' };
   }
 
   function pickFile(file) {
@@ -901,21 +925,7 @@
       doneVendorName.textContent = data.vendorName;
       doneSummary.textContent = `${data.savedCount}개 품목이 구매입력 시트에 등록됐어요.`;
       sheetLink.href = data.sheetGid !== undefined ? (SHEET_URL + '#gid=' + data.sheetGid) : SHEET_URL;
-      const ecount = data.ecount;
-      doneEcountStatus.classList.remove('ok', 'err');
-      if (ecount && ecount.purchase) {
-        doneEcountStatus.style.display = '';
-        const purchase = ecount.purchase;
-        if (purchase.ok) {
-          doneEcountStatus.textContent = '✓ 이카운트에도 매입전표까지 자동으로 올라갔어요.';
-          doneEcountStatus.classList.add('ok');
-        } else {
-          doneEcountStatus.textContent = '⚠ 이카운트 매입전표 등록 실패 — ' + (purchase.error || '알 수 없는 오류') + ' (직접 확인/업로드가 필요해요)';
-          doneEcountStatus.classList.add('err');
-        }
-      } else {
-        doneEcountStatus.style.display = 'none';
-      }
+      renderEcountStatus(data.ecount);
       doneBox.classList.add('show');
     } catch (err) {
       alert(err.message || String(err));
@@ -923,6 +933,90 @@
       confirmBtn.disabled = false;
       confirmStatusBox.classList.remove('show');
     }
+  });
+
+  // ecount.custCd가 비어있으면 거래처코드 없이 이름만으로 매칭을 시도한 것이라, 이카운트가 ok를
+  // 반환했어도 엉뚱한/새 거래처로 잘못 붙었을 수 있다. 그 경우까지 포함해서 수기 보정 칸을 열어둔다.
+  function renderEcountStatus(ecount) {
+    doneEcountStatus.classList.remove('ok', 'err');
+    ecountFixErrorBox.classList.remove('show');
+    if (ecount && ecount.purchase) {
+      doneEcountStatus.style.display = '';
+      const purchase = ecount.purchase;
+      const noCode = !ecount.custCd;
+      if (purchase.ok && !noCode) {
+        doneEcountStatus.textContent = '✓ 이카운트에도 매입전표까지 거래처코드로 정확히 연결해서 올라갔어요.';
+        doneEcountStatus.classList.add('ok');
+        ecountFixBox.classList.remove('show');
+      } else if (purchase.ok && noCode) {
+        doneEcountStatus.textContent = '⚠ 이카운트 매입전표는 올라갔지만, 거래처코드가 없어 이름만으로 매칭했어요 — 다른/새 거래처로 잘못 붙었을 수 있으니 아래에서 정확한 거래처코드를 입력해 다시 올려주세요.';
+        doneEcountStatus.classList.add('err');
+        ecountFixBox.classList.add('show');
+      } else {
+        doneEcountStatus.textContent = '⚠ 이카운트 매입전표 등록 실패 — ' + (purchase.error || '알 수 없는 오류') + '. 아래에서 거래처코드를 입력해 다시 올려보세요.';
+        doneEcountStatus.classList.add('err');
+        ecountFixBox.classList.add('show');
+      }
+    } else {
+      doneEcountStatus.style.display = 'none';
+      ecountFixBox.classList.remove('show');
+    }
+  }
+
+  // 마지막으로 성공 저장한 값 - 같은 값을 blur마다 중복으로 다시 보내지 않기 위한 기준.
+  let ecountFixLastSaved = { ecountCode: '', businessNo: '' };
+  let ecountFixInFlight = false;
+
+  async function submitEcountFix() {
+    if (!lastResult || ecountFixInFlight) return;
+    const ecountCode = ecountFixCode.value.trim();
+    const businessNo = ecountFixBizNo.value.trim();
+    if (!ecountCode && !businessNo) return;
+    if (ecountCode === ecountFixLastSaved.ecountCode && businessNo === ecountFixLastSaved.businessNo) return;
+
+    ecountFixInFlight = true;
+    ecountFixBtn.disabled = true;
+    ecountFixStatusBox.classList.add('show');
+    ecountFixErrorBox.classList.remove('show');
+    try {
+      const res = await fetch(ENDPOINT, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'purchase_retry_ecount',
+          vendorName: lastResult.vendorName,
+          ecountCode: ecountCode,
+          businessNo: businessNo,
+          rows: lastResult.rows
+        })
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || '처리 중 오류가 발생했어요.');
+      ecountFixLastSaved = { ecountCode: ecountCode, businessNo: businessNo };
+      lastResult.ecount = data.ecount;
+      renderEcountStatus(data.ecount);
+    } catch (err) {
+      ecountFixErrorBox.textContent = err.message || String(err);
+      ecountFixErrorBox.classList.add('show');
+    } finally {
+      ecountFixInFlight = false;
+      ecountFixBtn.disabled = false;
+      ecountFixStatusBox.classList.remove('show');
+    }
+  }
+
+  // 입력칸에서 포커스를 벗어나면(다 입력했다고 보고) 버튼을 누르지 않아도 자동으로 저장+재전송한다.
+  ecountFixCode.addEventListener('blur', submitEcountFix);
+  ecountFixBizNo.addEventListener('blur', submitEcountFix);
+
+  ecountFixBtn.addEventListener('click', async () => {
+    const ecountCode = ecountFixCode.value.trim();
+    const businessNo = ecountFixBizNo.value.trim();
+    if (!ecountCode && !businessNo) {
+      ecountFixErrorBox.textContent = '이카운트 거래처코드나 사업자등록번호 중 하나는 입력해주세요.';
+      ecountFixErrorBox.classList.add('show');
+      return;
+    }
+    await submitEcountFix();
   });
 
   function renderFlagList(listEl, sectionEl, items, metaFn) {

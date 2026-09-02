@@ -321,29 +321,61 @@
  const codesToSync = finalRows.filter(function (r) { return r.itemCode; }).map(function (r) { return r.itemCode; });
  const ecountItemResults = ecountSyncItemsByCode(codesToSync);
 
- const whCd = PropertiesService.getScriptProperties().getProperty('ECOUNT_DEFAULT_WH_CD') || '';
- // CUST_DES(이름)만 보내면 이카운트가 이름으로 알아서 매칭을 시도하다, 표기가 조금만 달라도
- // 기존 등록된 거래처를 못 찾고 새 거래처로 잡거나 실패할 수 있다. 이카운트 거래처코드는
- // 사업자등록번호가 아니라 내부 임의 코드인 경우가 많으므로(예: 신양상사=00122 — 확인은
- // importPurchaseVendorEcountCodes/이카운트 "거래처등록" 내보내기로 채워둔 E열 참고),
- // 거래처코드관리에 실제 이카운트거래처코드(E열)가 채워져 있으면 그걸 최우선으로 쓰고,
- // 없으면 사업자등록번호로 대신한다(그마저 없으면 이름 매칭에 맡긴다).
- const custCd = vendorInfo && vendorInfo.ecountCode ? vendorInfo.ecountCode
- : (vendorInfo && vendorInfo.businessNo ? String(vendorInfo.businessNo).replace(/\D/g, '') : '');
- const pushRows = finalRows.filter(function (r) { return r.itemCode; }).map(function (r) {
- return { date: r.date, custCd: custCd, custDes: vendorName, whCd: whCd, prodCd: r.itemCode, prodDes: r.itemName, qty: r.qty, unitPriceVat: r.unitPrice, supply: r.supply, vat: r.vat, remarks: r.note || '' };
- });
- let ecountPurchaseResult;
- if (!pushRows.length) {
- ecountPurchaseResult = { ok: false, error: '품목코드가 매칭된 행이 없어 이카운트 매입전표 저장을 건너뛰었습니다.' };
- } else if (!whCd) {
- ecountPurchaseResult = { ok: false, error: 'ECOUNT_DEFAULT_WH_CD 스크립트 속성이 없어 이카운트 매입전표 저장을 건너뛰었습니다. Apps Script 편집기 > 프로젝트 설정 > 스크립트 속성에서 입고창고의 이카운트 창고코드를 등록해주세요.' };
- } else {
- ecountPurchaseResult = ecountRelayCall('/push-purchase', { rows: pushRows });
- }
+ const custCd = resolveEcountCustCd(vendorInfo);
+ const ecountPurchaseResult = pushPurchaseRowsToEcount(vendorName, custCd, finalRows);
 
  return jsonOut({ ok: true, vendorName: vendorName, savedCount: finalRows.length, rows: finalRows, sheetGid: sheetGid,
- ecount: { vendor: ecountVendorResult, items: ecountItemResults, purchase: ecountPurchaseResult } });
+ ecount: { vendor: ecountVendorResult, items: ecountItemResults, purchase: ecountPurchaseResult, custCd: custCd } });
+ }
+
+ // ---- vendorInfo 기준으로 이카운트에 보낼 거래처코드(CUST_CD)를 결정한다 ----
+ // 거래처코드관리에 실제 이카운트거래처코드(E열)가 채워져 있으면 최우선으로 쓰고,
+ // 없으면 사업자등록번호(D열)로 대신한다(그마저 없으면 빈 문자열 - 이카운트 쪽 이름 매칭에 맡겨진다).
+ function resolveEcountCustCd(vendorInfo) {
+ if (!vendorInfo) return '';
+ if (vendorInfo.ecountCode) return vendorInfo.ecountCode;
+ if (vendorInfo.businessNo) return String(vendorInfo.businessNo).replace(/\D/g, '');
+ return '';
+ }
+
+ // ---- 품목코드가 매칭된 행들을 이카운트 매입전표로 전송 ----
+ function pushPurchaseRowsToEcount(vendorName, custCd, rows) {
+ const whCd = PropertiesService.getScriptProperties().getProperty('ECOUNT_DEFAULT_WH_CD') || '';
+ const pushRows = rows.filter(function (r) { return r.itemCode; }).map(function (r) {
+ return { date: r.date, custCd: custCd, custDes: vendorName, whCd: whCd, prodCd: r.itemCode, prodDes: r.itemName, qty: r.qty, unitPriceVat: r.unitPrice, supply: r.supply, vat: r.vat, remarks: r.note || '' };
+ });
+ if (!pushRows.length) return { ok: false, error: '품목코드가 매칭된 행이 없어 이카운트 매입전표 저장을 건너뛰었습니다.' };
+ if (!whCd) return { ok: false, error: 'ECOUNT_DEFAULT_WH_CD 스크립트 속성이 없어 이카운트 매입전표 저장을 건너뛰었습니다. Apps Script 편집기 > 프로젝트 설정 > 스크립트 속성에서 입고창고의 이카운트 창고코드를 등록해주세요.' };
+ return ecountRelayCall('/push-purchase', { rows: pushRows });
+ }
+
+ // ---- 구매확정 후 이카운트 거래처코드(CUST_CD)가 안 잡혀서 이름 매칭에만 의존했을 때,
+ //      페이지에서 거래처코드/사업자등록번호를 수기로 입력해 거래처코드관리를 보정하고 재전송한다. ----
+ // "구매입력" 시트 저장은 확정 시점에 이미 끝난 상태라 다시 만들지 않고, 프론트가 확정 응답으로
+ // 받아 들고 있던 rows를 그대로 되돌려받아 이카운트에만 다시 밀어넣는다.
+ function handlePurchaseRetryEcount(body) {
+ const vendorName = String(body.vendorName || '').trim();
+ const ecountCode = String(body.ecountCode || '').trim();
+ const businessNo = String(body.businessNo || '').trim();
+ const rows = body.rows;
+ if (!vendorName) throw new Error('거래처명이 없습니다.');
+ if (!ecountCode && !businessNo) throw new Error('이카운트 거래처코드나 사업자등록번호를 입력해주세요.');
+ if (!rows || !rows.length) throw new Error('다시 올릴 품목 데이터가 없습니다.');
+
+ const vendorInfo = findVendor(vendorName);
+ if (!vendorInfo) throw new Error('거래처(' + vendorName + ')를 거래처코드관리에서 찾을 수 없습니다.');
+
+ const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+ const sheet = ss.getSheetByName(VENDOR_SHEET);
+ if (businessNo) sheet.getRange(vendorInfo.rowIndex, 4).setValue(businessNo);
+ if (ecountCode) sheet.getRange(vendorInfo.rowIndex, 5).setValue(ecountCode);
+
+ const ecountVendorResult = businessNo ? ecountSyncVendor(vendorName, businessNo) : { ok: true, skipped: true };
+
+ const custCd = ecountCode || String(businessNo).replace(/\D/g, '');
+ const ecountPurchaseResult = pushPurchaseRowsToEcount(vendorName, custCd, rows);
+
+ return jsonOut({ ok: true, ecount: { vendor: ecountVendorResult, purchase: ecountPurchaseResult, custCd: custCd } });
  }
 
  // ---- 품목코드 매칭 + 공급가액/부가세 계산해서 행 조립 ----
