@@ -398,11 +398,29 @@
  return (pipeIdx === -1 ? s : s.slice(0, pipeIdx)).trim();
  }
 
+ // 확정 시점에도 한 번 더: 품목코드가 있는 행은 K/L열에 남아있는 텍스트가 아니라 그 코드로
+ // 품목등록마스터에 등록된 이름/규격을 최종값으로 쓴다(구매확인중 확정 로직과 동일한 안전망 —
+ // 드롭다운으로 품목코드만 바꾸고 이름/규격 텍스트는 그대로 둔 채 확정해도 등록되는 이름/규격이
+ // 실제 코드와 어긋나지 않게 한다).
+ const masterSheetForConfirm = ss.getSheetByName(MASTER_SHEET);
+ const masterDataForConfirm = masterSheetForConfirm ? masterSheetForConfirm.getDataRange().getValues() : [];
+
  const finalRows = rows.map(function (r) {
+ const code = parseItemCode(r[9]);
+ const masterMatch = code ? lookupMasterItemByCode(masterDataForConfirm, code) : null;
+ // 공급가액/부가세는 시트에 남아있는(수정 전 기준으로 계산된) 값을 믿지 않고, 수량/단가를
+ // 시트에서 직접 고친 경우에도 정확히 반영되도록 항상 현재 수량*단가로 다시 계산한다.
+ const qty = Number(r[12]) || 0;
+ const unitPrice = Math.round(Number(r[13]) || 0);
+ const supply = Math.round((unitPrice * qty) / 1.1);
+ const vat = Math.round(unitPrice * qty) - supply;
  return {
  date: r[0], seq: r[1], vendorCode: r[2], vendorName: r[3], manager: r[4], warehouse: r[5],
- dealType: r[6], currency: r[7], rate: r[8], itemCode: parseItemCode(r[9]), itemName: r[10], spec: r[11],
- qty: r[12], unitPrice: r[13], foreignAmount: r[14], supply: r[15], vat: r[16], note: r[17]
+ dealType: r[6], currency: r[7], rate: r[8],
+ itemCode: code,
+ itemName: masterMatch ? masterMatch.name : r[10],
+ spec: masterMatch ? masterMatch.spec : r[11],
+ qty: qty, unitPrice: unitPrice, foreignAmount: r[14], supply: supply, vat: vat, note: r[17]
  };
  });
 
