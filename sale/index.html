@@ -590,8 +590,8 @@
     });
   }
 
-  // ---- 품목 행 하나 생성 ----
-  function addItemRow() {
+  // ---- 품목 행 하나 생성 (initial이 있으면 상담체크리스트에서 넘어온 값으로 미리 채운다) ----
+  function addItemRow(initial) {
     const row = document.createElement('div');
     row.className = 'item-row';
     row.innerHTML =
@@ -613,6 +613,13 @@
     const specInput = row.querySelector('.item-spec');
     const priceInput = row.querySelector('.item-price');
     const removeBtn = row.querySelector('.item-remove');
+
+    if (initial) {
+      nameInput.value = initial.name || '';
+      specInput.value = initial.spec || '';
+      priceInput.value = initial.price || '';
+      row.querySelector('.item-qty').value = initial.qty || 1;
+    }
 
     function fillFromMatch(it) {
       nameInput.value = it.name;
@@ -908,10 +915,36 @@
     XLSX.writeFile(wb, `판매입력_${lastResult.vendorName}_${today}.xlsx`);
   });
 
+  // ---- 상담 체크리스트 목록 화면에서 "판매등록" 버튼으로 넘어온 경우 거래처명·품목을 미리 채운다 ----
+  // (?prefill=<JSON({vendor, items:[{name, qty}]})> 형태로 전달됨. 형식이 잘못돼도 화면은 정상 동작해야 하므로 실패 시 무시)
+  function getPrefillFromUrl() {
+    try {
+      const raw = new URLSearchParams(window.location.search).get('prefill');
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  const prefill = getPrefillFromUrl();
+  if (prefill) {
+    // 새로고침/뒤로가기 시 같은 값이 중복 적용되지 않도록 주소창의 쿼리는 지운다.
+    history.replaceState(null, '', window.location.pathname);
+  }
+
   // 페이지 열자마자 바로 입력할 수 있게 초기 품목 행/자동완성 데이터를 미리 준비해둔다.
   loadVendorNames();
   loadItemMaster();
-  for (let i = 0; i < 6; i++) addItemRow();
+
+  if (prefill && prefill.vendor) manualVendorName.value = prefill.vendor;
+
+  const prefillItems = (prefill && prefill.items || []).filter(it => it && it.name);
+  if (prefillItems.length) {
+    prefillItems.forEach(it => addItemRow(it));
+  } else {
+    for (let i = 0; i < 6; i++) addItemRow();
+  }
 </script>
 
 </body>

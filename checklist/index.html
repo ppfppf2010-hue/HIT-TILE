@@ -347,6 +347,13 @@
     font-family:'Noto Sans KR';
   }
   .consult-card .cancel-btn:active{ background:#FEE2E2; }
+  .consult-card .sale-btn{
+    font-size:11px; font-weight:700; color:var(--red-dark);
+    background:#EFF6FF; border:1px solid #BFD7FF;
+    padding:3px 8px; border-radius:12px; white-space:nowrap; cursor:pointer;
+    font-family:'Noto Sans KR';
+  }
+  .consult-card .sale-btn:active{ background:#DCEAFE; }
   .consult-card .row2{
     margin-top:4px; font-size:12.5px; color:var(--muted);
     display:flex; flex-wrap:wrap; gap:4px 12px;
@@ -431,6 +438,7 @@
     <a href="#" class="back-link" onclick="showView('list'); return false;">← 목록으로</a>
     <div class="success-banner">✓ 상담완료 · 발주대기로 저장되었습니다 (이대한님 이메일로 발송됨)</div>
     <div id="detailContainer"></div>
+    <button class="secondary" id="saleLinkBtn" onclick="goToSaleRegistrationFromCurrent()">🧾 판매등록으로 연결</button>
     <button class="secondary" id="imageBtn" onclick="saveAsImage()">🖼 이미지로 저장</button>
     <button class="primary" style="margin-top:10px;" onclick="startNewEntry()">+ 새 상담 입력하기</button>
   </section>
@@ -564,6 +572,7 @@ function renderConsultationList(records){
           <span class="company">${escapeHtml(company || '(업체명 없음)')}</span>
           <div class="badge-col">
             <span class="badge">${escapeHtml(status)}</span>
+            <button type="button" class="sale-btn" onclick="event.stopPropagation(); goToSaleRegistrationFromList(${idx})">판매등록</button>
             <button type="button" class="cancel-btn" onclick="event.stopPropagation(); cancelConsultation(${idx})">상담 취소</button>
           </div>
         </div>
@@ -596,6 +605,45 @@ async function cancelConsultation(idx){
   } catch(err){
     showToast('취소 실패: ' + err.message);
   }
+}
+
+// ---- 상담 기록(타일/집기류)에서 판매등록 페이지로 넘길 품목 목록을 뽑아낸다 ----
+function buildSaleItemsFromRecord(rec){
+  const tile = safeParse(pickField(rec, ['tile_json']) || '{}');
+  const fixture = safeParse(pickField(rec, ['fixture_json']) || '{}');
+  const items = [];
+  Object.keys(tile).forEach(key => {
+    const name = ((tile[key] || {}).name || '').trim();
+    if(name) items.push({ name, qty: 1 });
+  });
+  Object.keys(fixture).forEach(zone => {
+    const zoneData = fixture[zone] || {};
+    Object.keys(zoneData).forEach(key => {
+      const name = (zoneData[key] || '').trim();
+      if(name) items.push({ name, qty: 1 });
+    });
+  });
+  return items;
+}
+
+// ---- 상담 1건을 골라 판매등록 페이지(../sale/)로 이동한다 (거래처명·품목을 미리 채워줌) ----
+function goToSaleRegistration(rec){
+  if(!rec) return;
+  const company = pickField(rec, ['업체','company']);
+  const items = buildSaleItemsFromRecord(rec);
+  const payload = {};
+  if(company) payload.vendor = company;
+  if(items.length) payload.items = items;
+  const query = encodeURIComponent(JSON.stringify(payload));
+  window.location.href = '../sale/index.html?prefill=' + query;
+}
+
+function goToSaleRegistrationFromList(idx){
+  goToSaleRegistration((window._consultationRecords || [])[idx]);
+}
+
+function goToSaleRegistrationFromCurrent(){
+  goToSaleRegistration(currentRecord);
 }
 
 function showConsultationDetail(idx){
