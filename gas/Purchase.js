@@ -186,13 +186,14 @@
  return null;
  }
 
- // ---- "구매확인중" 시트에서 품목코드(J열)를 드롭다운으로 바꾸면, 품목명/규격(K/L열)도 그 코드 기준으로
- //      바로 맞춰준다. (그냥 두면 코드만 바뀌고 이름은 원래 인식된 값 그대로 남아서 혼동을 준다.)
+ // ---- "구매확인중"/"판매확인중" 시트에서 품목코드(J열)를 드롭다운으로 바꾸면, 품목명/규격(K/L열)도
+ //      그 코드 기준으로 바로 맞춰준다. (그냥 두면 코드만 바뀌고 이름은 원래 인식된 값 그대로 남아서 혼동을 준다.)
  function onEdit(e) {
  try {
  const range = e.range;
  const sheet = range.getSheet();
- if (sheet.getName() !== PURCHASE_REVIEW_SHEET) return;
+ const sheetName = sheet.getName();
+ if (sheetName !== PURCHASE_REVIEW_SHEET && sheetName !== SALE_REVIEW_SHEET) return;
  if (range.getColumn() !== 10 || range.getRow() < 2) return; // J열(품목코드), 헤더 제외
  if (range.getNumRows() !== 1 || range.getNumColumns() !== 1) return; // 단일 셀 수정만 처리
 
@@ -255,13 +256,19 @@
  const finalRows = rows.map(function (r) {
  const code = parseItemCode(r[9]);
  const masterMatch = code ? lookupMasterItemByCode(masterDataForConfirm, code) : null;
+ // 공급가액/부가세는 시트에 남아있는(수정 전 기준으로 계산된) 값을 믿지 않고, 수량/단가를
+ // 시트에서 직접 고친 경우에도 정확히 반영되도록 항상 현재 수량*단가로 다시 계산한다.
+ const qty = Number(r[12]) || 0;
+ const unitPrice = Math.round(Number(r[13]) || 0);
+ const supply = Math.round((unitPrice * qty) / 1.1);
+ const vat = Math.round(unitPrice * qty) - supply;
  return {
  date: r[0], seq: r[1], vendorCode: r[2], vendorName: r[3], manager: r[4], warehouse: r[5],
  dealType: r[6], currency: r[7], rate: r[8],
  itemCode: code,
  itemName: masterMatch ? masterMatch.name : r[10],
  spec: masterMatch ? masterMatch.spec : r[11],
- qty: r[12], unitPrice: r[13], foreignAmount: r[14], supply: r[15], vat: r[16], note: r[17]
+ qty: qty, unitPrice: unitPrice, foreignAmount: r[14], supply: supply, vat: vat, note: r[17]
  };
  });
 
