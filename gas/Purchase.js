@@ -37,6 +37,7 @@
  const fileBase64 = body.fileBase64;
  const mimeType = body.mimeType || 'application/pdf';
  const targetMonth = String(body.targetMonth || '').trim(); // 'YYYY-MM', 선택 시 그 달 품목만 등록
+ const overrideDate = normalizeDateYyyyMmDd(body.overrideDate); // 'YYYY-MM-DD', 선택 시 문서 인식 날짜 대신 이 날짜로 등록(미래 날짜도 가능)
  if (!fileBase64) throw new Error('파일이 없습니다.');
 
  const parsed = extractPurchaseWithClaude(fileBase64, mimeType, targetMonth);
@@ -44,6 +45,13 @@
  if (!parsed.items || parsed.items.length === 0) throw new Error('문서에서 품목을 찾지 못했습니다.');
 
  filterItemsByMonth(parsed, targetMonth);
+
+ // 날짜를 직접 지정했으면 문서에서 인식된 날짜(전표 날짜/품목별 날짜 전부)를 이 값으로 덮어써서
+ // 무조건 사용자가 정한 날짜로 등록되게 한다(월 필터는 원래 인식 날짜 기준으로 이미 끝난 뒤라 영향 없음).
+ if (overrideDate) {
+ parsed.docDate = overrideDate;
+ parsed.items.forEach(function (it) { it.date = overrideDate; });
+ }
 
  const vendorInfo = findVendor(parsed.vendorName);
  if (!vendorInfo) {
