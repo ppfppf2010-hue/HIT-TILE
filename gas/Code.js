@@ -80,6 +80,8 @@
  if (action === 'list_sale_vendor_names') return handleListSaleVendorNames();
  if (action === 'list_sale_vendor_contacts') return handleListSaleVendorContacts();
  if (action === 'sale_check_vendor') return handleCheckSaleVendor(body);
+ if (action === 'sync_vendors_now') return handleSyncVendorsNow();
+ if (action === 'debug_ecount_vendors') return handleDebugEcountVendors();
  throw new Error('알 수 없는 action: ' + action);
  } catch (err) {
  return jsonOut({ ok: false, error: err.message });
@@ -874,6 +876,127 @@
  }
  }
  return null;
+ }
+
+ // ==== 이카운트 거래처 마스터와 시트(거래처코드관리/판매거래처) 주기적 대조 ====
+ // "모든 등록 기준은 시트가 아니라 이카운트"라는 요구에 따라, 이카운트에 실제 등록된 거래처
+ // 목록(ecount-relay의 /list-vendors, GetBasicCustList)을 가져와서 시트의 거래처명/사업자번호/
+ // 이카운트거래처코드를 이카운트 쪽 값으로 맞춘다(충돌 시 이카운트가 항상 이긴다).
+ // - 시트에 이미 있는 거래처는 이카운트 값으로 덮어쓴다.
+ // - 이카운트에는 있는데 시트에 없는 거래처는 새 행으로 추가한다.
+ // - 시트에는 있는데 이카운트에서 못 찾은 거래처는 지우지 않고 F열(이카운트대조상태)에 표시만
+ //   해서 사람이 보고 판단하게 한다(잘못 지워지면 되돌리기 어려우므로 삭제는 절대 하지 않음).
+ function ecountFetchVendors() {
+ const result = ecountRelayCall('/list-vendors', {});
+ if (!result.ok) throw new Error('이카운트 거래처 목록 조회 실패: ' + (result.error || '알 수 없는 오류'));
+ return result.vendors || [];
+ }
+
+ // opts: { nameCol, businessNoCol, ecountCodeCol, statusCol } (1-based 열 번호)
+ function syncVendorSheetWithEcount(sheetName, opts, vendors) {
+ const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+ const sheet = ss.getSheetByName(sheetName);
+ if (!sheet) throw new Error(sheetName + ' 시트를 찾을 수 없습니다.');
+
+ const byNormName = {};
+ const byBizNo = {};
+ const byCustCd = {};
+ vendors.forEach(function (v) {
+ if (v.name) byNormName[normalizeVendorName(v.name)] = v;
+ const biz = String(v.businessNo || '').replace(/\D/g, '');
+ if (biz) byBizNo[biz] = v;
+ if (v.custCd) byCustCd[v.custCd] = v;
+ });
+
+ const lastCol = Math.max(sheet.getLastColumn(), opts.statusCol);
+ const lastRow = Math.max(sheet.getLastRow(), 1);
+ const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+ if (!String(data[0][opts.statusCol - 1] || '').trim()) sheet.getRange(1, opts.statusCol).setValue('이카운트대조상태');
+
+ const matchedCustCds = {};
+ const existingNorm = {};
+ let updated = 0, unchanged = 0, flagged = 0;
+
+ for (let i = 1; i < data.length; i++) {
+ const row = data[i];
+ const name = String(row[opts.nameCol - 1] || '').trim();
+ if (!name) continue;
+ existingNorm[normalizeVendorName(name)] = true;
+
+ const curBizNo = String(row[opts.businessNoCol - 1] || '').replace(/\D/g, '');
+ const curCode = String(row[opts.ecountCodeCol - 1] || '').trim();
+ const match = (curCode && byCustCd[curCode]) || (curBizNo && byBizNo[curBizNo]) || byNormName[normalizeVendorName(name)];
+ const rowNum = i + 1;
+
+ if (!match) {
+ sheet.getRange(rowNum, opts.statusCol).setValue('⚠ 이카운트에서 못 찾음 - 직접 확인 필요');
+ flagged++;
+ continue;
+ }
+
+ if (match.custCd) matchedCustCds[match.custCd] = true;
+ let changed = false;
+ if (match.custCd && match.custCd !== curCode) { sheet.getRange(rowNum, opts.ecountCodeCol).setValue(match.custCd); changed = true; }
+ const matchBizNo = String(match.businessNo || '').replace(/\D/g, '');
+ if (matchBizNo && matchBizNo !== curBizNo) { sheet.getRange(rowNum, opts.businessNoCol).setValue(match.businessNo); changed = true; }
+ if (match.name && match.name.trim() !== name) { sheet.getRange(rowNum, opts.nameCol).setValue(match.name.trim()); changed = true; }
+ sheet.getRange(rowNum, opts.statusCol).setValue('✓ 이카운트 일치 (' + Utilities.formatDate(new Date(), 'Asia/Seoul', 'MM/dd HH:mm') + ')');
+ if (changed) updated++; else unchanged++;
+ }
+
+ // 이카운트에는 있는데 시트에 아예 없는 거래처는 새 행으로 추가한다.
+ let added = 0;
+ vendors.forEach(function (v) {
+ if (!v.name || (v.custCd && matchedCustCds[v.custCd])) return;
+ if (existingNorm[normalizeVendorName(v.name)]) return; // 이름은 이미 있는데 다른 이유로 못 엮인 경우는 중복 추가 방지 위해 건너뜀
+ const newRow = new Array(lastCol).fill('');
+ newRow[opts.nameCol - 1] = v.name;
+ newRow[opts.businessNoCol - 1] = v.businessNo || '';
+ newRow[opts.ecountCodeCol - 1] = v.custCd || '';
+ newRow[opts.statusCol - 1] = '✓ 이카운트에서 신규 발견 (자동추가)';
+ sheet.appendRow(newRow);
+ added++;
+ });
+
+ return { sheetName: sheetName, ecountVendorCount: vendors.length, updated: updated, unchanged: unchanged, flagged: flagged, added: added };
+ }
+
+ // ---- 구매/판매 거래처 시트를 이카운트 기준으로 한 번에 대조한다 ----
+ // 트리거(간헐적 자동 실행)로 등록해서 쓰거나, Apps Script 편집기에서 [Run]으로 수동 실행해도 된다.
+ // 거래처코드관리: A거래처명 B코드접두어 C마지막사용번호 D사업자등록번호 E이카운트거래처코드
+ // 판매거래처:     A거래처명 B사업자등록번호 C대표자명 D전화 E이카운트거래처코드
+ function runVendorSyncAll() {
+ const vendors = ecountFetchVendors(); // 한 번만 가져와서 두 시트에 같이 쓴다(이카운트 API 호출 최소화)
+ const results = [];
+ try { results.push(syncVendorSheetWithEcount(VENDOR_SHEET, { nameCol: 1, businessNoCol: 4, ecountCodeCol: 5, statusCol: 6 }, vendors)); }
+ catch (e) { results.push({ sheetName: VENDOR_SHEET, error: e.message }); }
+ try { results.push(syncVendorSheetWithEcount(SALE_VENDOR_SHEET, { nameCol: 1, businessNoCol: 2, ecountCodeCol: 5, statusCol: 6 }, vendors)); }
+ catch (e) { results.push({ sheetName: SALE_VENDOR_SHEET, error: e.message }); }
+ Logger.log(JSON.stringify(results));
+ return results;
+ }
+
+ // ---- 최초 1회 실행: runVendorSyncAll이 6시간마다 자동으로 돌도록 트리거 등록 ----
+ // 이미 등록되어 있으면 중복 등록하지 않는다. Apps Script 편집기에서 이 함수를 선택하고 [Run]하면 됨.
+ function setupVendorSyncTrigger() {
+ const already = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'runVendorSyncAll'; });
+ if (already) return { ok: true, message: '이미 등록되어 있습니다 - 중복 등록하지 않았습니다.' };
+ ScriptApp.newTrigger('runVendorSyncAll').timeBased().everyHours(6).create();
+ return { ok: true, message: '6시간마다 자동 대조 트리거를 등록했습니다.' };
+ }
+
+ // ---- 웹에서 즉시 대조를 실행해볼 수 있게 하는 action (배포 후 결과 확인용) ----
+ function handleSyncVendorsNow() {
+ return jsonOut({ ok: true, results: runVendorSyncAll() });
+ }
+
+ // ---- 이카운트 거래처 목록 API 원본 응답을 그대로 확인하기 위한 디버그용 action ----
+ // (GetBasicCustList 응답 필드명이 예상과 다르면 이걸로 실제 모양을 보고 ecount-relay/server.js의
+ // /list-vendors 파싱 부분을 맞추면 된다.)
+ function handleDebugEcountVendors() {
+ const result = ecountRelayCall('/list-vendors', { debug: true });
+ Logger.log(JSON.stringify(result, null, 2)); // Apps Script 편집기에서 이 함수를 직접 [Run]해도 실행기록에서 원본을 볼 수 있게
+ return jsonOut(result);
  }
 
  // ---- 이카운트 "거래처등록" 내보내기 목록으로 거래처코드관리 시트의 이카운트거래처코드(E열)를

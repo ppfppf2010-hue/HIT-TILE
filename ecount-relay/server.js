@@ -142,6 +142,35 @@ app.post('/register-vendor', async (req, res) => {
   }
 });
 
+// ---- 거래처 목록 조회 (GetBasicCustList) ----
+// 구글시트(거래처코드관리/판매거래처)를 "이카운트 기준"으로 주기적으로 대조/보정하기 위해 쓴다.
+// 주의: 이카운트 OAPI 문서를 이 서버 개발 환경에서 직접 열람하지 못한 상태로, 기존 Save류 API의
+// 명명 규칙(AccountBasic/SaveBasicCust)에 맞춰 GetBasicCustList로 우선 구현했다. 응답 구조가
+// 다르면(예: Data.Result가 아니라 다른 필드) 아래 파싱 부분만 실제 응답 모양 보고 고치면 된다 -
+// debug:true로 호출하면 이카운트 원본 응답을 그대로 돌려주니 그걸로 확인 가능하다.
+app.post('/list-vendors', async (req, res) => {
+  try {
+    const data = await ecountCall('/OAPI/V2/AccountBasic/GetBasicCustList', {});
+    const failMsg = ecountFailureMessage(data);
+    if (failMsg) return res.json({ ok: false, error: failMsg, ecount: data });
+
+    const list = (data && data.Data && (data.Data.Result || data.Data.Datas || data.Data.List)) || [];
+    const vendors = list.map(function (v) {
+      return {
+        custCd: v.CUST_CD || v.CUST || '',
+        name: v.CUST_NAME || v.CUST_DES || '',
+        businessNo: v.BUSINESS_NO || v.BUSINESS_NUMBER || ''
+      };
+    }).filter(function (v) { return v.custCd || v.name; });
+
+    const payload = { ok: true, vendors: vendors, count: vendors.length };
+    if (req.body && req.body.debug) payload.raw = data;
+    res.json(payload);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // ---- 품목 등록/동기화 (SaveBasicProduct) ----
 // prodCd는 우리 시스템에서 이미 채번한 코드를 그대로 쓴다(이카운트 PROD_CD는 자유 코드).
 app.post('/register-item', async (req, res) => {
