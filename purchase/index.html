@@ -393,6 +393,11 @@
       <input type="month" id="monthInput">
     </div>
 
+    <div class="month-field" id="dateOverrideField">
+      <label for="dateOverrideInput">일자 직접 지정 <span>(선택, 비워두면 문서에서 인식한 날짜 사용 - 며칠 뒤 등 미래 날짜도 지정 가능)</span></label>
+      <input type="date" id="dateOverrideInput">
+    </div>
+
     <button class="submit" id="submitBtn" disabled>업로드해서 분석하기</button>
 
     <div class="status" id="statusBox">
@@ -510,6 +515,8 @@
   const fileClear = document.getElementById('fileClear');
   const monthField = document.getElementById('monthField');
   const monthInput = document.getElementById('monthInput');
+  const dateOverrideField = document.getElementById('dateOverrideField');
+  const dateOverrideInput = document.getElementById('dateOverrideInput');
   const submitBtn = document.getElementById('submitBtn');
   const statusBox = document.getElementById('statusBox');
   const statusText = document.getElementById('statusText');
@@ -559,6 +566,8 @@
     fileChip.classList.remove('show');
     monthField.classList.remove('show');
     monthInput.value = '';
+    dateOverrideField.classList.remove('show');
+    dateOverrideInput.value = '';
     submitBtn.disabled = true;
     statusBox.classList.remove('show');
     errorBox.classList.remove('show');
@@ -577,6 +586,7 @@
     fileName.textContent = file.name;
     fileChip.classList.add('show');
     monthField.classList.add('show');
+    dateOverrideField.classList.add('show');
     submitBtn.disabled = false;
     errorBox.classList.remove('show');
     errorBox.classList.remove('credit-warn');
@@ -718,7 +728,8 @@
           action: 'purchase_extract',
           fileBase64: base64,
           mimeType: mimeType,
-          targetMonth: monthInput.value || ''
+          targetMonth: monthInput.value || '',
+          overrideDate: dateOverrideInput.value || ''
         })
       });
 
