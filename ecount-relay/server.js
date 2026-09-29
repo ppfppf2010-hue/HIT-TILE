@@ -202,6 +202,48 @@ app.post('/register-item', async (req, res) => {
   }
 });
 
+// ---- 품목 목록 조회 (GetBasicProductsList) ----
+// 이카운트에서 품목을 수정/추가하면 구글시트(품목등록마스터)도 따라가도록, GAS가 주기적으로 이 목록을
+// 가져가서 "이카운트 기준"으로 대조/보정한다(gas/ItemSync.js의 runItemSyncAll).
+// /list-vendors와 마찬가지로 실제 계정에서 처음 돌려볼 때 debug:true로 원본 응답(raw)을 보고
+// 리스트 경로/필드명이 맞는지 한 번 확인해야 한다. 다르면 아래 파싱 부분만 고치면 된다.
+// 숫자에 천단위 콤마가 붙어오지 않도록 COMMA_FLAG:'N'으로 요청한다.
+function toNumberOrNull(v) {
+  if (v === undefined || v === null || String(v).trim() === '') return null;
+  const n = Number(String(v).replace(/,/g, ''));
+  return isNaN(n) ? null : n;
+}
+
+app.post('/list-items', async (req, res) => {
+  try {
+    const body = { COMMA_FLAG: 'N' };
+    if (req.body && req.body.prodCd) body.PROD_CD = req.body.prodCd;
+    const data = await ecountCall('/OAPI/V2/InventoryBasic/GetBasicProductsList', body);
+    const failMsg = ecountFailureMessage(data);
+    if (failMsg) return res.json({ ok: false, error: failMsg, ecount: data });
+
+    const list = (data && data.Data && (data.Data.Result || data.Data.Datas || data.Data.List)) || [];
+    const items = list.map(function (p) {
+      return {
+        prodCd: String(p.PROD_CD || '').trim(),
+        prodDes: String(p.PROD_DES || '').trim(),
+        spec: String(p.SIZE_DES || p.SIZE || '').trim(),
+        unit: String(p.UNIT || '').trim(),
+        inPrice: toNumberOrNull(p.IN_PRICE),
+        inPriceVat: p.IN_PRICE_VAT != null ? String(p.IN_PRICE_VAT).trim() : null,
+        outPrice: toNumberOrNull(p.OUT_PRICE),
+        outPriceVat: p.OUT_PRICE_VAT != null ? String(p.OUT_PRICE_VAT).trim() : null
+      };
+    }).filter(function (p) { return p.prodCd; });
+
+    const payload = { ok: true, items: items, count: items.length };
+    if (req.body && req.body.debug) payload.raw = data;
+    res.json(payload);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // ---- 매입전표 저장 (SavePurchases) ----
 // rows: [{ date(YYYYMMDD), custCd, custDes, whCd, prodCd, prodDes, qty, unitPriceVat, supply, vat, remarks }]
 // 한 번의 호출에 들어온 rows는 전부 같은 순번(UPLOAD_SER_NO)을 줘서 하나의 전표로 묶는다

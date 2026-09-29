@@ -35,6 +35,12 @@ Google Apps Script(UrlFetchApp)는 요청마다 구글 클라우드의 서로 �
 - `POST /register-item` — `{prodCd, prodDes, spec?, unit?, inPrice?, inPriceVat?, outPrice?, outPriceVat?}` → 이카운트 품목 등록/동기화 (SaveBasicProduct)
 - `POST /push-purchase` — `{rows: [{date, custCd?, custDes, whCd, prodCd, prodDes, qty, unitPriceVat, supply, vat, remarks}]}` → 매입전표 저장 (SavePurchases). 한 번의 호출에 담긴 rows는 전부 한 장의 전표로 묶인다. `custCd`(=사업자등록번호, 숫자만)가 있으면 `CUST_CD`로 같이 보내서 정확히 그 거래처에 붙인다.
 - `POST /list-vendors` — `{debug?: true}` → 이카운트에 등록된 전체 거래처 목록 조회 (GetBasicCustList). `{ok, vendors:[{custCd, name, businessNo}], count}` 형태로 돌려준다. `debug:true`로 호출하면 이카운트 원본 응답을 `raw`에 그대로 담아준다 — 응답 필드명이 예상과 다를 때 이걸로 실제 모양을 확인한다. GAS 쪽 `gas/Code.js`의 `syncVendorSheetWithEcount`가 이 목록으로 구글시트(거래처코드관리/판매거래처)를 이카운트 기준으로 주기적으로 대조/보정한다.
+- `POST /list-items` — `{prodCd?, debug?: true}` → 이카운트에 등록된 품목 목록 조회 (GetBasicProductsList). `{ok, items:[{prodCd, prodDes, spec, unit, inPrice, inPriceVat, outPrice, outPriceVat}], count}` 형태. GAS 쪽 `gas/ItemSync.js`의 `runItemSyncAll`이 이 목록으로 품목등록마스터를 이카운트 기준으로 주기적으로 대조/보정한다. `/list-vendors`처럼 추정 구현이라 첫 실행 때 `debug:true`로 `raw`를 보고 필드명/리스트 경로를 한 번 확인해야 한다.
+
+## 품목 양방향 연동 (이카운트 ↔ 품목등록마스터)
+- **이카운트 → 시트**: 이카운트는 변경 알림(웹훅)이 없어서 GAS 트리거가 1시간마다 `/list-items`를 불러 대조한다. 같은 품목코드의 품목명/규격/단위/단가/VAT를 이카운트 값으로 덮어쓰고, 이카운트에만 있는 품목은 새 행으로 추가, 시트에만 있는 품목은 지우지 않고 O열(이카운트대조상태)에 표시만 한다.
+- **시트 → 이카운트**: 품목등록마스터에서 사람이 칸을 직접 고치면 설치형 onEdit 트리거가 그 행을 `/register-item`으로 다시 보낸다. 실패하면 O열에 사유가 남고, 다음 대조 때 이카운트 값으로 되돌아간다(기준은 항상 이카운트).
+- 설정: 중계서버를 이 버전으로 재시작(`pm2 restart ecount-relay`) → GAS에 `ItemSync.js` 반영 후 새 버전 배포 → Apps Script 편집기에서 `setupItemSyncTriggers()` 한 번 [Run] → 웹에서 `{"action":"debug_ecount_items"}`로 응답 모양 확인 → `{"action":"sync_items_now"}`로 첫 대조.
 
 ## 알아둘 점
 - 이카운트 거래처코드는 **사업자등록번호**다(우리가 정하는 코드가 아님). 원래는 이미 등록된 거래처면 거래처명(CUST_DES)만 보내도 이름으로 자동매칭될 거라 예상했는데, 실제로는 공백/"(주)" 위치 같은 표기 차이만 있어도 매칭에 실패해서 다른/새 거래처로 잡히는 문제가 있었다. 그래서 `/push-purchase`는 이제 사업자등록번호를 알고 있으면 `CUST_CD`로 명시해서 보낸다 — 이름 표기와 무관하게 정확한 거래처에 붙는다. 사업자번호가 없는(진짜 신규) 거래처만 여전히 이름 기반 매칭에 의존한다.
