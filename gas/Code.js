@@ -888,8 +888,14 @@
  // - 이카운트에는 있는데 시트에 없는 거래처는 새 행으로 추가한다.
  // - 시트에는 있는데 이카운트에서 못 찾은 거래처는 지우지 않고 F열(이카운트대조상태)에 표시만
  //   해서 사람이 보고 판단하게 한다(잘못 지워지면 되돌리기 어려우므로 삭제는 절대 하지 않음).
+ //
+ // ⚠ 2026-10 확인: 이카운트 OAPI V2에는 거래처 "조회" API가 없다(거래처는 SaveBasicCust 저장만 가능).
+ // 예전에 추측해서 쓴 GetBasicCustList는 운영서버에서 "No HTTP resource was found"로 실패했다.
+ // 그래서 ecount-relay의 /list-vendors는 이카운트를 부르지 않고 { ok:false, unsupported:true }를 돌려주며,
+ // 여기서는 그 경우를 에러로 던지지 않고 null을 돌려 대조를 건너뛴다(6시간 트리거가 매번 실패 메일을 보내지 않도록).
  function ecountFetchVendors() {
  const result = ecountRelayCall('/list-vendors', {});
+ if (result && result.unsupported) return null;
  if (!result.ok) throw new Error('이카운트 거래처 목록 조회 실패: ' + (result.error || '알 수 없는 오류'));
  return result.vendors || [];
  }
@@ -969,6 +975,11 @@
  // 판매거래처:     A거래처명 B사업자등록번호 C대표자명 D전화 E이카운트거래처코드
  function runVendorSyncAll() {
  const vendors = ecountFetchVendors(); // 한 번만 가져와서 두 시트에 같이 쓴다(이카운트 API 호출 최소화)
+ if (vendors === null) {
+ const skipped = [{ skipped: true, message: '이카운트에 거래처 목록 조회 API가 없어 대조를 건너뜀. 이 함수의 6시간 트리거(setupVendorSyncTrigger로 등록)는 Apps Script [트리거] 화면에서 삭제해도 됩니다.' }];
+ Logger.log(JSON.stringify(skipped));
+ return skipped;
+ }
  const results = [];
  try { results.push(syncVendorSheetWithEcount(VENDOR_SHEET, { nameCol: 1, businessNoCol: 4, ecountCodeCol: 5, statusCol: 6 }, vendors)); }
  catch (e) { results.push({ sheetName: VENDOR_SHEET, error: e.message }); }
@@ -1455,23 +1466,84 @@
  // GAS는 고정 IP가 없어 이카운트 OAPI를 직접 호출할 수 없으므로, 고정 IP를 가진 중계서버(ecount-relay)를
  // 거쳐서 호출한다. 중계서버 주소/비밀키는 스크립트 속성(ECOUNT_RELAY_URL, ECOUNT_RELAY_SECRET)에 등록해서 쓴다.
  // 이카운트 동기화가 실패해도 구글시트 저장은 이미 끝난 뒤이므로, 흐름을 막지 않고 결과만 응답에 담아 돌려준다.
+ // 실패(ok:false)는 '연동로그' 탭에도 남긴다. 실패가 응답 본문으로만 오기 때문에 Apps Script 실행기록에는
+ // "Completed"로만 보여서, 예전엔 실제 이카운트 에러 문구를 어디서도 찾을 수 없었다(2026-10 장애 때 확인).
  function ecountRelayCall(path, payload) {
+ const result = ecountRelayFetch(path, payload);
+ if (!result || !result.ok) logEcountFailure(path, payload, result);
+ return result;
+ }
+
+ function ecountRelayFetch(path, payload) {
  const props = PropertiesService.getScriptProperties();
  const url = props.getProperty('ECOUNT_RELAY_URL');
  const secret = props.getProperty('ECOUNT_RELAY_SECRET');
  if (!url || !secret) return { ok: false, error: 'ECOUNT_RELAY_URL/ECOUNT_RELAY_SECRET 스크립트 속성이 설정되지 않았습니다.' };
+ let res;
  try {
- const res = UrlFetchApp.fetch(url.replace(/\/+$/, '') + path, {
+ res = UrlFetchApp.fetch(url.replace(/\/+$/, '') + path, {
  method: 'post',
  contentType: 'application/json',
  headers: { 'X-Relay-Secret': secret },
  payload: JSON.stringify(payload),
  muteHttpExceptions: true
  });
- return JSON.parse(res.getContentText());
  } catch (e) {
- return { ok: false, error: e.message };
+ return { ok: false, error: '중계서버 연결 실패: ' + e.message };
  }
+ const status = res.getResponseCode();
+ const text = res.getContentText();
+ try {
+ const data = JSON.parse(text);
+ if (data && typeof data === 'object' && status >= 400 && data.httpStatus == null) data.httpStatus = status;
+ return data;
+ } catch (e) {
+ // 예: 서버에 옛 코드가 떠 있어서 Express 기본 404 HTML("Cannot POST /x")이 오는 경우
+ return { ok: false, error: '중계서버가 JSON이 아닌 응답을 보냈습니다 (HTTP ' + status + ')', httpStatus: status, rawBody: text.slice(0, 500) };
+ }
+ }
+
+ const ECOUNT_LOG_SHEET = '연동로그';
+ const ECOUNT_LOG_HEADERS = ['시각', '경로', '요약', '에러문구', 'HTTP상태', '원본'];
+
+ // 로그 기록이 실패해도 본 흐름(시트 저장/응답)은 절대 막지 않는다. 비밀키/헤더는 기록하지 않는다.
+ function logEcountFailure(path, payload, result) {
+ try {
+ if (result && result.unsupported) return; // 이카운트에 API 자체가 없는 경우(/list-vendors) - 주기 실행마다 쌓이지 않게 생략
+ const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+ let sheet = ss.getSheetByName(ECOUNT_LOG_SHEET);
+ if (!sheet) {
+ sheet = ss.insertSheet(ECOUNT_LOG_SHEET);
+ sheet.appendRow(ECOUNT_LOG_HEADERS);
+ sheet.setFrozenRows(1);
+ }
+ const r = result || {};
+ let raw = '';
+ try { raw = JSON.stringify(r.ecount || r.rawBody || r); } catch (e) { raw = String(r); }
+ sheet.appendRow([
+ Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss'),
+ path,
+ summarizeEcountPayload(path, payload),
+ r.error || '(응답 없음)',
+ r.httpStatus || '',
+ raw.slice(0, 2000)
+ ]);
+ } catch (e) {
+ Logger.log('연동로그 기록 실패: ' + e.message);
+ }
+ }
+
+ // 어떤 건이 실패했는지 시트에서 바로 알아볼 수 있을 정도의 식별 정보만 남긴다.
+ function summarizeEcountPayload(path, payload) {
+ const p = payload || {};
+ if (p.businessNo || p.custName) return (p.custName || '') + ' / ' + (p.businessNo || '');
+ if (p.prodCd || p.prodDes) return (p.prodCd || '') + ' / ' + (p.prodDes || '');
+ if (Array.isArray(p.rows)) {
+ const first = p.rows[0] || {};
+ return p.rows.length + '건 (' + (first.custDes || first.custCd || '') + ' ' + (first.date || '') + ')';
+ }
+ if (p.debug) return 'debug';
+ return '';
  }
 
  // businessNo(사업자등록번호)는 이카운트의 실제 거래처코드라 필수 - 없으면 동기화를 건너뛴다.
