@@ -118,8 +118,26 @@ if (cals && cals.length) return cals[0];
 return CalendarApp.createCalendar(name);
 }
 
+// ---- 캘린더 이벤트 제목/설명에서 업체명·현장명 추출 ----
+// 새 형식: "[업체명] 현장명 현장주소,시간" -> 업체명 = 대괄호 안, 현장명 = 대괄호 뒤에서 마지막 ",시간" 부분을 뺀 나머지.
+// 옛 형식(대괄호 없음): 제목 = 업체명, 설명 첫 줄 = 현장명. 단 체크리스트("[배송 전]", "□ ...") 줄은 현장명으로 쓰지 않는다.
+function parseDeliveryEventTitle(title, description) {
+const t = String(title || '').trim();
+const m = t.match(/^\[([^\]]+)\]\s*(.*)$/);
+if (m) {
+let rest = m[2].trim();
+const lastComma = rest.lastIndexOf(',');
+if (lastComma !== -1) rest = rest.slice(0, lastComma).trim();
+return { vendorName: m[1].trim(), siteName: rest };
+}
+const firstLine = String(description || '').trim().split('\n')[0].trim();
+const isChecklistLine = /^(\[|□|☑|담당:)/.test(firstLine);
+return { vendorName: t, siteName: isChecklistLine ? '' : firstLine };
+}
+
 // ---- "히트타일 배송일정" 캘린더에 등록된 일정을 배송관리 주문으로 가져옴 ----
-// 이벤트 제목 = 업체명, 설명 첫 줄(있으면) = 현장명. 이미 가져온 이벤트는 태그를 남겨서 다시 돌려도 중복 생성되지 않는다.
+// 제목/설명 해석은 parseDeliveryEventTitle 참고. 이미 가져온 이벤트는 태그를 남겨서 다시 돌려도 중복 생성되지 않는다.
+// 이미 가져온 이벤트라도 전표 등록 전이면, 캘린더에서 바뀐 업체명·현장명(예: 동호수 확정)을 시트에 다시 반영한다.
 function syncDeliveryFromCalendar() {
 const calendar = getOrCreateCalendar(CALENDAR_NAME_DELIVERY);
 const start = new Date();
@@ -132,14 +150,27 @@ const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 const orderSheet = ss.getSheetByName(ORDER_SHEET);
 
 let createdCount = 0;
+let updatedCount = 0;
 events.forEach(function (event) {
-if (event.getTag('hitTileOrderId')) return; // 이미 가져온 일정은 건너뜀
-
-const vendorName = String(event.getTitle() || '').trim();
+const parsed = parseDeliveryEventTitle(event.getTitle(), event.getDescription());
+const vendorName = parsed.vendorName;
+const siteName = parsed.siteName;
 if (!vendorName) return;
 
-const desc = String(event.getDescription() || '').trim();
-const siteName = desc ? desc.split('\n')[0].trim() : '';
+const existingOrderId = event.getTag('hitTileOrderId');
+if (existingOrderId) {
+// 이미 가져온 일정: 전표 등록 전이면 업체명·현장명만 최신 제목에 맞춰 갱신
+const rowIdx = findOrderRowIndex(orderSheet, existingOrderId);
+if (rowIdx === -1) return;
+const cur = orderSheet.getRange(rowIdx, 3, 1, 4).getValues()[0]; // 업체명, 연락처, 현장명, 전표등록여부
+if (cur[3] === 'Y') return;
+if (String(cur[0]) !== vendorName || String(cur[2]) !== siteName) {
+orderSheet.getRange(rowIdx, 3).setValue(vendorName);
+orderSheet.getRange(rowIdx, 5).setValue(siteName);
+updatedCount++;
+}
+return;
+}
 
 const dateStr = Utilities.formatDate(event.getStartTime(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
@@ -155,13 +186,13 @@ event.setTag('hitTileOrderId', orderId);
 createdCount++;
 });
 
-return { created: createdCount };
+return { created: createdCount, updated: updatedCount };
 }
 
 // ---- (프론트에서 호출) 배송관리 페이지 로드 시 캘린더 동기화 ----
 function handleSyncCalendarDeliveries() {
 const result = syncDeliveryFromCalendar();
-return jsonOut({ ok: true, created: result.created });
+return jsonOut({ ok: true, created: result.created, updated: result.updated });
 }
 
 // ---- 특정 날짜의 주문 목록 + 각 주문의 품목 조회 ----
