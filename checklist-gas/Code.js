@@ -49,8 +49,15 @@ function testEmail() {
 
 function doPost(e) {
   try {
-    var sheet = getSheet_();
     var data = JSON.parse(e.postData.contents);
+    // 타일량 계산기 결과 저장 (CalcSave.js)
+    if (data.action === 'save_calc') {
+      return ContentService
+        .createTextOutput(JSON.stringify(saveCalc_(data)))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var sheet = getSheet_();
     var id = Utilities.getUuid();
     var timestamp = new Date().toISOString();
 
