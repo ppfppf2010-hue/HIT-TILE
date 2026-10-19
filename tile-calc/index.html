@@ -148,7 +148,7 @@
     <div class="row">
       <label class="f wide">현장명<input id="site" type="text" placeholder="예) ○○아파트 ○동"></label>
       <label class="f">발주일<input id="date" type="date"></label>
-      <label class="f">할증<input id="loss" type="number" step="0.05" min="1" value="1.2"></label>
+      <label class="f">할증 (800각 제외)<input id="loss" type="number" step="0.05" min="1" value="1.2"></label>
     </div>
   </div>
 
@@ -203,7 +203,7 @@
   <div class="card">
     <ul class="rule">
       <li>300×300 · 300×600 · 600×600 · 600×1200: 1박스 = 1.44㎡ → 박스 = ㎡ × 할증 ÷ 1.44 (올림)</li>
-      <li>800×800: 3장 = 1박스(1.92㎡). 바닥 · 벽면은 ㎡ × 할증 ÷ 1.92 (올림)</li>
+      <li>800×800: 3장 = 1박스(1.92㎡). 1.2배 할증 없이 +1박스 → 바닥 · 벽면은 ㎡ ÷ 1.92 (올림) + 1박스</li>
       <li>주방 300×600 · 600×600: 가로 × 세로 ㎡ × 할증 ÷ 1.44 (올림)</li>
       <li>주방 800×800: 가로 × 800, 길이로 계산 → 장수 = 가로 ÷ 800 (올림), 박스 = 장수 ÷ 3 (올림) + 1박스. 상부장이 없으면 세로 ÷ 800 (올림)줄만큼 곱함</li>
       <li>욕실 벽체: (가로 + 세로) × 2 × 높이 · 바닥: 가로 × 세로</li>
@@ -226,7 +226,7 @@
 <script>
 const SIZES = ['300×300', '300×600', '600×600', '600×1200', '800×800'];
 const BIG = '800×800';
-const BOX_AREA = { [BIG]: 1.92 }; // 나머지는 1.44
+const BOX_AREA = { [BIG]: 1.92 }; // 800각 3장 = 1박스, 나머지는 1.44
 const KINDS = { floor: '바닥', bath: '욕실', wall: '벽면', kitchen: '주방' };
 // 주방에 600각 · 800각을 쓰면 에폭시로 시공
 const KITCHEN_EPOXY = ['600×600', BIG];
@@ -271,9 +271,11 @@ const num = v => { const n = parseFloat(v); return isFinite(n) && n > 0 ? n : 0;
 const ceil = x => Math.ceil(Math.round(x * 1e6) / 1e6);
 const fmt = (x, d = 2) => (Math.round(x * 10 ** d) / 10 ** d).toLocaleString('ko-KR');
 
+// 800각은 1.2배 할증 대신 +1박스
 function boxesByArea(area, size, loss) {
   if (!area) return 0;
-  return ceil(area * loss / (BOX_AREA[size] || 1.44));
+  if (size === BIG) return ceil(area / BOX_AREA[BIG]) + 1;
+  return ceil(area * loss / 1.44);
 }
 
 // 공간 하나 → 발주 라인 목록 [{label, size, code, area, boxes, adh, note}]
