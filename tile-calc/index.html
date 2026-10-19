@@ -210,6 +210,7 @@
       <li>평 환산: 2박스 = 1평 (업계 관행)</li>
       <li>압착: 1평에 1포 → 압착 박스 ÷ 2 (올림)</li>
       <li>본드: 2평에 1말 → 본드 박스 ÷ 4 (올림)</li>
+      <li>에폭시: 본드와 동일, 2평에 1조 → 에폭시 박스 ÷ 4 (올림)</li>
       <li>레미탈: 40kg 1포 = 0.025㎥, 25kg 1포 = 0.015625㎥ (올림)</li>
     </ul>
   </div>
@@ -226,9 +227,9 @@ const SIZES = ['300×300', '300×600', '600×600', '600×1200', '800×800'];
 const BIG = '800×800';
 const BOX_AREA = { [BIG]: 1.92 }; // 나머지는 1.44
 const KINDS = { floor: '바닥', bath: '욕실', wall: '벽면', kitchen: '주방' };
-const ADH = ['압착', '본드', '없음'];
+const ADH = ['압착', '본드', '에폭시', '없음'];
 const EXTRAS = [
-  ['백시멘', '포'], ['메지', '포'], ['유가', '개'], ['코너비트', '개'], ['에폭시', '조'], ['벽돌', '개'],
+  ['백시멘', '포'], ['메지', '포'], ['유가', '개'], ['코너비트', '개'], ['벽돌', '개'],
   ['욕조', '개'], ['떠발이 몰탈', '포'], ['드라이픽스', '포'], ['젠다이', '개'], ['모래', '포'], ['전시멘', '포']
 ];
 const STORAGE_KEY = 'hittile-tile-calc-v1';
@@ -236,7 +237,7 @@ const STORAGE_KEY = 'hittile-tile-calc-v1';
 let uid = 0;
 function newSpace(kind) {
   const base = { id: ++uid, kind, name: KINDS[kind], w: '', d: '', h: '', size: '600×600', code: '', adh: kind === 'floor' ? '압착' : '본드' };
-  if (kind === 'bath') Object.assign(base, { name: '욕실', h: 2300, wallSize: '300×600', wallCode: '', floorSize: '300×300', floorCode: '' });
+  if (kind === 'bath') Object.assign(base, { name: '욕실', h: 2300, wallSize: '300×600', wallCode: '', wallAdh: '본드', floorSize: '300×300', floorCode: '', floorAdh: '압착' });
   if (kind === 'kitchen') Object.assign(base, { size: '300×600', upper: true });
   return base;
 }
@@ -278,8 +279,8 @@ function calcSpace(sp, loss) {
     const wallArea = (w + d) * 2 * h / 1e6;
     const floorArea = w * d / 1e6;
     return [
-      { label: sp.name + ' 벽체', size: sp.wallSize, code: sp.wallCode, area: wallArea, boxes: boxesByArea(wallArea, sp.wallSize, loss), adh: '본드' },
-      { label: sp.name + ' 바닥', size: sp.floorSize, code: sp.floorCode, area: floorArea, boxes: boxesByArea(floorArea, sp.floorSize, loss), adh: '압착' }
+      { label: sp.name + ' 벽체', size: sp.wallSize, code: sp.wallCode, area: wallArea, boxes: boxesByArea(wallArea, sp.wallSize, loss), adh: sp.wallAdh || '본드' },
+      { label: sp.name + ' 바닥', size: sp.floorSize, code: sp.floorCode, area: floorArea, boxes: boxesByArea(floorArea, sp.floorSize, loss), adh: sp.floorAdh || '압착' }
     ];
   }
   if (sp.kind === 'kitchen' && sp.size === BIG) {
@@ -298,12 +299,14 @@ function calcAll() {
   const lines = state.spaces.flatMap(sp => calcSpace(sp, loss));
   const pressBoxes = lines.filter(l => l.adh === '압착').reduce((a, l) => a + l.boxes, 0);
   const bondBoxes = lines.filter(l => l.adh === '본드').reduce((a, l) => a + l.boxes, 0);
+  const epoxyBoxes = lines.filter(l => l.adh === '에폭시').reduce((a, l) => a + l.boxes, 0);
   const m = state.mortar;
   const vol = num(m.w) * num(m.l) * num(m.t) / 1e9;
   return {
     lines,
     pressBoxes, press: Math.ceil(pressBoxes / 2),
     bondBoxes, bond: Math.ceil(bondBoxes / 4),
+    epoxyBoxes, epoxy: Math.ceil(epoxyBoxes / 4),
     vol, mortar40: vol ? ceil(vol / 0.025) : 0, mortar25: vol ? ceil(vol / 0.015625) : 0
   };
 }
@@ -311,6 +314,8 @@ function calcAll() {
 /* ---------- 렌더링 ---------- */
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const sizeOptions = sel => SIZES.map(s => `<option${s === sel ? ' selected' : ''}>${s}</option>`).join('');
+const adhSelect = (id, key, sel) =>
+  `<label class="f">부자재<select data-id="${id}" data-k="${key}">${ADH.map(a => `<option${a === sel ? ' selected' : ''}>${a}</option>`).join('')}</select></label>`;
 const field = (id, key, label, val, extra = '') =>
   `<label class="f">${label}<input type="number" inputmode="numeric" data-id="${id}" data-k="${key}" value="${esc(val)}" ${extra}></label>`;
 
@@ -319,15 +324,17 @@ function spaceHtml(sp) {
   let body = '';
   if (sp.kind === 'bath') {
     body = `<div class="row">${field(id, 'w', '가로', sp.w)}${field(id, 'd', '세로', sp.d)}${field(id, 'h', '높이', sp.h)}</div>
-      <div class="sub-label">벽체 · 본드</div>
+      <div class="sub-label">벽체</div>
       <div class="row">
         <label class="f">규격<select data-id="${id}" data-k="wallSize">${sizeOptions(sp.wallSize)}</select></label>
         <label class="f wide">품번<input type="text" data-id="${id}" data-k="wallCode" value="${esc(sp.wallCode)}"></label>
+        ${adhSelect(id, 'wallAdh', sp.wallAdh || '본드')}
       </div>
-      <div class="sub-label">바닥 · 압착</div>
+      <div class="sub-label">바닥</div>
       <div class="row">
         <label class="f">규격<select data-id="${id}" data-k="floorSize">${sizeOptions(sp.floorSize)}</select></label>
         <label class="f wide">품번<input type="text" data-id="${id}" data-k="floorCode" value="${esc(sp.floorCode)}"></label>
+        ${adhSelect(id, 'floorAdh', sp.floorAdh || '압착')}
       </div>`;
   } else {
     // 주방 800각 + 상부장이면 1줄 고정이라 세로를 800으로 잠근다
@@ -343,7 +350,7 @@ function spaceHtml(sp) {
       <div class="row">
         <label class="f">규격<select data-id="${id}" data-k="size" data-rerender="1">${sizeOptions(sp.size)}</select></label>
         <label class="f wide">품번<input type="text" data-id="${id}" data-k="code" value="${esc(sp.code)}"></label>
-        <label class="f">부자재<select data-id="${id}" data-k="adh">${ADH.map(a => `<option${a === sp.adh ? ' selected' : ''}>${a}</option>`).join('')}</select></label>
+        ${adhSelect(id, 'adh', sp.adh)}
       </div>
       ${upper}`;
   }
@@ -387,6 +394,7 @@ function update() {
   document.getElementById('matBody').innerHTML =
     `<tr><td>압착</td><td>${r.pressBoxes}박스 = ${fmt(r.pressBoxes / 2, 1)}평</td><td class="num"><b>${r.press}</b> 포</td></tr>
      <tr><td>본드</td><td>${r.bondBoxes}박스 = ${fmt(r.bondBoxes / 2, 1)}평</td><td class="num"><b>${r.bond}</b> 말</td></tr>
+     <tr><td>에폭시</td><td>${r.epoxyBoxes}박스 = ${fmt(r.epoxyBoxes / 2, 1)}평</td><td class="num"><b>${r.epoxy}</b> 조</td></tr>
      <tr><td>레미탈</td><td>${fmt(r.vol, 3)}㎥</td><td class="num"><b>${r.mortar40}</b> 포(40kg) / <b>${r.mortar25}</b> 포(25kg)</td></tr>` + extraRows;
 
   document.getElementById('mortarResult').innerHTML = r.vol
@@ -422,6 +430,7 @@ function orderText(r) {
   out.push('', '■ 부자재');
   if (r.press) out.push(`압착 ${r.press}포`);
   if (r.bond) out.push(`본드 ${r.bond}말`);
+  if (r.epoxy) out.push(`에폭시 ${r.epoxy}조`);
   if (r.vol) out.push(`레미탈 ${r.mortar40}포(40kg) / ${r.mortar25}포(25kg)`);
   EXTRAS.forEach(([n, u]) => { if (num(state.extras[n])) out.push(`${n} ${num(state.extras[n])}${u}`); });
   if (state.memo) out.push('', state.memo);
