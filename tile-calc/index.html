@@ -211,7 +211,10 @@
       <li>압착: 1평에 1포 → 압착 박스 ÷ 2 (올림)</li>
       <li>본드: 2평에 1말 → 본드 박스 ÷ 4 (올림)</li>
       <li>에폭시: 본드와 동일, 2평에 1조 → 에폭시 박스 ÷ 4 (올림)</li>
-      <li>주방 600×600 · 800×800은 에폭시 시공 (규격을 고르면 자동 선택)</li>
+      <li>주방 600×600 · 600×1200 · 800×800은 에폭시 시공 (규격을 고르면 자동 선택)</li>
+      <li>드라이픽스: 압착과 동일, 1평에 1포 → 드라이픽스 박스 ÷ 2 (올림)</li>
+      <li>떠발이 몰탈: 욕실 1칸당 15포 (욕실 카드에서 끌 수 있음)</li>
+      <li>백시멘 · 메지: 따로 지정 (직접 입력)</li>
       <li>레미탈: 40kg 1포 = 0.025㎥, 25kg 1포 = 0.015625㎥ (올림)</li>
     </ul>
   </div>
@@ -228,20 +231,21 @@ const SIZES = ['300×300', '300×600', '600×600', '600×1200', '800×800'];
 const BIG = '800×800';
 const BOX_AREA = { [BIG]: 1.92 }; // 800각 3장 = 1박스, 나머지는 1.44
 const KINDS = { floor: '바닥', bath: '욕실', wall: '벽면', kitchen: '주방' };
-// 주방에 600각 · 800각을 쓰면 에폭시로 시공
-const KITCHEN_EPOXY = ['600×600', BIG];
+// 주방에 600각 · 600×1200 · 800각을 쓰면 에폭시로 시공
+const KITCHEN_EPOXY = ['600×600', '600×1200', BIG];
 const kitchenAdh = size => KITCHEN_EPOXY.includes(size) ? '에폭시' : '본드';
-const ADH = ['압착', '본드', '에폭시', '없음'];
+const ADH = ['압착', '드라이픽스', '본드', '에폭시', '없음'];
+const MORTAR_PER_BATH = 15; // 떠발이 몰탈: 욕실 1칸당 15포
 const EXTRAS = [
   ['백시멘', '포'], ['메지', '포'], ['유가', '개'], ['코너비트', '개'], ['벽돌', '개'],
-  ['욕조', '개'], ['떠발이 몰탈', '포'], ['드라이픽스', '포'], ['젠다이', '개'], ['모래', '포'], ['전시멘', '포']
+  ['욕조', '개'], ['젠다이', '개'], ['모래', '포'], ['전시멘', '포']
 ];
 const STORAGE_KEY = 'hittile-tile-calc-v1';
 
 let uid = 0;
 function newSpace(kind) {
   const base = { id: ++uid, kind, name: KINDS[kind], w: '', d: '', h: '', size: '600×600', code: '', adh: kind === 'floor' ? '압착' : '본드' };
-  if (kind === 'bath') Object.assign(base, { name: '욕실', h: 2300, wallSize: '300×600', wallCode: '', wallAdh: '본드', floorSize: '300×300', floorCode: '', floorAdh: '압착' });
+  if (kind === 'bath') Object.assign(base, { name: '욕실', h: 2300, wallSize: '300×600', wallCode: '', wallAdh: '본드', floorSize: '300×300', floorCode: '', floorAdh: '압착', ttebari: true });
   if (kind === 'kitchen') Object.assign(base, { size: '300×600', upper: true });
   return base;
 }
@@ -306,6 +310,9 @@ function calcAll() {
   const pressBoxes = lines.filter(l => l.adh === '압착').reduce((a, l) => a + l.boxes, 0);
   const bondBoxes = lines.filter(l => l.adh === '본드').reduce((a, l) => a + l.boxes, 0);
   const epoxyBoxes = lines.filter(l => l.adh === '에폭시').reduce((a, l) => a + l.boxes, 0);
+  const dryBoxes = lines.filter(l => l.adh === '드라이픽스').reduce((a, l) => a + l.boxes, 0);
+  // 예전에 저장된 욕실에는 ttebari 값이 없으므로 기본 포함으로 본다
+  const baths = state.spaces.filter(s => s.kind === 'bath' && s.ttebari !== false).length;
   const m = state.mortar;
   const vol = num(m.w) * num(m.l) * num(m.t) / 1e9;
   return {
@@ -313,6 +320,8 @@ function calcAll() {
     pressBoxes, press: Math.ceil(pressBoxes / 2),
     bondBoxes, bond: Math.ceil(bondBoxes / 4),
     epoxyBoxes, epoxy: Math.ceil(epoxyBoxes / 4),
+    dryBoxes, dry: Math.ceil(dryBoxes / 2),
+    baths, ttebari: baths * MORTAR_PER_BATH,
     vol, mortar40: vol ? ceil(vol / 0.025) : 0, mortar25: vol ? ceil(vol / 0.015625) : 0
   };
 }
@@ -341,7 +350,8 @@ function spaceHtml(sp) {
         <label class="f">규격<select data-id="${id}" data-k="floorSize">${sizeOptions(sp.floorSize)}</select></label>
         <label class="f wide">품번<input type="text" data-id="${id}" data-k="floorCode" value="${esc(sp.floorCode)}"></label>
         ${adhSelect(id, 'floorAdh', sp.floorAdh || '압착')}
-      </div>`;
+      </div>
+      <label class="check"><input type="checkbox" data-id="${id}" data-k="ttebari"${sp.ttebari !== false ? ' checked' : ''}>떠발이 몰탈 ${MORTAR_PER_BATH}포</label>`;
   } else {
     // 주방 800각 + 상부장이면 1줄 고정이라 세로를 800으로 잠근다
     const kitchenFixed = sp.kind === 'kitchen' && sp.size === BIG && sp.upper;
@@ -399,8 +409,10 @@ function update() {
     `<tr><td>${n}</td><td>직접 입력</td><td class="num"><b>${num(state.extras[n])}</b> ${u}</td></tr>`).join('');
   document.getElementById('matBody').innerHTML =
     `<tr><td>압착</td><td>${r.pressBoxes}박스 = ${fmt(r.pressBoxes / 2, 1)}평</td><td class="num"><b>${r.press}</b> 포</td></tr>
+     <tr><td>드라이픽스</td><td>${r.dryBoxes}박스 = ${fmt(r.dryBoxes / 2, 1)}평</td><td class="num"><b>${r.dry}</b> 포</td></tr>
      <tr><td>본드</td><td>${r.bondBoxes}박스 = ${fmt(r.bondBoxes / 2, 1)}평</td><td class="num"><b>${r.bond}</b> 말</td></tr>
      <tr><td>에폭시</td><td>${r.epoxyBoxes}박스 = ${fmt(r.epoxyBoxes / 2, 1)}평</td><td class="num"><b>${r.epoxy}</b> 조</td></tr>
+     <tr><td>떠발이 몰탈</td><td>욕실 ${r.baths}칸 × ${MORTAR_PER_BATH}포</td><td class="num"><b>${r.ttebari}</b> 포</td></tr>
      <tr><td>레미탈</td><td>${fmt(r.vol, 3)}㎥</td><td class="num"><b>${r.mortar40}</b> 포(40kg) / <b>${r.mortar25}</b> 포(25kg)</td></tr>` + extraRows;
 
   document.getElementById('mortarResult').innerHTML = r.vol
@@ -435,8 +447,10 @@ function orderText(r) {
 
   out.push('', '■ 부자재');
   if (r.press) out.push(`압착 ${r.press}포`);
+  if (r.dry) out.push(`드라이픽스 ${r.dry}포`);
   if (r.bond) out.push(`본드 ${r.bond}말`);
   if (r.epoxy) out.push(`에폭시 ${r.epoxy}조`);
+  if (r.ttebari) out.push(`떠발이 몰탈 ${r.ttebari}포`);
   if (r.vol) out.push(`레미탈 ${r.mortar40}포(40kg) / ${r.mortar25}포(25kg)`);
   EXTRAS.forEach(([n, u]) => { if (num(state.extras[n])) out.push(`${n} ${num(state.extras[n])}${u}`); });
   if (state.memo) out.push('', state.memo);
