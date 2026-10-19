@@ -204,7 +204,8 @@
     <ul class="rule">
       <li>300×300 · 300×600 · 600×600 · 600×1200: 1박스 = 1.44㎡ → 박스 = ㎡ × 할증 ÷ 1.44 (올림)</li>
       <li>800×800: 3장 = 1박스(1.92㎡). 바닥 · 벽면은 ㎡ × 할증 ÷ 1.92 (올림)</li>
-      <li>주방 800×800: 길이로 계산 → 장수 = 길이 ÷ 800 (올림) × 줄 수, 박스 = 장수 ÷ 3 (올림) + 1박스. 상부장이 있으면 1줄, 없으면 높이 ÷ 800 (올림)줄</li>
+      <li>주방 300×600 · 600×600: 가로 × 세로 ㎡ × 할증 ÷ 1.44 (올림)</li>
+      <li>주방 800×800: 가로 × 800, 길이로 계산 → 장수 = 가로 ÷ 800 (올림), 박스 = 장수 ÷ 3 (올림) + 1박스. 상부장이 없으면 세로 ÷ 800 (올림)줄만큼 곱함</li>
       <li>욕실 벽체: (가로 + 세로) × 2 × 높이 · 바닥: 가로 × 세로</li>
       <li>평 환산: 2박스 = 1평 (업계 관행)</li>
       <li>압착: 1평에 1포 → 압착 박스 ÷ 2 (올림)</li>
@@ -285,7 +286,7 @@ function calcSpace(sp, loss) {
     const lines = sp.upper ? 1 : (h ? Math.ceil(h / 800) : 0);
     const pcs = Math.ceil(w / 800) * lines;
     const boxes = pcs ? Math.ceil(pcs / 3) + 1 : 0;
-    const note = pcs ? `${lines}줄 · ${pcs}장 → ${Math.ceil(pcs / 3)}박스 + 할증 1박스` : (!sp.upper && w && !h ? '상부장이 없으면 높이를 입력하세요' : '');
+    const note = pcs ? `${lines}줄 · ${pcs}장 → ${Math.ceil(pcs / 3)}박스 + 할증 1박스` : (!sp.upper && w && !h ? '상부장이 없으면 세로를 입력하세요' : '');
     return [{ label: sp.name, size: sp.size, code: sp.code, area: pcs * 0.64, boxes, adh: sp.adh, note }];
   }
   const area = sp.kind === 'floor' ? w * d / 1e6 : w * h / 1e6;
@@ -329,9 +330,13 @@ function spaceHtml(sp) {
         <label class="f wide">품번<input type="text" data-id="${id}" data-k="floorCode" value="${esc(sp.floorCode)}"></label>
       </div>`;
   } else {
+    // 주방 800각 + 상부장이면 1줄 고정이라 세로를 800으로 잠근다
+    const kitchenFixed = sp.kind === 'kitchen' && sp.size === BIG && sp.upper;
     const dims = sp.kind === 'floor'
       ? field(id, 'w', '가로', sp.w) + field(id, 'd', '세로', sp.d)
-      : field(id, 'w', '길이', sp.w) + field(id, 'h', '높이', sp.h);
+      : sp.kind === 'kitchen'
+        ? field(id, 'w', '가로', sp.w) + (kitchenFixed ? field(id, 'h', '세로', 800, 'disabled') : field(id, 'h', '세로', sp.h))
+        : field(id, 'w', '길이', sp.w) + field(id, 'h', '높이', sp.h);
     const upper = sp.kind === 'kitchen' && sp.size === BIG
       ? `<label class="check"><input type="checkbox" data-id="${id}" data-k="upper"${sp.upper ? ' checked' : ''}>상부장 있음 (1줄)</label>` : '';
     body = `<div class="row">${dims}</div>
