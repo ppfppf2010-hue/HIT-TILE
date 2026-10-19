@@ -211,6 +211,7 @@
       <li>압착: 1평에 1포 → 압착 박스 ÷ 2 (올림)</li>
       <li>본드: 2평에 1말 → 본드 박스 ÷ 4 (올림)</li>
       <li>에폭시: 본드와 동일, 2평에 1조 → 에폭시 박스 ÷ 4 (올림)</li>
+      <li>주방 600×600 · 800×800은 에폭시 시공 (규격을 고르면 자동 선택)</li>
       <li>레미탈: 40kg 1포 = 0.025㎥, 25kg 1포 = 0.015625㎥ (올림)</li>
     </ul>
   </div>
@@ -227,6 +228,9 @@ const SIZES = ['300×300', '300×600', '600×600', '600×1200', '800×800'];
 const BIG = '800×800';
 const BOX_AREA = { [BIG]: 1.92 }; // 나머지는 1.44
 const KINDS = { floor: '바닥', bath: '욕실', wall: '벽면', kitchen: '주방' };
+// 주방에 600각 · 800각을 쓰면 에폭시로 시공
+const KITCHEN_EPOXY = ['600×600', BIG];
+const kitchenAdh = size => KITCHEN_EPOXY.includes(size) ? '에폭시' : '본드';
 const ADH = ['압착', '본드', '에폭시', '없음'];
 const EXTRAS = [
   ['백시멘', '포'], ['메지', '포'], ['유가', '개'], ['코너비트', '개'], ['벽돌', '개'],
@@ -458,6 +462,7 @@ document.getElementById('spaces').addEventListener('input', e => {
   const sp = state.spaces.find(s => s.id === id);
   if (!sp || !k) return;
   sp[k] = t.type === 'checkbox' ? t.checked : t.value;
+  if (sp.kind === 'kitchen' && k === 'size') sp.adh = kitchenAdh(sp.size);
   if (t.dataset.rerender || k === 'upper') renderSpaces(); else update();
 });
 document.getElementById('spaces').addEventListener('click', e => {
