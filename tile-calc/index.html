@@ -266,6 +266,77 @@ try { state = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch (e) { state
 if (!state || !Array.isArray(state.spaces)) state = defaultState();
 uid = state.spaces.reduce((m, s) => Math.max(m, s.id), 0);
 
+/* ---------- 상담 체크리스트에서 넘어온 경우 (?prefill=) ---------- */
+// 품목 규격/이름에서 타일 규격을 찾는다: "600*600", "300x600", "1200×600", "800각" 등
+function parseSize(...texts) {
+  for (const t of texts) {
+    const str = String(t || '');
+    const m = str.match(/(\d{3,4})\s*[x×X*]\s*(\d{3,4})/);
+    if (m) {
+      const [a, b] = [+m[1], +m[2]].sort((x, y) => x - y);
+      const hit = SIZES.find(sz => sz === `${a}×${b}`);
+      if (hit) return hit;
+    }
+    const g = str.match(/(300|600|800)\s*각/);
+    if (g) return `${g[1]}×${g[1]}`;
+  }
+  return '';
+}
+
+// 체크리스트 공간(key) → 계산기 공간 카드
+function spacesFromConsult(rows) {
+  const byKey = {};
+  rows.forEach(r => { byKey[r.key] = r; });
+  const sizeOf = r => r ? parseSize(r.spec, r.name, r.memo) : '';
+  const codeOf = r => r ? r.name : '';
+  const out = [];
+  const used = new Set();
+  const push = (kind, name, extra) => { const sp = newSpace(kind); sp.name = name; Object.assign(sp, extra); out.push(sp); return sp; };
+  const withSize = (extra, size) => size ? Object.assign(extra, { size }) : extra;
+
+  rows.forEach(r => {
+    if (used.has(r.key)) return;
+    used.add(r.key);
+    const size = sizeOf(r);
+    if (r.key === 'kitchen') {
+      const sp = push('kitchen', r.label, withSize({ code: codeOf(r) }, size));
+      sp.adh = kitchenAdh(sp.size);
+    } else if (r.key === 'artwall') {
+      push('wall', r.label, withSize({ code: codeOf(r) }, size));
+    } else if (/^(common|master)(Wall|Floor)$/.test(r.key)) {
+      const zone = r.key.replace(/(Wall|Floor)$/, '');
+      const wall = byKey[zone + 'Wall'], floor = byKey[zone + 'Floor'];
+      used.add(zone + 'Wall'); used.add(zone + 'Floor');
+      const extra = { wallCode: codeOf(wall), floorCode: codeOf(floor) };
+      if (sizeOf(wall)) extra.wallSize = sizeOf(wall);
+      if (sizeOf(floor)) extra.floorSize = sizeOf(floor);
+      push('bath', zone === 'common' ? '공동욕실' : '안방욕실', extra);
+    } else {
+      // 현관 · 베란다 · 바닥 등은 바닥(가로 × 세로)
+      push('floor', r.label, withSize({ code: codeOf(r) }, size));
+    }
+  });
+  return out;
+}
+
+(function importPrefill() {
+  const raw = new URLSearchParams(location.search).get('prefill');
+  if (!raw) return;
+  let data;
+  try { data = JSON.parse(raw); } catch (e) { return; }
+  // 새로고침해도 다시 덮어쓰지 않도록 주소에서 지운다
+  history.replaceState(null, '', location.pathname);
+  const hasWork = state.spaces.some(sp => sp.w || sp.d);
+  if (hasWork && !confirm('상담 내용으로 새로 채울까요?\n지금 입력된 사이즈는 지워집니다.')) return;
+  const next = defaultState();
+  next.site = data.site || '';
+  if (data.date) next.memo = '배송일정: ' + data.date;
+  uid = 0;
+  next.spaces = spacesFromConsult(Array.isArray(data.rows) ? data.rows : []);
+  if (!next.spaces.length) next.spaces = defaultState().spaces;
+  state = next;
+})();
+
 function save() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
 }
@@ -311,8 +382,8 @@ function calcAll() {
   const bondBoxes = lines.filter(l => l.adh === '본드').reduce((a, l) => a + l.boxes, 0);
   const epoxyBoxes = lines.filter(l => l.adh === '에폭시').reduce((a, l) => a + l.boxes, 0);
   const dryBoxes = lines.filter(l => l.adh === '드라이픽스').reduce((a, l) => a + l.boxes, 0);
-  // 예전에 저장된 욕실에는 ttebari 값이 없으므로 기본 포함으로 본다
-  const baths = state.spaces.filter(s => s.kind === 'bath' && s.ttebari !== false).length;
+  // 사이즈를 넣은 욕실만 센다. 예전에 저장된 욕실에는 ttebari 값이 없으므로 기본 포함으로 본다
+  const baths = state.spaces.filter(s => s.kind === 'bath' && s.ttebari !== false && (num(s.w) || num(s.d))).length;
   const m = state.mortar;
   const vol = num(m.w) * num(m.l) * num(m.t) / 1e9;
   return {

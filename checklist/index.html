@@ -438,6 +438,7 @@
     <a href="#" class="back-link" onclick="showView('list'); return false;">← 목록으로</a>
     <div class="success-banner">✓ 상담완료 · 발주대기로 저장되었습니다 (이대한님 이메일로 발송됨)</div>
     <div id="detailContainer"></div>
+    <button class="secondary" id="tileCalcBtn" onclick="goToTileCalcFromCurrent()">📐 타일 수량 계산 (사이즈 입력)</button>
     <button class="secondary" id="saleLinkBtn" onclick="goToSaleRegistrationFromCurrent()">🧾 판매등록으로 연결</button>
     <button class="secondary" id="imageBtn" onclick="saveAsImage()">🖼 이미지로 저장</button>
     <button class="primary" style="margin-top:10px;" onclick="startNewEntry()">+ 새 상담 입력하기</button>
@@ -572,6 +573,7 @@ function renderConsultationList(records){
           <span class="company">${escapeHtml(company || '(업체명 없음)')}</span>
           <div class="badge-col">
             <span class="badge">${escapeHtml(status)}</span>
+            <button type="button" class="sale-btn" onclick="event.stopPropagation(); goToTileCalcFromList(${idx})">수량계산</button>
             <button type="button" class="sale-btn" onclick="event.stopPropagation(); goToSaleRegistrationFromList(${idx})">판매등록</button>
             <button type="button" class="cancel-btn" onclick="event.stopPropagation(); cancelConsultation(${idx})">상담 취소</button>
           </div>
@@ -644,6 +646,34 @@ function goToSaleRegistrationFromList(idx){
 
 function goToSaleRegistrationFromCurrent(){
   goToSaleRegistration(currentRecord);
+}
+
+// ---- 상담 1건의 타일 정보를 타일량 계산기(../tile-calc/)로 넘긴다. 계산기에서 사이즈만 적으면 된다 ----
+// 규격은 품목등록마스터의 규격(spec)으로 찾고, 계산기 쪽에서 규격 문자열을 해석한다.
+async function goToTileCalc(rec){
+  if(!rec) return;
+  await loadItemMaster();
+  const tile = safeParse(pickField(rec, ['tile_json']) || '{}');
+  const rows = Object.keys(tile).map(key => {
+    const d = tile[key] || {};
+    const name = (d.name || '').trim();
+    const item = name ? itemMasterCache.find(it => it.name === name) : null;
+    return { key, label: (d.label || key).replace('\n', ' '), name, spec: item && item.spec ? item.spec : '', memo: d.memo || '' };
+  }).filter(r => r.name);
+  const payload = {
+    site: [pickField(rec, ['업체','company']), pickField(rec, ['현장주소','address'])].filter(Boolean).join(' '),
+    date: formatDateOnly(pickField(rec, ['배송일정','deliveryDate','타일시공일','tileDate'])),
+    rows,
+  };
+  window.location.href = '../tile-calc/index.html?prefill=' + encodeURIComponent(JSON.stringify(payload));
+}
+
+function goToTileCalcFromList(idx){
+  goToTileCalc((window._consultationRecords || [])[idx]);
+}
+
+function goToTileCalcFromCurrent(){
+  goToTileCalc(currentRecord);
 }
 
 function showConsultationDetail(idx){
