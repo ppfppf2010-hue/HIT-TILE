@@ -71,3 +71,17 @@ clasp push
 누르면 지금의 입력 체크리스트로 넘어가도록 되어 있습니다. 목록 화면은
 `WEBAPP_URL?action=list`를 호출해서 위 `ConsultationList.js`가 돌려주는 JSON을 그립니다.
 백엔드 배포 전까지는 "아직 불러올 수 없다"는 안내만 뜹니다.
+
+## 5. (업데이트) 타일량 계산기 결과를 상담에 저장 — `CalcSave.js`
+
+타일량 계산기(`tile-calc/`)의 **상담에 저장** 버튼이 `WEBAPP_URL`로
+`{ action: 'save_calc', id, calc }`를 POST합니다. 백엔드에 반영하려면:
+
+1. Apps Script 편집기에 새 파일 `CalcSave`를 만들고 `checklist-gas/CalcSave.js` 내용을 그대로 붙여넣기
+2. `Code.gs`의 `doPost` 맨 앞부분을 이 저장소 `checklist-gas/Code.js`와 같게 바꾸기
+   (`data.action === 'save_calc'`이면 `saveCalc_`로 넘기는 4줄이 추가됨)
+3. 배포 → 배포 관리 → 연필 아이콘 → 새 버전 → 배포 (exec 주소는 그대로 유지)
+
+저장하면 상담 시트 맨 뒤에 `calc_json` · `수량요약` · `수량저장일` 컬럼이 자동으로 생기고,
+같은 상담의 "히트타일 발주" 캘린더 일정 설명 끝에 `[타일 수량]` 블록이 붙습니다
+(다시 저장하면 그 블록만 바뀜).

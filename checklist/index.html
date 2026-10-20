@@ -438,6 +438,7 @@
     <a href="#" class="back-link" onclick="showView('list'); return false;">← 목록으로</a>
     <div class="success-banner">✓ 상담완료 · 발주대기로 저장되었습니다 (이대한님 이메일로 발송됨)</div>
     <div id="detailContainer"></div>
+    <button class="secondary" id="tileCalcBtn" onclick="goToTileCalcFromCurrent()">📐 타일 수량 계산 (사이즈 입력)</button>
     <button class="secondary" id="saleLinkBtn" onclick="goToSaleRegistrationFromCurrent()">🧾 판매등록으로 연결</button>
     <button class="secondary" id="imageBtn" onclick="saveAsImage()">🖼 이미지로 저장</button>
     <button class="primary" style="margin-top:10px;" onclick="startNewEntry()">+ 새 상담 입력하기</button>
@@ -572,6 +573,7 @@ function renderConsultationList(records){
           <span class="company">${escapeHtml(company || '(업체명 없음)')}</span>
           <div class="badge-col">
             <span class="badge">${escapeHtml(status)}</span>
+            <button type="button" class="sale-btn" onclick="event.stopPropagation(); goToTileCalcFromList(${idx})">수량계산</button>
             <button type="button" class="sale-btn" onclick="event.stopPropagation(); goToSaleRegistrationFromList(${idx})">판매등록</button>
             <button type="button" class="cancel-btn" onclick="event.stopPropagation(); cancelConsultation(${idx})">상담 취소</button>
           </div>
@@ -579,6 +581,7 @@ function renderConsultationList(records){
         <div class="row2">
           ${address ? `<span>${escapeHtml(address)}</span>` : ''}
           ${deliveryDate ? `<span>배송 ${escapeHtml(deliveryDate)}</span>` : ''}
+          ${pickField(rec, ['수량요약']) ? '<span>✓ 수량 저장됨</span>' : ''}
         </div>
       </div>
     `;
@@ -611,11 +614,17 @@ async function cancelConsultation(idx){
 function buildSaleItemsFromRecord(rec){
   const tile = safeParse(pickField(rec, ['tile_json']) || '{}');
   const fixture = safeParse(pickField(rec, ['fixture_json']) || '{}');
+  const calc = safeParse(pickField(rec, ['calc_json']) || '{}');
   const items = [];
-  Object.keys(tile).forEach(key => {
-    const name = ((tile[key] || {}).name || '').trim();
-    if(name) items.push({ name, qty: 1 });
-  });
+  // 타일량 계산기에서 저장한 수량이 있으면 타일 · 부자재는 그 수량으로 넘긴다
+  if(Array.isArray(calc.items) && calc.items.length){
+    calc.items.forEach(it => { if(it && it.name) items.push({ name: it.name, qty: it.qty || 1 }); });
+  } else {
+    Object.keys(tile).forEach(key => {
+      const name = ((tile[key] || {}).name || '').trim();
+      if(name) items.push({ name, qty: 1 });
+    });
+  }
   Object.keys(fixture).forEach(zone => {
     const zoneData = fixture[zone] || {};
     Object.keys(zoneData).forEach(key => {
@@ -646,6 +655,37 @@ function goToSaleRegistrationFromCurrent(){
   goToSaleRegistration(currentRecord);
 }
 
+// ---- 상담 1건의 타일 정보를 타일량 계산기(../tile-calc/)로 넘긴다. 계산기에서 사이즈만 적으면 된다 ----
+// 규격은 품목등록마스터의 규격(spec)으로 찾고, 계산기 쪽에서 규격 문자열을 해석한다.
+async function goToTileCalc(rec){
+  if(!rec) return;
+  await loadItemMaster();
+  const tile = safeParse(pickField(rec, ['tile_json']) || '{}');
+  const rows = Object.keys(tile).map(key => {
+    const d = tile[key] || {};
+    const name = (d.name || '').trim();
+    const item = name ? itemMasterCache.find(it => it.name === name) : null;
+    return { key, label: (d.label || key).replace('\n', ' '), name, spec: item && item.spec ? item.spec : '', memo: d.memo || '' };
+  }).filter(r => r.name);
+  const calc = safeParse(pickField(rec, ['calc_json']) || '{}');
+  const payload = {
+    id: pickField(rec, ['id']),
+    calc: calc.state || null,
+    site: [pickField(rec, ['업체','company']), pickField(rec, ['현장주소','address'])].filter(Boolean).join(' '),
+    date: formatDateOnly(pickField(rec, ['배송일정','deliveryDate','타일시공일','tileDate'])),
+    rows,
+  };
+  window.location.href = '../tile-calc/index.html?prefill=' + encodeURIComponent(JSON.stringify(payload));
+}
+
+function goToTileCalcFromList(idx){
+  goToTileCalc((window._consultationRecords || [])[idx]);
+}
+
+function goToTileCalcFromCurrent(){
+  goToTileCalc(currentRecord);
+}
+
 function showConsultationDetail(idx){
   const rec = (window._consultationRecords || [])[idx];
   if(!rec) return;
@@ -659,6 +699,9 @@ function showConsultationDetail(idx){
     'tile_json': pickField(rec, ['tile_json']) || '{}',
     'fixture_json': pickField(rec, ['fixture_json']) || '{}',
     '특이사항': pickField(rec, ['특이사항','note']),
+    'id': pickField(rec, ['id']),
+    'calc_json': pickField(rec, ['calc_json']) || '',
+    '수량요약': pickField(rec, ['수량요약']),
   };
   renderDetail(mapped);
 }
@@ -1034,6 +1077,13 @@ function renderDetail(rec){
     <div class="card">
       <h3>특이사항</h3>
       <div>${escapeHtml(rec['특이사항']) || '없음'}</div>
+    </div>
+
+    <div class="card">
+      <h3>타일 수량</h3>
+      ${rec['수량요약']
+        ? `<div style="white-space:pre-wrap; line-height:1.6;">${escapeHtml(rec['수량요약'])}</div>`
+        : '<div>아직 계산 전이에요. 아래 "타일 수량 계산" 버튼으로 사이즈를 입력하세요.</div>'}
     </div>
   `;
 

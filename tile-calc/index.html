@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>히트타일 타일량 계산기</title>
+<style>
+  :root{
+    --bg:#f5f6f8;
+    --ink:#1a1a1a;
+    --muted:#6b7280;
+    --line:rgba(17,17,17,0.09);
+    --brass:#2563eb;
+    --brass-deep:#1d4ed8;
+    --brass-soft:#eef2ff;
+    --warn:#b1503f;
+    --card:#ffffff;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Malgun Gothic',sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    padding:0 0 60px;
+  }
+  header{
+    padding:32px 6vw 20px;
+    border-bottom:1px solid var(--line);
+  }
+  header h1{ margin:0 0 6px; font-size:22px; }
+  header p{ margin:0; color:var(--muted); font-size:13px; line-height:1.5; }
+
+  main{ max-width:720px; margin:0 auto; padding:24px 16px 0; }
+
+  h2{ font-size:15px; margin:28px 0 10px; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  h2 small{ font-weight:400; color:var(--muted); font-size:12px; }
+
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:16px;
+    margin-bottom:12px;
+  }
+  .row{ display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; }
+  .row + .row{ margin-top:10px; }
+  label.f{ display:flex; flex-direction:column; gap:4px; font-size:11.5px; color:var(--muted); flex:1 1 90px; min-width:0; }
+  label.f.wide{ flex:2 1 160px; }
+  input, select, textarea{
+    font-family:inherit;
+    font-size:15px;
+    padding:9px 10px;
+    border:1px solid var(--line);
+    border-radius:9px;
+    background:#fff;
+    color:var(--ink);
+    width:100%;
+    min-width:0;
+  }
+  input:focus, select:focus, textarea:focus{ outline:2px solid var(--brass-soft); border-color:var(--brass); }
+  input[type=number]{ font-variant-numeric:tabular-nums; }
+  textarea{ resize:vertical; min-height:60px; }
+  .check{ display:flex; align-items:center; gap:6px; font-size:13px; color:var(--ink); padding:9px 0; }
+  .check input{ width:auto; }
+
+  .space-head{ display:flex; gap:8px; align-items:center; margin-bottom:10px; }
+  .space-head input{ font-weight:600; }
+  .space-head select{ flex:0 0 140px; }
+  .del{
+    flex:0 0 auto;
+    border:none; background:none; color:var(--muted);
+    font-size:20px; cursor:pointer; padding:4px 6px; line-height:1;
+  }
+  .del:hover{ color:var(--warn); }
+
+  .sub-label{ font-size:12px; font-weight:600; color:var(--brass-deep); margin:12px 0 6px; }
+
+  .result{
+    margin-top:12px;
+    background:var(--brass-soft);
+    border-radius:10px;
+    padding:10px 12px;
+    font-size:13px;
+    line-height:1.6;
+    font-variant-numeric:tabular-nums;
+  }
+  .result b{ color:var(--brass-deep); font-size:15px; }
+  .result .note{ color:var(--muted); font-size:12px; }
+
+  .btn{
+    font-family:inherit; font-size:14px; font-weight:600;
+    padding:10px 16px; border-radius:999px; cursor:pointer;
+    border:1px solid var(--line); background:var(--card); color:var(--ink);
+  }
+  .btn:hover{ border-color:var(--brass); color:var(--brass-deep); }
+  .btn.primary{ background:var(--brass); border-color:var(--brass); color:#fff; }
+  .btn.primary:hover{ background:var(--brass-deep); color:#fff; }
+  .btns{ display:flex; flex-wrap:wrap; gap:8px; }
+
+  table{ width:100%; border-collapse:collapse; font-size:13.5px; font-variant-numeric:tabular-nums; }
+  th, td{ padding:7px 6px; border-bottom:1px solid var(--line); text-align:left; }
+  th{ font-size:12px; color:var(--muted); font-weight:500; }
+  td.num, th.num{ text-align:right; }
+  td.num b{ color:var(--brass-deep); }
+
+  .extras{ display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; }
+  .extras label.f{ flex:none; }
+
+  .rule{ font-size:12.5px; color:var(--muted); line-height:1.7; margin:0; padding-left:18px; }
+
+  pre#orderText{
+    white-space:pre-wrap;
+    font-family:inherit;
+    font-size:13.5px;
+    line-height:1.6;
+    background:#fafafa;
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:12px;
+    margin:0 0 10px;
+  }
+  .toast{
+    position:fixed; left:50%; bottom:24px; transform:translateX(-50%);
+    background:var(--ink); color:#fff; font-size:13px;
+    padding:9px 16px; border-radius:999px; opacity:0; transition:opacity .2s; pointer-events:none;
+  }
+  .toast.show{ opacity:1; }
+
+  @media print{
+    header p, .no-print, h2 .btns{ display:none !important; }
+    body{ background:#fff; }
+    .card{ border:none; padding:0; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>타일량 계산기</h1>
+  <p>치수(mm)를 넣으면 타일 박스 · 압착 · 본드 · 레미탈 수량과 발주서가 자동으로 나와요.<br>
+  입력 내용은 이 기기에만 저장돼요.</p>
+</header>
+
+<main>
+
+  <div class="card">
+    <div class="row">
+      <label class="f wide">현장명<input id="site" type="text" placeholder="예) ○○아파트 ○동"></label>
+      <label class="f">발주일<input id="date" type="date"></label>
+      <label class="f">할증 (800각 제외)<input id="loss" type="number" step="0.05" min="1" value="1.2"></label>
+    </div>
+  </div>
+
+  <h2>공간별 타일 <small>단위 mm</small></h2>
+  <div id="spaces"></div>
+  <div class="btns no-print">
+    <button class="btn" type="button" data-add="floor">+ 바닥</button>
+    <button class="btn" type="button" data-add="bath">+ 욕실</button>
+    <button class="btn" type="button" data-add="wall">+ 벽면</button>
+    <button class="btn" type="button" data-add="kitchen">+ 주방</button>
+  </div>
+
+  <h2>레미탈 <small>가로 × 세로 × 두께</small></h2>
+  <div class="card">
+    <div class="row">
+      <label class="f">가로<input id="mW" type="number" inputmode="numeric"></label>
+      <label class="f">세로<input id="mL" type="number" inputmode="numeric"></label>
+      <label class="f">두께<input id="mT" type="number" inputmode="numeric" placeholder="50"></label>
+    </div>
+    <div class="result" id="mortarResult"></div>
+  </div>
+
+  <h2>기타 부자재 <small>직접 입력</small></h2>
+  <div class="card">
+    <div class="extras" id="extras"></div>
+  </div>
+
+  <h2>합계</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>공간</th><th>규격</th><th>품번</th><th class="num">㎡</th><th class="num">박스</th></tr></thead>
+      <tbody id="sumBody"></tbody>
+    </table>
+    <table style="margin-top:14px;">
+      <thead><tr><th>부자재</th><th>기준</th><th class="num">수량</th></tr></thead>
+      <tbody id="matBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card no-print" id="consultBar" style="display:none;">
+    <div class="row" style="align-items:center; justify-content:space-between;">
+      <div style="font-size:13px; line-height:1.5;">
+        <b>상담 연결됨</b><br><span id="consultStatus" style="color:var(--muted);">저장하면 상담 목록 · 판매등록 · 발주 캘린더에 수량이 들어가요</span>
+      </div>
+      <div class="btns">
+        <a class="btn" href="../checklist/index.html" style="text-decoration:none;">상담 목록</a>
+        <button class="btn primary" type="button" id="saveConsultBtn">상담에 저장</button>
+      </div>
+    </div>
+  </div>
+
+  <h2>발주서
+    <span class="btns no-print">
+      <button class="btn primary" type="button" id="copyBtn">복사</button>
+      <button class="btn" type="button" onclick="window.print()">인쇄</button>
+    </span>
+  </h2>
+  <div class="card">
+    <label class="f no-print" style="margin-bottom:10px;">메모 (배송일 · 요청사항)<textarea id="memo"></textarea></label>
+    <pre id="orderText"></pre>
+  </div>
+
+  <h2>계산 기준</h2>
+  <div class="card">
+    <ul class="rule">
+      <li>300×300 · 300×600 · 600×600 · 600×1200: 1박스 = 1.44㎡ → 박스 = ㎡ × 할증 ÷ 1.44 (올림)</li>
+      <li>800×800: 3장 = 1박스(1.92㎡). 1.2배 할증 없이 +1박스 → 바닥 · 벽면은 ㎡ ÷ 1.92 (올림) + 1박스</li>
+      <li>주방 300×600 · 600×600: 가로 × 세로 ㎡ × 할증 ÷ 1.44 (올림)</li>
+      <li>주방 800×800: 가로 × 800, 길이로 계산 → 장수 = 가로 ÷ 800 (올림), 박스 = 장수 ÷ 3 (올림) + 1박스. 상부장이 없으면 세로 ÷ 800 (올림)줄만큼 곱함</li>
+      <li>욕실 벽체: (가로 + 세로) × 2 × 높이 · 바닥: 가로 × 세로</li>
+      <li>평 환산: 2박스 = 1평 (업계 관행)</li>
+      <li>압착: 1평에 1포 → 압착 박스 ÷ 2 (올림)</li>
+      <li>본드: 2평에 1말 → 본드 박스 ÷ 4 (올림)</li>
+      <li>에폭시: 본드와 동일, 2평에 1조 → 에폭시 박스 ÷ 4 (올림)</li>
+      <li>주방 600×600 · 600×1200 · 800×800은 에폭시 시공 (규격을 고르면 자동 선택)</li>
+      <li>드라이픽스: 압착과 동일, 1평에 1포 → 드라이픽스 박스 ÷ 2 (올림)</li>
+      <li>떠발이 몰탈: 욕실 1칸당 15포 (욕실 카드에서 끌 수 있음)</li>
+      <li>백시멘 · 메지: 따로 지정 (직접 입력)</li>
+      <li>레미탈: 40kg 1포 = 0.025㎥, 25kg 1포 = 0.015625㎥ (올림)</li>
+    </ul>
+  </div>
+
+  <div class="btns no-print" style="margin-top:16px;">
+    <button class="btn" type="button" id="resetBtn">전체 초기화</button>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SIZES = ['300×300', '300×600', '600×600', '600×1200', '800×800'];
+const BIG = '800×800';
+const BOX_AREA = { [BIG]: 1.92 }; // 800각 3장 = 1박스, 나머지는 1.44
+const KINDS = { floor: '바닥', bath: '욕실', wall: '벽면', kitchen: '주방' };
+// 주방에 600각 · 600×1200 · 800각을 쓰면 에폭시로 시공
+const KITCHEN_EPOXY = ['600×600', '600×1200', BIG];
+const kitchenAdh = size => KITCHEN_EPOXY.includes(size) ? '에폭시' : '본드';
+const ADH = ['압착', '드라이픽스', '본드', '에폭시', '없음'];
+const MORTAR_PER_BATH = 15; // 떠발이 몰탈: 욕실 1칸당 15포
+const EXTRAS = [
+  ['백시멘', '포'], ['메지', '포'], ['유가', '개'], ['코너비트', '개'], ['벽돌', '개'],
+  ['욕조', '개'], ['젠다이', '개'], ['모래', '포'], ['전시멘', '포']
+];
+const STORAGE_KEY = 'hittile-tile-calc-v1';
+// 상담체크리스트와 같은 Apps Script 웹앱 (checklist/index.html의 WEBAPP_URL)
+const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyGTRMKSfiTQvhAeFDH0BUtFYjhaLal8ba_S9rFGDi2JhiRn49Dp4OR7tQ3GGkmeHze/exec';
+
+let uid = 0;
+function newSpace(kind) {
+  const base = { id: ++uid, kind, name: KINDS[kind], w: '', d: '', h: '', size: '600×600', code: '', adh: kind === 'floor' ? '압착' : '본드' };
+  if (kind === 'bath') Object.assign(base, { name: '욕실', h: 2300, wallSize: '300×600', wallCode: '', wallAdh: '본드', floorSize: '300×300', floorCode: '', floorAdh: '압착', ttebari: true });
+  if (kind === 'kitchen') Object.assign(base, { size: '300×600', upper: true });
+  return base;
+}
+
+function defaultState() {
+  const s = { site: '', date: new Date().toISOString().slice(0, 10), loss: 1.2, memo: '', mortar: { w: '', l: '', t: '' }, extras: {}, spaces: [] };
+  const add = (kind, name) => { const sp = newSpace(kind); sp.name = name; s.spaces.push(sp); };
+  add('floor', '현관');
+  add('kitchen', '주방');
+  add('bath', '거실욕실');
+  add('bath', '안방욕실');
+  add('floor', '베란다');
+  return s;
+}
+
+let state;
+try { state = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch (e) { state = null; }
+if (!state || !Array.isArray(state.spaces)) state = defaultState();
+uid = state.spaces.reduce((m, s) => Math.max(m, s.id), 0);
+
+/* ---------- 상담 체크리스트에서 넘어온 경우 (?prefill=) ---------- */
+// 품목 규격/이름에서 타일 규격을 찾는다: "600*600", "300x600", "1200×600", "800각" 등
+function parseSize(...texts) {
+  for (const t of texts) {
+    const str = String(t || '');
+    const m = str.match(/(\d{3,4})\s*[x×X*]\s*(\d{3,4})/);
+    if (m) {
+      const [a, b] = [+m[1], +m[2]].sort((x, y) => x - y);
+      const hit = SIZES.find(sz => sz === `${a}×${b}`);
+      if (hit) return hit;
+    }
+    const g = str.match(/(300|600|800)\s*각/);
+    if (g) return `${g[1]}×${g[1]}`;
+  }
+  return '';
+}
+
+// 체크리스트 공간(key) → 계산기 공간 카드
+function spacesFromConsult(rows) {
+  const byKey = {};
+  rows.forEach(r => { byKey[r.key] = r; });
+  const sizeOf = r => r ? parseSize(r.spec, r.name, r.memo) : '';
+  const codeOf = r => r ? r.name : '';
+  const out = [];
+  const used = new Set();
+  const push = (kind, name, extra) => { const sp = newSpace(kind); sp.name = name; Object.assign(sp, extra); out.push(sp); return sp; };
+  const withSize = (extra, size) => size ? Object.assign(extra, { size }) : extra;
+
+  rows.forEach(r => {
+    if (used.has(r.key)) return;
+    used.add(r.key);
+    const size = sizeOf(r);
+    if (r.key === 'kitchen') {
+      const sp = push('kitchen', r.label, withSize({ code: codeOf(r) }, size));
+      sp.adh = kitchenAdh(sp.size);
+    } else if (r.key === 'artwall') {
+      push('wall', r.label, withSize({ code: codeOf(r) }, size));
+    } else if (/^(common|master)(Wall|Floor)$/.test(r.key)) {
+      const zone = r.key.replace(/(Wall|Floor)$/, '');
+      const wall = byKey[zone + 'Wall'], floor = byKey[zone + 'Floor'];
+      used.add(zone + 'Wall'); used.add(zone + 'Floor');
+      const extra = { wallCode: codeOf(wall), floorCode: codeOf(floor) };
+      if (sizeOf(wall)) extra.wallSize = sizeOf(wall);
+      if (sizeOf(floor)) extra.floorSize = sizeOf(floor);
+      push('bath', zone === 'common' ? '공동욕실' : '안방욕실', extra);
+    } else {
+      // 현관 · 베란다 · 바닥 등은 바닥(가로 × 세로)
+      push('floor', r.label, withSize({ code: codeOf(r) }, size));
+    }
+  });
+  return out;
+}
+
+(function importPrefill() {
+  const raw = new URLSearchParams(location.search).get('prefill');
+  if (!raw) return;
+  let data;
+  try { data = JSON.parse(raw); } catch (e) { return; }
+  // 새로고침해도 다시 덮어쓰지 않도록 주소에서 지운다
+  history.replaceState(null, '', location.pathname);
+  const id = data.id || '';
+  const saved = data.calc && Array.isArray(data.calc.spaces) ? data.calc : null;
+  // 같은 상담을 이 기기에서 이어 하던 중이고 시트에 저장된 값이 없으면 그대로 이어 간다
+  if (id && state.consultId === id && !saved) return;
+  const hasWork = state.spaces.some(sp => sp.w || sp.d);
+  if (hasWork && state.consultId !== id && !confirm('상담 내용으로 새로 채울까요?\n지금 입력된 사이즈는 지워집니다.')) return;
+  if (saved) {
+    state = Object.assign(defaultState(), saved, { consultId: id });
+    uid = state.spaces.reduce((m, sp) => Math.max(m, sp.id), 0);
+    return;
+  }
+  const next = defaultState();
+  next.consultId = id;
+  next.site = data.site || '';
+  if (data.date) next.memo = '배송일정: ' + data.date;
+  uid = 0;
+  next.spaces = spacesFromConsult(Array.isArray(data.rows) ? data.rows : []);
+  if (!next.spaces.length) next.spaces = defaultState().spaces;
+  state = next;
+})();
+
+function save() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+}
+
+const num = v => { const n = parseFloat(v); return isFinite(n) && n > 0 ? n : 0; };
+// 부동소수 오차(1.5000000000000002 등) 때문에 한 박스 더 붙지 않도록 소수 6자리에서 정리 후 올림
+const ceil = x => Math.ceil(Math.round(x * 1e6) / 1e6);
+const fmt = (x, d = 2) => (Math.round(x * 10 ** d) / 10 ** d).toLocaleString('ko-KR');
+
+// 800각은 1.2배 할증 대신 +1박스
+function boxesByArea(area, size, loss) {
+  if (!area) return 0;
+  if (size === BIG) return ceil(area / BOX_AREA[BIG]) + 1;
+  return ceil(area * loss / 1.44);
+}
+
+// 공간 하나 → 발주 라인 목록 [{label, size, code, area, boxes, adh, note}]
+function calcSpace(sp, loss) {
+  const w = num(sp.w), d = num(sp.d), h = num(sp.h);
+  if (sp.kind === 'bath') {
+    const wallArea = (w + d) * 2 * h / 1e6;
+    const floorArea = w * d / 1e6;
+    return [
+      { label: sp.name + ' 벽체', size: sp.wallSize, code: sp.wallCode, area: wallArea, boxes: boxesByArea(wallArea, sp.wallSize, loss), adh: sp.wallAdh || '본드' },
+      { label: sp.name + ' 바닥', size: sp.floorSize, code: sp.floorCode, area: floorArea, boxes: boxesByArea(floorArea, sp.floorSize, loss), adh: sp.floorAdh || '압착' }
+    ];
+  }
+  if (sp.kind === 'kitchen' && sp.size === BIG) {
+    const lines = sp.upper ? 1 : (h ? Math.ceil(h / 800) : 0);
+    const pcs = Math.ceil(w / 800) * lines;
+    const boxes = pcs ? Math.ceil(pcs / 3) + 1 : 0;
+    const note = pcs ? `${lines}줄 · ${pcs}장 → ${Math.ceil(pcs / 3)}박스 + 할증 1박스` : (!sp.upper && w && !h ? '상부장이 없으면 세로를 입력하세요' : '');
+    return [{ label: sp.name, size: sp.size, code: sp.code, area: pcs * 0.64, boxes, adh: sp.adh, note }];
+  }
+  const area = sp.kind === 'floor' ? w * d / 1e6 : w * h / 1e6;
+  return [{ label: sp.name, size: sp.size, code: sp.code, area, boxes: boxesByArea(area, sp.size, loss), adh: sp.adh }];
+}
+
+function calcAll() {
+  const loss = num(state.loss) || 1;
+  const lines = state.spaces.flatMap(sp => calcSpace(sp, loss));
+  const pressBoxes = lines.filter(l => l.adh === '압착').reduce((a, l) => a + l.boxes, 0);
+  const bondBoxes = lines.filter(l => l.adh === '본드').reduce((a, l) => a + l.boxes, 0);
+  const epoxyBoxes = lines.filter(l => l.adh === '에폭시').reduce((a, l) => a + l.boxes, 0);
+  const dryBoxes = lines.filter(l => l.adh === '드라이픽스').reduce((a, l) => a + l.boxes, 0);
+  // 사이즈를 넣은 욕실만 센다. 예전에 저장된 욕실에는 ttebari 값이 없으므로 기본 포함으로 본다
+  const baths = state.spaces.filter(s => s.kind === 'bath' && s.ttebari !== false && (num(s.w) || num(s.d))).length;
+  const m = state.mortar;
+  const vol = num(m.w) * num(m.l) * num(m.t) / 1e9;
+  return {
+    lines,
+    pressBoxes, press: Math.ceil(pressBoxes / 2),
+    bondBoxes, bond: Math.ceil(bondBoxes / 4),
+    epoxyBoxes, epoxy: Math.ceil(epoxyBoxes / 4),
+    dryBoxes, dry: Math.ceil(dryBoxes / 2),
+    baths, ttebari: baths * MORTAR_PER_BATH,
+    vol, mortar40: vol ? ceil(vol / 0.025) : 0, mortar25: vol ? ceil(vol / 0.015625) : 0
+  };
+}
+
+/* ---------- 렌더링 ---------- */
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const sizeOptions = sel => SIZES.map(s => `<option${s === sel ? ' selected' : ''}>${s}</option>`).join('');
+const adhSelect = (id, key, sel) =>
+  `<label class="f">부자재<select data-id="${id}" data-k="${key}">${ADH.map(a => `<option${a === sel ? ' selected' : ''}>${a}</option>`).join('')}</select></label>`;
+const field = (id, key, label, val, extra = '') =>
+  `<label class="f">${label}<input type="number" inputmode="numeric" data-id="${id}" data-k="${key}" value="${esc(val)}" ${extra}></label>`;
+
+function spaceHtml(sp) {
+  const id = sp.id;
+  let body = '';
+  if (sp.kind === 'bath') {
+    body = `<div class="row">${field(id, 'w', '가로', sp.w)}${field(id, 'd', '세로', sp.d)}${field(id, 'h', '높이', sp.h)}</div>
+      <div class="sub-label">벽체</div>
+      <div class="row">
+        <label class="f">규격<select data-id="${id}" data-k="wallSize">${sizeOptions(sp.wallSize)}</select></label>
+        <label class="f wide">품번<input type="text" data-id="${id}" data-k="wallCode" value="${esc(sp.wallCode)}"></label>
+        ${adhSelect(id, 'wallAdh', sp.wallAdh || '본드')}
+      </div>
+      <div class="sub-label">바닥</div>
+      <div class="row">
+        <label class="f">규격<select data-id="${id}" data-k="floorSize">${sizeOptions(sp.floorSize)}</select></label>
+        <label class="f wide">품번<input type="text" data-id="${id}" data-k="floorCode" value="${esc(sp.floorCode)}"></label>
+        ${adhSelect(id, 'floorAdh', sp.floorAdh || '압착')}
+      </div>
+      <label class="check"><input type="checkbox" data-id="${id}" data-k="ttebari"${sp.ttebari !== false ? ' checked' : ''}>떠발이 몰탈 ${MORTAR_PER_BATH}포</label>`;
+  } else {
+    // 주방 800각 + 상부장이면 1줄 고정이라 세로를 800으로 잠근다
+    const kitchenFixed = sp.kind === 'kitchen' && sp.size === BIG && sp.upper;
+    const dims = sp.kind === 'floor'
+      ? field(id, 'w', '가로', sp.w) + field(id, 'd', '세로', sp.d)
+      : sp.kind === 'kitchen'
+        ? field(id, 'w', '가로', sp.w) + (kitchenFixed ? field(id, 'h', '세로', 800, 'disabled') : field(id, 'h', '세로', sp.h))
+        : field(id, 'w', '길이', sp.w) + field(id, 'h', '높이', sp.h);
+    const upper = sp.kind === 'kitchen' && sp.size === BIG
+      ? `<label class="check"><input type="checkbox" data-id="${id}" data-k="upper"${sp.upper ? ' checked' : ''}>상부장 있음 (1줄)</label>` : '';
+    body = `<div class="row">${dims}</div>
+      <div class="row">
+        <label class="f">규격<select data-id="${id}" data-k="size" data-rerender="1">${sizeOptions(sp.size)}</select></label>
+        <label class="f wide">품번<input type="text" data-id="${id}" data-k="code" value="${esc(sp.code)}"></label>
+        ${adhSelect(id, 'adh', sp.adh)}
+      </div>
+      ${upper}`;
+  }
+  return `<div class="card" data-space="${id}">
+    <div class="space-head">
+      <input type="text" data-id="${id}" data-k="name" value="${esc(sp.name)}" aria-label="공간명">
+      <button class="del no-print" type="button" data-del="${id}" aria-label="삭제">×</button>
+    </div>
+    ${body}
+    <div class="result" id="res-${id}"></div>
+  </div>`;
+}
+
+function renderSpaces() {
+  document.getElementById('spaces').innerHTML = state.spaces.map(spaceHtml).join('');
+  update();
+}
+
+function renderExtras() {
+  document.getElementById('extras').innerHTML = EXTRAS.map(([n, u]) =>
+    `<label class="f">${n} (${u})<input type="number" inputmode="numeric" min="0" data-extra="${n}" value="${esc(state.extras[n] || '')}"></label>`).join('');
+}
+
+function update() {
+  const r = calcAll();
+  const loss = num(state.loss) || 1;
+
+  state.spaces.forEach(sp => {
+    const el = document.getElementById('res-' + sp.id);
+    if (!el) return;
+    el.innerHTML = calcSpace(sp, loss).map(l =>
+      `${sp.kind === 'bath' ? esc(l.label.replace(sp.name + ' ', '')) + ' ' : ''}${fmt(l.area)}㎡ → <b>${l.boxes}박스</b>` +
+      (l.note ? `<div class="note">${esc(l.note)}</div>` : '')).join('<br>');
+  });
+
+  document.getElementById('sumBody').innerHTML = r.lines.map(l =>
+    `<tr><td>${esc(l.label)}</td><td>${esc(l.size)}</td><td>${esc(l.code)}</td><td class="num">${fmt(l.area)}</td><td class="num"><b>${l.boxes}</b></td></tr>`).join('');
+
+  const extraRows = EXTRAS.filter(([n]) => num(state.extras[n])).map(([n, u]) =>
+    `<tr><td>${n}</td><td>직접 입력</td><td class="num"><b>${num(state.extras[n])}</b> ${u}</td></tr>`).join('');
+  document.getElementById('matBody').innerHTML =
+    `<tr><td>압착</td><td>${r.pressBoxes}박스 = ${fmt(r.pressBoxes / 2, 1)}평</td><td class="num"><b>${r.press}</b> 포</td></tr>
+     <tr><td>드라이픽스</td><td>${r.dryBoxes}박스 = ${fmt(r.dryBoxes / 2, 1)}평</td><td class="num"><b>${r.dry}</b> 포</td></tr>
+     <tr><td>본드</td><td>${r.bondBoxes}박스 = ${fmt(r.bondBoxes / 2, 1)}평</td><td class="num"><b>${r.bond}</b> 말</td></tr>
+     <tr><td>에폭시</td><td>${r.epoxyBoxes}박스 = ${fmt(r.epoxyBoxes / 2, 1)}평</td><td class="num"><b>${r.epoxy}</b> 조</td></tr>
+     <tr><td>떠발이 몰탈</td><td>욕실 ${r.baths}칸 × ${MORTAR_PER_BATH}포</td><td class="num"><b>${r.ttebari}</b> 포</td></tr>
+     <tr><td>레미탈</td><td>${fmt(r.vol, 3)}㎥</td><td class="num"><b>${r.mortar40}</b> 포(40kg) / <b>${r.mortar25}</b> 포(25kg)</td></tr>` + extraRows;
+
+  document.getElementById('mortarResult').innerHTML = r.vol
+    ? `${fmt(r.vol, 3)}㎥ → 40kg <b>${r.mortar40}포</b> · 25kg <b>${r.mortar25}포</b>`
+    : '<span class="note">치수를 넣으면 계산돼요</span>';
+
+  document.getElementById('orderText').textContent = orderText(r);
+  document.getElementById('consultBar').style.display = state.consultId ? '' : 'none';
+  save();
+}
+
+// 판매등록으로 넘길 품목: 타일은 품번(없으면 공간 · 규격)별 박스 합계, 부자재는 계산 수량
+function saleItems(r) {
+  const tiles = {};
+  r.lines.filter(l => l.boxes).forEach(l => {
+    const name = l.code || `타일 ${l.size} (${l.label})`;
+    tiles[name] = (tiles[name] || 0) + l.boxes;
+  });
+  const items = Object.entries(tiles).map(([name, qty]) => ({ name, qty, unit: '박스' }));
+  [['압착', r.press, '포'], ['드라이픽스', r.dry, '포'], ['본드', r.bond, '말'], ['에폭시', r.epoxy, '조'],
+   ['떠발이 몰탈', r.ttebari, '포'], ['레미탈 40kg', r.mortar40, '포']]
+    .forEach(([name, qty, unit]) => { if (qty) items.push({ name, qty, unit }); });
+  EXTRAS.forEach(([n, u]) => { if (num(state.extras[n])) items.push({ name: n, qty: num(state.extras[n]), unit: u }); });
+  return items;
+}
+
+async function saveToConsult() {
+  const btn = document.getElementById('saveConsultBtn');
+  const status = document.getElementById('consultStatus');
+  const r = calcAll();
+  btn.disabled = true; btn.textContent = '저장 중...';
+  try {
+    const res = await fetch(WEBAPP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'save_calc', id: state.consultId, calc: { state, summary: orderText(r), items: saleItems(r) } })
+    });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || '알 수 없는 오류');
+    const t = new Date();
+    status.textContent = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')} 상담에 저장됨` + (json.calendarUpdated ? ' · 발주 캘린더 반영' : '');
+    toast('상담에 저장됐어요');
+  } catch (err) {
+    status.textContent = '저장 실패: ' + err.message;
+    toast('저장 실패');
+  } finally {
+    btn.disabled = false; btn.textContent = '상담에 저장';
+  }
+}
+
+function orderText(r) {
+  const out = ['[히트타일 타일 발주서]'];
+  if (state.site) out.push('현장: ' + state.site);
+  if (state.date) out.push('발주일: ' + state.date);
+  out.push('', '■ 타일');
+  const tiles = r.lines.filter(l => l.boxes);
+  if (!tiles.length) out.push('-');
+  tiles.forEach(l => out.push(`${l.label} ${l.size}${l.code ? ' ' + l.code : ''} — ${l.boxes}박스`));
+
+  // 같은 품번이 여러 공간에 쓰이면 품번별 합계도 붙인다
+  const byCode = {};
+  tiles.filter(l => l.code).forEach(l => {
+    const k = l.code + ' (' + l.size + ')';
+    byCode[k] = byCode[k] || { n: 0, boxes: 0 };
+    byCode[k].n++; byCode[k].boxes += l.boxes;
+  });
+  const merged = Object.entries(byCode).filter(([, v]) => v.n > 1);
+  if (merged.length) {
+    out.push('', '■ 품번별 합계');
+    merged.forEach(([k, v]) => out.push(`${k} — ${v.boxes}박스`));
+  }
+
+  out.push('', '■ 부자재');
+  if (r.press) out.push(`압착 ${r.press}포`);
+  if (r.dry) out.push(`드라이픽스 ${r.dry}포`);
+  if (r.bond) out.push(`본드 ${r.bond}말`);
+  if (r.epoxy) out.push(`에폭시 ${r.epoxy}조`);
+  if (r.ttebari) out.push(`떠발이 몰탈 ${r.ttebari}포`);
+  if (r.vol) out.push(`레미탈 ${r.mortar40}포(40kg) / ${r.mortar25}포(25kg)`);
+  EXTRAS.forEach(([n, u]) => { if (num(state.extras[n])) out.push(`${n} ${num(state.extras[n])}${u}`); });
+  if (state.memo) out.push('', state.memo);
+  return out.join('\n');
+}
+
+/* ---------- 이벤트 ---------- */
+function bindTop(id, key) {
+  const el = document.getElementById(id);
+  el.value = state[key] ?? '';
+  el.addEventListener('input', () => { state[key] = el.value; update(); });
+}
+bindTop('site', 'site');
+bindTop('date', 'date');
+bindTop('loss', 'loss');
+bindTop('memo', 'memo');
+['w', 'l', 't'].forEach(k => {
+  const el = document.getElementById('m' + k.toUpperCase());
+  el.value = state.mortar[k] ?? '';
+  el.addEventListener('input', () => { state.mortar[k] = el.value; update(); });
+});
+
+document.getElementById('spaces').addEventListener('input', e => {
+  const t = e.target, id = +t.dataset.id, k = t.dataset.k;
+  const sp = state.spaces.find(s => s.id === id);
+  if (!sp || !k) return;
+  sp[k] = t.type === 'checkbox' ? t.checked : t.value;
+  if (sp.kind === 'kitchen' && k === 'size') sp.adh = kitchenAdh(sp.size);
+  if (t.dataset.rerender || k === 'upper') renderSpaces(); else update();
+});
+document.getElementById('spaces').addEventListener('click', e => {
+  const id = +e.target.dataset.del;
+  if (!id) return;
+  const sp = state.spaces.find(s => s.id === id);
+  if (!confirm(`'${sp.name}'을(를) 삭제할까요?`)) return;
+  state.spaces = state.spaces.filter(s => s.id !== id);
+  renderSpaces();
+});
+document.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => {
+  state.spaces.push(newSpace(b.dataset.add));
+  renderSpaces();
+}));
+document.getElementById('extras').addEventListener('input', e => {
+  state.extras[e.target.dataset.extra] = e.target.value;
+  update();
+});
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1600);
+}
+document.getElementById('copyBtn').addEventListener('click', () => {
+  const text = document.getElementById('orderText').textContent;
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast('복사됐어요'); } catch (e) { toast('복사 실패 — 길게 눌러 복사하세요'); }
+    ta.remove();
+  };
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => toast('복사됐어요'), fallback);
+  else fallback();
+});
+document.getElementById('saveConsultBtn').addEventListener('click', saveToConsult);
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (!confirm('입력한 내용을 모두 지울까요?')) return;
+  try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+  location.reload();
+});
+
+renderExtras();
+renderSpaces();
+</script>
+</body>
+</html>
