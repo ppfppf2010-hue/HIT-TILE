@@ -15,12 +15,15 @@ const KO_REVIEW_SHEET = '한글명검토';
 const KO_HEADERS = ['품목코드', '현재 품목명', '규격', '한글명(수정 가능)', '바뀔 품목명', '상태'];
 const KO_BATCH = 60;
 const HANGUL_RE = /[가-힣]/;
+// 이미 끝에 "(한글)"이 붙은 이름 — 예: "타일IBIZA GREY (이비자 그레이)"
+const KO_SUFFIX_RE = /\([^)]*[가-힣][^)]*\)\s*$/;
 
 function koTargetRows_(masterData, keyword, prefix) {
   return masterData.slice(1).filter(function (r) {
     const code = String(r[0]).trim();
     const name = String(r[1]).trim();
-    if (!code || !name || HANGUL_RE.test(name)) return false;
+    // "타일IBIZA GREY"처럼 앞에 한글이 붙은 이름도 대상 — 영문 단어가 있고 한글 병기가 아직 없으면 된다
+    if (!code || !name || !/[A-Za-z]{3,}/.test(name) || KO_SUFFIX_RE.test(name)) return false;
     return (prefix && code.indexOf(prefix) === 0) || (keyword && String(r[12]).indexOf(keyword) !== -1);
   });
 }
@@ -47,9 +50,16 @@ function handleKoreanNamePreview(body) {
   const known = {};
   existing.forEach(function (r) { known[String(r[0]).trim()] = true; });
 
-  const todo = targets.filter(function (r) { return !known[String(r[0]).trim()]; });
-  const translated = {};
-  for (let i = 0; i < todo.length; i += KO_BATCH) {
+  // body.items = [{code, ko}]가 오면 그 한글명을 그대로 쓰고(사람이 정한 목록), 없으면 Claude로 만든다
+  const given = {};
+  ((body && body.items) || []).forEach(function (it) { if (it && it.code && it.ko) given[String(it.code).trim()] = String(it.ko).trim(); });
+  const useGiven = Object.keys(given).length > 0;
+  const todo = targets.filter(function (r) {
+    const code = String(r[0]).trim();
+    return !known[code] && (!useGiven || given[code]);
+  });
+  const translated = useGiven ? given : {};
+  for (let i = 0; !useGiven && i < todo.length; i += KO_BATCH) {
     Object.assign(translated, translateNamesWithClaude_(todo.slice(i, i + KO_BATCH).map(function (r) {
       return { code: String(r[0]).trim(), name: String(r[1]).trim(), spec: String(r[3] || '').trim() };
     })));
@@ -147,7 +157,7 @@ function handleKoreanNameApply(body) {
     if (!masterRow) { statusCell.setValue('실패: 품목등록마스터에 코드 없음'); results.push({ code: code, ok: false }); continue; }
     const m = masterData[masterRow - 1];
     const current = String(m[1]).trim();
-    if (HANGUL_RE.test(current)) { statusCell.setValue('완료(이미 한글 포함)'); results.push({ code: code, ok: true, skipped: true }); continue; }
+    if (KO_SUFFIX_RE.test(current)) { statusCell.setValue('완료(이미 한글 병기)'); results.push({ code: code, ok: true, skipped: true }); continue; }
 
     const newName = current + ' (' + ko + ')';
     const res = ecountSyncItem({ code: code, name: newName, spec: m[3], unit: m[6], inPrice: m[4], inVat: m[5], outPrice: m[10], outVat: m[11] });
@@ -165,4 +175,10 @@ function handleKoreanNameApply(body) {
   const remaining = sheet.getRange(2, 1, sheet.getLastRow() - 1, KO_HEADERS.length).getValues()
     .filter(function (r) { return r[0] && String(r[3]).trim() && String(r[5]).indexOf('완료') !== 0; }).length;
   return jsonOut({ ok: true, processed: processed, remaining: remaining, results: results });
+}
+
+// 이카운트에 실제로 저장된 품목 정보 확인 (적용 전후 비교용)
+function handleKoreanNameCheck(body) {
+  const codes = (body && body.codes) || [];
+  return jsonOut({ ok: true, items: codes.map(function (c) { return { code: c, ecount: ecountRelayCall('/list-items', { prodCd: c }) }; }) });
 }
