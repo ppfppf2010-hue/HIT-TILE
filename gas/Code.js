@@ -63,6 +63,8 @@
  if (action === 'korean_name_apply') return handleKoreanNameApply(body);
  if (action === 'korean_name_check') return handleKoreanNameCheck(body);
  if (action === 'korean_name_set') return handleKoreanNameSet(body);
+ if (action === 'korean_name_seed') return handleKoreanNameSeed(body);
+ if (action === 'setup_korean_name_auto') return handleSetupKoreanNameAuto();
  if (action === 'setup_item_sync') return handleSetupItemSync(body);
  if (action === 'list_triggers') return handleListTriggers();
  if (action === 'remove_trigger') return handleRemoveTrigger(body);

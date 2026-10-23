@@ -9,6 +9,9 @@
  * 3) action="korean_name_apply" : 탭의 한글명으로 이카운트(/register-item, SaveBasicProduct)와
  *    품목등록마스터 품목명을 "영문명 (한글명)"으로 바꾼다. 실행시간 제한 때문에 limit개씩 끊어서 처리하고,
  *    끝난 줄은 상태 칸에 "완료"를 남겨 다시 호출하면 남은 것부터 이어 간다.
+ * 4) 자동: runKoreanNameAuto를 1시간마다 실행(action="setup_korean_name_auto"로 트리거 등록).
+ *    새 영문 품목은 1)로 한글명을 만들고 3)으로 바로 적용한다. 한글명 칸이 비었거나 한글이 없는 줄은 건너뛰므로,
+ *    모델번호만 있는 품목은 사람이 "한글명검토" 탭에 이름을 적어 두면 다음 실행 때 적용된다.
  */
 
 const KO_REVIEW_SHEET = '한글명검토';
@@ -98,7 +101,8 @@ function translateNamesWithClaude_(items) {
     '- 시리즈·컬러명은 업계에서 부르는 대로 한글 발음으로 적으세요 (예: Calacatta → 칼라카타, Statuario → 스타투아리오, Grey → 그레이).',
     '- 표면 마감은 우리말로: Matt/Matte → 무광, Polished/Glossy → 유광, Lappato/Semi → 반광, Rustic/Structure → 요철.',
     '- 사이즈 숫자(600x600 등)와 품목코드는 넣지 마세요. 규격 칸에 따로 있습니다.',
-    '- 의미를 모르는 약어는 지어내지 말고 영문 그대로 두세요.',
+    '- 이름 앞의 "타일" 같은 이미 한글인 부분은 빼고, 영문 부분만 한글로 적으세요.',
+    '- 모델번호·약어만 있고 읽을 단어가 없거나(예: WT3674, VG R05) 뜻을 모르면 지어내지 말고 빈 문자열 ""로 두세요.',
     '- 아래 JSON 객체 하나만 출력하세요. 설명 없이 {"품목코드":"한글명", ...}',
     '',
     JSON.stringify(items)
@@ -150,7 +154,7 @@ function handleKoreanNameApply(body) {
     const code = String(review[i][0]).trim();
     const ko = String(review[i][3]).trim();
     const status = String(review[i][5]).trim();
-    if (!code || !ko || status.indexOf('완료') === 0) continue;
+    if (!code || !HANGUL_RE.test(ko) || status.indexOf('완료') === 0) continue;
     if (onlyCode && code !== onlyCode) continue;
     processed++;
 
@@ -181,7 +185,7 @@ function handleKoreanNameApply(body) {
   }
 
   const remaining = sheet.getRange(2, 1, sheet.getLastRow() - 1, KO_HEADERS.length).getValues()
-    .filter(function (r) { return r[0] && String(r[3]).trim() && String(r[5]).indexOf('완료') !== 0; }).length;
+    .filter(function (r) { return r[0] && HANGUL_RE.test(String(r[3])) && String(r[5]).indexOf('완료') !== 0; }).length;
   return jsonOut({ ok: true, processed: processed, remaining: remaining, results: results });
 }
 
@@ -207,4 +211,44 @@ function handleKoreanNameSet(body) {
     return { code: it.code, ok: !!(res && res.ok), name: it.name, error: res && res.error };
   });
   return jsonOut({ ok: true, results: results });
+}
+
+// 한글명을 사람이 정해야 하는 품목(모델번호만 있는 타일 등)을 한글명 칸을 비운 채 탭에 올려 둔다 — body.items = [{code, status}]
+// 탭에 올라간 품목은 자동 실행 때 Claude로 다시 번역하지 않는다.
+function handleKoreanNameSeed(body) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const masterData = ss.getSheetByName(MASTER_SHEET).getDataRange().getValues();
+  const sheet = koGetReviewSheet_(ss);
+  const known = {};
+  if (sheet.getLastRow() > 1) sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues().forEach(function (r) { known[String(r[0]).trim()] = true; });
+  const start = sheet.getLastRow() + 1;
+  const rows = [];
+  ((body && body.items) || []).forEach(function (it) {
+    const code = String(it.code || '').trim();
+    const m = masterData.find(function (r) { return String(r[0]).trim() === code; });
+    if (!code || known[code] || !m) return;
+    known[code] = true;
+    const n = start + rows.length;
+    rows.push([code, String(m[1]).trim(), String(m[3] || '').trim(), '', '=IF(D' + n + '="","",B' + n + '&" ("&D' + n + '&")")', it.status || '']);
+  });
+  if (rows.length) sheet.getRange(start, 1, rows.length, KO_HEADERS.length).setValues(rows);
+  return jsonOut({ ok: true, added: rows.length });
+}
+
+// ---- 자동 실행: 새 영문 품목에 한글명 만들기 + 적용 (시간 트리거) ----
+function runKoreanNameAuto() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(1000)) return;
+  try {
+    handleKoreanNamePreview({});
+    handleKoreanNameApply({ limit: 10 });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function handleSetupKoreanNameAuto() {
+  const exists = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'runKoreanNameAuto'; });
+  if (!exists) ScriptApp.newTrigger('runKoreanNameAuto').timeBased().everyHours(1).create();
+  return jsonOut({ ok: true, created: !exists });
 }
