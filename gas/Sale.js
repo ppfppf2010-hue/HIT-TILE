@@ -205,7 +205,7 @@
  const stored = String(data[i][0] || '');
  if (!stored.trim()) continue;
  if (stored.trim() === String(correctedName).trim() || normalizeVendorName(stored) === target) {
- return { rowIndex: i + 1, storedName: stored.trim(), businessNo: String(data[i][1] || '').trim() };
+ return { rowIndex: i + 1, storedName: stored.trim(), businessNo: String(data[i][1] || '').trim(), ecountCode: String(data[i][4] || '').trim() };
  }
  }
  return null;
@@ -450,8 +450,12 @@
  const ecountItemResults = ecountSyncItemsByCode(codesToSync);
 
  const whCd = PropertiesService.getScriptProperties().getProperty('ECOUNT_DEFAULT_SHIP_WH_CD') || '';
+ // 구매(Purchase.js)와 같은 원칙: 이름(CUST_DES)만 보내면 이카운트가 거래처를 못 찾아 미수금(잔액)이
+ // 그 업체에 잡히지 않는다. 판매거래처 시트 E열(이카운트거래처코드)을 최우선, 없으면 사업자등록번호를 CUST_CD로 보낸다.
+ const custCd = vendorInfo && vendorInfo.ecountCode ? vendorInfo.ecountCode
+ : (vendorInfo && vendorInfo.businessNo ? String(vendorInfo.businessNo).replace(/\D/g, '') : '');
  const pushRows = finalRows.filter(function (r) { return r.itemCode; }).map(function (r) {
- return { date: r.date, custDes: vendorName, whCd: whCd, prodCd: r.itemCode, prodDes: r.itemName, qty: r.qty, unitPriceVat: r.unitPrice, supply: r.supply, vat: r.vat, remarks: r.note || '' };
+ return { date: r.date, custCd: custCd, custDes: vendorName, whCd: whCd, prodCd: r.itemCode, prodDes: r.itemName, qty: r.qty, unitPriceVat: r.unitPrice, supply: r.supply, vat: r.vat, remarks: r.note || '' };
  });
  let ecountSaleResult;
  if (!pushRows.length) {
