@@ -243,6 +243,16 @@ function handleListTriggers() {
   }) });
 }
 
+// 이카운트 품목 조회가 막혀 있는 동안 매시간 대조를 끄는 용도
+function handleRemoveTrigger(body) {
+  const handler = body && body.handler;
+  let removed = 0;
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === handler) { ScriptApp.deleteTrigger(t); removed++; }
+  });
+  return jsonOut({ ok: true, removed: removed });
+}
+
 // ---- 웹에서 즉시 대조 실행 ----
 function handleSyncItemsNow() {
   return jsonOut({ ok: true, result: runItemSyncAll() });

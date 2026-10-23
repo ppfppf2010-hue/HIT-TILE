@@ -65,6 +65,7 @@
  if (action === 'korean_name_set') return handleKoreanNameSet(body);
  if (action === 'setup_item_sync') return handleSetupItemSync(body);
  if (action === 'list_triggers') return handleListTriggers();
+ if (action === 'remove_trigger') return handleRemoveTrigger(body);
  if (action === 'delivery_extract') return handleDeliveryExtract(body);
  if (action === 'save_invoice') return handleSaveInvoice(body);
  if (action === 'save_payment') return handleSavePayment(body);
