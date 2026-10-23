@@ -671,6 +671,7 @@ async function goToTileCalc(rec){
   const payload = {
     id: pickField(rec, ['id']),
     calc: calc.state || null,
+    vendor: pickField(rec, ['업체','company']),
     site: [pickField(rec, ['업체','company']), pickField(rec, ['현장주소','address'])].filter(Boolean).join(' '),
     date: formatDateOnly(pickField(rec, ['배송일정','deliveryDate','타일시공일','tileDate'])),
     rows,

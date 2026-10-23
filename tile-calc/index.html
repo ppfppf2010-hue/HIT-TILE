@@ -147,6 +147,7 @@
   <div class="card">
     <div class="row">
       <label class="f wide">현장명<input id="site" type="text" placeholder="예) ○○아파트 ○동"></label>
+      <label class="f wide">거래처 (판매등록용)<input id="vendor" type="text" placeholder="상담에서 넘어오면 자동"></label>
       <label class="f">발주일<input id="date" type="date"></label>
       <label class="f">할증 (800각 제외)<input id="loss" type="number" step="0.05" min="1" value="1.2"></label>
     </div>
@@ -195,8 +196,17 @@
       </div>
       <div class="btns">
         <a class="btn" href="../checklist/index.html" style="text-decoration:none;">상담 목록</a>
-        <button class="btn primary" type="button" id="saveConsultBtn">상담에 저장</button>
+        <button class="btn" type="button" id="saveConsultBtn">상담에 저장</button>
       </div>
+    </div>
+  </div>
+
+  <div class="card no-print">
+    <div class="row" style="align-items:center; justify-content:space-between;">
+      <div style="font-size:13px; line-height:1.5;">
+        <b>판매등록</b><br><span id="saleHint" style="color:var(--muted);">위 합계 수량으로 판매등록 화면을 채워서 열어요</span>
+      </div>
+      <button class="btn primary" type="button" id="saleBtn">판매등록 진행 →</button>
     </div>
   </div>
 
@@ -265,7 +275,7 @@ function newSpace(kind) {
 }
 
 function defaultState() {
-  const s = { site: '', date: new Date().toISOString().slice(0, 10), loss: 1.2, memo: '', mortar: { w: '', l: '', t: '' }, extras: {}, spaces: [] };
+  const s = { site: '', vendor: '', date: new Date().toISOString().slice(0, 10), loss: 1.2, memo: '', mortar: { w: '', l: '', t: '' }, extras: {}, spaces: [] };
   const add = (kind, name) => { const sp = newSpace(kind); sp.name = name; s.spaces.push(sp); };
   add('floor', '현관');
   add('kitchen', '주방');
@@ -341,18 +351,21 @@ function spacesFromConsult(rows) {
   // 새로고침해도 다시 덮어쓰지 않도록 주소에서 지운다
   history.replaceState(null, '', location.pathname);
   const id = data.id || '';
+  const vendor = data.vendor || '';
   const saved = data.calc && Array.isArray(data.calc.spaces) ? data.calc : null;
   // 같은 상담을 이 기기에서 이어 하던 중이고 시트에 저장된 값이 없으면 그대로 이어 간다
-  if (id && state.consultId === id && !saved) return;
+  if (id && state.consultId === id && !saved) { if (vendor) state.vendor = vendor; return; }
   const hasWork = state.spaces.some(sp => sp.w || sp.d);
   if (hasWork && state.consultId !== id && !confirm('상담 내용으로 새로 채울까요?\n지금 입력된 사이즈는 지워집니다.')) return;
   if (saved) {
     state = Object.assign(defaultState(), saved, { consultId: id });
+    if (vendor) state.vendor = vendor;
     uid = state.spaces.reduce((m, sp) => Math.max(m, sp.id), 0);
     return;
   }
   const next = defaultState();
   next.consultId = id;
+  next.vendor = vendor;
   next.site = data.site || '';
   if (data.date) next.memo = '배송일정: ' + data.date;
   uid = 0;
@@ -550,11 +563,30 @@ async function saveToConsult() {
     const t = new Date();
     status.textContent = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')} 상담에 저장됨` + (json.calendarUpdated ? ' · 발주 캘린더 반영' : '');
     toast('상담에 저장됐어요');
+    return true;
   } catch (err) {
     status.textContent = '저장 실패: ' + err.message;
     toast('저장 실패');
+    return false;
   } finally {
     btn.disabled = false; btn.textContent = '상담에 저장';
+  }
+}
+
+// 계산 결과로 판매등록 화면(../sale/)을 채워서 연다. 상담에서 왔으면 상담에 먼저 저장해 둔다
+async function goToSale() {
+  const items = saleItems(calcAll());
+  if (!items.length) { toast('계산된 수량이 없어요 — 치수를 먼저 넣어 주세요'); return; }
+  const btn = document.getElementById('saleBtn');
+  btn.disabled = true;
+  try {
+    if (state.consultId && !(await saveToConsult()) &&
+        !confirm('상담 저장에 실패했어요. 그래도 판매등록으로 넘어갈까요?')) return;
+    const payload = { items: items.map(({ name, qty }) => ({ name, qty })) };
+    if ((state.vendor || '').trim()) payload.vendor = state.vendor.trim();
+    location.href = '../sale/index.html?prefill=' + encodeURIComponent(JSON.stringify(payload));
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -599,6 +631,7 @@ function bindTop(id, key) {
   el.addEventListener('input', () => { state[key] = el.value; update(); });
 }
 bindTop('site', 'site');
+bindTop('vendor', 'vendor');
 bindTop('date', 'date');
 bindTop('loss', 'loss');
 bindTop('memo', 'memo');
@@ -650,6 +683,7 @@ document.getElementById('copyBtn').addEventListener('click', () => {
   else fallback();
 });
 document.getElementById('saveConsultBtn').addEventListener('click', saveToConsult);
+document.getElementById('saleBtn').addEventListener('click', goToSale);
 document.getElementById('resetBtn').addEventListener('click', () => {
   if (!confirm('입력한 내용을 모두 지울까요?')) return;
   try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}

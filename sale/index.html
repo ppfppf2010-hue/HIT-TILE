@@ -544,17 +544,16 @@
 
   // ---- 품목마스터 목록(자동완성 + 단가 자동채움용) ----
   let itemMasterCache = [];
-  let itemMasterLoaded = false;
-  async function loadItemMaster() {
-    if (itemMasterLoaded) return;
-    itemMasterLoaded = true;
-    try {
-      const res = await fetch(ENDPOINT, { method: 'POST', body: JSON.stringify({ action: 'list_item_master' }) });
-      const data = await res.json();
-      if (data.ok && data.items) itemMasterCache = data.items;
-    } catch (e) {
-      itemMasterLoaded = false; // 실패하면 다음에 다시 시도
+  // 불러오는 중에 다시 불려도 같은 요청을 기다리도록 Promise를 들고 있는다
+  let itemMasterPromise = null;
+  function loadItemMaster() {
+    if (!itemMasterPromise) {
+      itemMasterPromise = fetch(ENDPOINT, { method: 'POST', body: JSON.stringify({ action: 'list_item_master' }) })
+        .then(res => res.json())
+        .then(data => { if (data.ok && data.items) itemMasterCache = data.items; })
+        .catch(() => { itemMasterPromise = null; }); // 실패하면 다음에 다시 시도
     }
+    return itemMasterPromise;
   }
 
   // ---- 직접 그려주는 자동완성 드롭다운 (모바일 브라우저는 <datalist> 지원이 부실해서 직접 구현) ----
@@ -632,10 +631,12 @@
       fillFromMatch);
 
     // 드롭다운에서 고르지 않고 정확한 품목명을 직접 타이핑해서 마쳤을 때도 규격/단가를 자동으로 채운다.
-    nameInput.addEventListener('blur', () => {
+    function fillIfExact() {
       const exact = itemMasterCache.find(function (it) { return it.name === nameInput.value.trim(); });
       if (exact && !specInput.value && !priceInput.value) fillFromMatch(exact);
-    });
+    }
+    nameInput.addEventListener('blur', fillIfExact);
+    row.fillIfExact = fillIfExact;
     removeBtn.addEventListener('click', () => row.remove());
 
     itemRows.appendChild(row);
@@ -941,7 +942,9 @@
 
   const prefillItems = (prefill && prefill.items || []).filter(it => it && it.name);
   if (prefillItems.length) {
-    prefillItems.forEach(it => addItemRow(it));
+    const prefillRows = prefillItems.map(it => addItemRow(it));
+    // 상담/타일량 계산기에서 넘어온 품목은 품목등록마스터에 같은 이름이 있으면 규격 · 단가까지 채운다
+    loadItemMaster().then(() => prefillRows.forEach(row => row.fillIfExact()));
   } else {
     for (let i = 0; i < 6; i++) addItemRow();
   }
