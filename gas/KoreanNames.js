@@ -132,6 +132,8 @@ function translateNamesWithClaude_(items) {
 function handleKoreanNameApply(body) {
   const limit = Math.max(1, Math.min(Number(body && body.limit) || 40, 80));
   const onlyCode = body && body.code ? String(body.code).trim() : '';
+  // 이카운트는 연달아 호출하면 HTML 오류 페이지를 돌려준다 → 호출 사이를 띄우고, 그 오류면 한 번 더 기다렸다 재시도
+  const delayMs = Math.max(0, Number(body && body.delayMs) || 2000);
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName(KO_REVIEW_SHEET);
   if (!sheet || sheet.getLastRow() < 2) return jsonOut({ ok: false, error: '한글명검토 탭이 비어 있습니다. 먼저 korean_name_preview를 실행하세요.' });
@@ -160,7 +162,13 @@ function handleKoreanNameApply(body) {
     if (KO_SUFFIX_RE.test(current)) { statusCell.setValue('완료(이미 한글 병기)'); results.push({ code: code, ok: true, skipped: true }); continue; }
 
     const newName = current + ' (' + ko + ')';
-    const res = ecountSyncItem({ code: code, name: newName, spec: m[3], unit: m[6], inPrice: m[4], inVat: m[5], outPrice: m[10], outVat: m[11] });
+    const item = { code: code, name: newName, spec: m[3], unit: m[6], inPrice: m[4], inVat: m[5], outPrice: m[10], outVat: m[11] };
+    if (processed > 1) Utilities.sleep(delayMs);
+    let res = ecountSyncItem(item);
+    if (res && !res.ok && /DOCTYPE|JSON/.test(String(res.error || ''))) {
+      Utilities.sleep(10000);
+      res = ecountSyncItem(item);
+    }
     if (res && res.ok) {
       masterSheet.getRange(masterRow, 2).setValue(newName);
       statusCell.setValue('완료 ' + Utilities.formatDate(new Date(), 'Asia/Seoul', 'MM-dd HH:mm'));
@@ -181,4 +189,22 @@ function handleKoreanNameApply(body) {
 function handleKoreanNameCheck(body) {
   const codes = (body && body.codes) || [];
   return jsonOut({ ok: true, items: codes.map(function (c) { return { code: c, ecount: ecountRelayCall('/list-items', { prodCd: c }) }; }) });
+}
+
+// 품목명을 통째로 지정해서 바꾼다 (예: "(무광)"을 빼고 한글명으로 바꾸는 경우) — body.items = [{code, name}]
+function handleKoreanNameSet(body) {
+  const delayMs = Math.max(0, Number(body && body.delayMs) || 12000);
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const masterSheet = ss.getSheetByName(MASTER_SHEET);
+  const masterData = masterSheet.getDataRange().getValues();
+  const results = ((body && body.items) || []).map(function (it, i) {
+    const idx = masterData.findIndex(function (r) { return String(r[0]).trim() === String(it.code).trim(); });
+    if (idx < 1 || !it.name) return { code: it.code, ok: false, error: '코드 없음 또는 이름 없음' };
+    const m = masterData[idx];
+    if (i > 0) Utilities.sleep(delayMs);
+    const res = ecountSyncItem({ code: it.code, name: it.name, spec: m[3], unit: m[6], inPrice: m[4], inVat: m[5], outPrice: m[10], outVat: m[11] });
+    if (res && res.ok) masterSheet.getRange(idx + 1, 2).setValue(it.name);
+    return { code: it.code, ok: !!(res && res.ok), name: it.name, error: res && res.error };
+  });
+  return jsonOut({ ok: true, results: results });
 }

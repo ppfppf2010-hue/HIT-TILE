@@ -62,6 +62,7 @@
  if (action === 'korean_name_preview') return handleKoreanNamePreview(body);
  if (action === 'korean_name_apply') return handleKoreanNameApply(body);
  if (action === 'korean_name_check') return handleKoreanNameCheck(body);
+ if (action === 'korean_name_set') return handleKoreanNameSet(body);
  if (action === 'delivery_extract') return handleDeliveryExtract(body);
  if (action === 'save_invoice') return handleSaveInvoice(body);
  if (action === 'save_payment') return handleSavePayment(body);
