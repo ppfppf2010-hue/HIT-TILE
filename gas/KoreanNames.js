@@ -133,7 +133,7 @@ function handleKoreanNameApply(body) {
   const limit = Math.max(1, Math.min(Number(body && body.limit) || 40, 80));
   const onlyCode = body && body.code ? String(body.code).trim() : '';
   // 이카운트는 연달아 호출하면 HTML 오류 페이지를 돌려준다 → 호출 사이를 띄우고, 그 오류면 한 번 더 기다렸다 재시도
-  const delayMs = Math.max(0, Number(body && body.delayMs) || 2000);
+  const delayMs = Math.max(0, Number(body && body.delayMs) || 12000);
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName(KO_REVIEW_SHEET);
   if (!sheet || sheet.getLastRow() < 2) return jsonOut({ ok: false, error: '한글명검토 탭이 비어 있습니다. 먼저 korean_name_preview를 실행하세요.' });
