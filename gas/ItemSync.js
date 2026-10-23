@@ -214,10 +214,12 @@ function onMasterSheetEdit(e) {
 // ---- 최초 1회 실행: 1시간마다 이카운트->시트 대조 + 시트 수정 시 이카운트 반영 트리거 등록 ----
 // 이미 등록된 트리거는 중복 등록하지 않는다. 주기를 바꾸려면 everyHours(1) 부분만 고치면 된다
 // (이카운트 조회 API 호출 제한이 있으므로 너무 짧게 잡지 말 것).
-function setupItemSyncTriggers() {
+// editOnly: 이카운트 품목 조회 API(GetBasicProductsList)가 아직 인증되지 않았을 때는 시트->이카운트 방향만 켠다
+// (조회가 매시간 실패하면 이카운트의 시간당 연속 오류 제한 30건을 깎아 먹는다).
+function setupItemSyncTriggers(editOnly) {
   const handlers = ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction(); });
   const messages = [];
-  if (handlers.indexOf('runItemSyncAll') === -1) {
+  if (editOnly !== true && handlers.indexOf('runItemSyncAll') === -1) {
     ScriptApp.newTrigger('runItemSyncAll').timeBased().everyHours(1).create();
     messages.push('1시간마다 이카운트->품목등록마스터 대조 트리거 등록');
   }
@@ -230,6 +232,17 @@ function setupItemSyncTriggers() {
   return result;
 }
 
+// ---- 웹에서 트리거 등록 / 현재 등록된 트리거 확인 ----
+function handleSetupItemSync(body) {
+  return jsonOut(setupItemSyncTriggers(!!(body && body.editOnly)));
+}
+
+function handleListTriggers() {
+  return jsonOut({ ok: true, triggers: ScriptApp.getProjectTriggers().map(function (t) {
+    return { handler: t.getHandlerFunction(), event: String(t.getEventType()) };
+  }) });
+}
+
 // ---- 웹에서 즉시 대조 실행 ----
 function handleSyncItemsNow() {
   return jsonOut({ ok: true, result: runItemSyncAll() });
@@ -240,4 +253,9 @@ function handleDebugEcountItems() {
   const result = ecountRelayCall('/list-items', { debug: true });
   Logger.log(JSON.stringify(result, null, 2));
   return jsonOut(result);
+}
+
+// ---- 편집기에서 [실행]용: 시트 -> 이카운트 반영 트리거만 등록 (처음 실행 때 권한 승인 창이 뜬다) ----
+function setupItemEditSync() {
+  return setupItemSyncTriggers(true);
 }
