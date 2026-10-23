@@ -294,6 +294,7 @@
   .item-row-main .item-qty{ width:76px; text-align:right; }
   .item-row-sub{ display:flex; align-items:center; gap:8px; margin-top:6px; }
   .item-row-sub .item-spec{ flex:1; min-width:0; font-size:12.5px; color:var(--muted); }
+  .item-row-sub .item-memo{ width:84px; font-size:12.5px; color:var(--muted); }
   .item-row-sub .item-price{ width:104px; font-size:12.5px; color:var(--muted); text-align:right; }
   .item-row-sub .item-remove{
     flex-shrink:0;
@@ -544,17 +545,16 @@
 
   // ---- 품목마스터 목록(자동완성 + 단가 자동채움용) ----
   let itemMasterCache = [];
-  let itemMasterLoaded = false;
-  async function loadItemMaster() {
-    if (itemMasterLoaded) return;
-    itemMasterLoaded = true;
-    try {
-      const res = await fetch(ENDPOINT, { method: 'POST', body: JSON.stringify({ action: 'list_item_master' }) });
-      const data = await res.json();
-      if (data.ok && data.items) itemMasterCache = data.items;
-    } catch (e) {
-      itemMasterLoaded = false; // 실패하면 다음에 다시 시도
+  // 불러오는 중에 다시 불려도 같은 요청을 기다리도록 Promise를 들고 있는다
+  let itemMasterPromise = null;
+  function loadItemMaster() {
+    if (!itemMasterPromise) {
+      itemMasterPromise = fetch(ENDPOINT, { method: 'POST', body: JSON.stringify({ action: 'list_item_master' }) })
+        .then(res => res.json())
+        .then(data => { if (data.ok && data.items) itemMasterCache = data.items; })
+        .catch(() => { itemMasterPromise = null; }); // 실패하면 다음에 다시 시도
     }
+    return itemMasterPromise;
   }
 
   // ---- 직접 그려주는 자동완성 드롭다운 (모바일 브라우저는 <datalist> 지원이 부실해서 직접 구현) ----
@@ -604,6 +604,7 @@
       '</div>' +
       '<div class="item-row-sub">' +
         '<input type="text" class="item-spec" placeholder="규격">' +
+        '<input type="text" class="item-memo" placeholder="적요(공간)">' +
         '<input type="number" class="item-price" placeholder="단가">' +
         '<button type="button" class="item-remove">×</button>' +
       '</div>';
@@ -618,6 +619,7 @@
       nameInput.value = initial.name || '';
       specInput.value = initial.spec || '';
       priceInput.value = initial.price || '';
+      row.querySelector('.item-memo').value = initial.memo || '';
       row.querySelector('.item-qty').value = initial.qty || 1;
     }
 
@@ -632,10 +634,12 @@
       fillFromMatch);
 
     // 드롭다운에서 고르지 않고 정확한 품목명을 직접 타이핑해서 마쳤을 때도 규격/단가를 자동으로 채운다.
-    nameInput.addEventListener('blur', () => {
+    function fillIfExact() {
       const exact = itemMasterCache.find(function (it) { return it.name === nameInput.value.trim(); });
       if (exact && !specInput.value && !priceInput.value) fillFromMatch(exact);
-    });
+    }
+    nameInput.addEventListener('blur', fillIfExact);
+    row.fillIfExact = fillIfExact;
     removeBtn.addEventListener('click', () => row.remove());
 
     itemRows.appendChild(row);
@@ -675,7 +679,8 @@
         name: row.querySelector('.item-name').value.trim(),
         spec: row.querySelector('.item-spec').value.trim(),
         qty: Number(row.querySelector('.item-qty').value) || 0,
-        unitPrice: Number(row.querySelector('.item-price').value) || 0
+        unitPrice: Number(row.querySelector('.item-price').value) || 0,
+        memo: row.querySelector('.item-memo').value.trim()
       };
     }).filter(function (it) { return it.name && it.qty; });
 
@@ -916,7 +921,7 @@
   });
 
   // ---- 상담 체크리스트 목록 화면에서 "판매등록" 버튼으로 넘어온 경우 거래처명·품목을 미리 채운다 ----
-  // (?prefill=<JSON({vendor, items:[{name, qty}]})> 형태로 전달됨. 형식이 잘못돼도 화면은 정상 동작해야 하므로 실패 시 무시)
+  // (?prefill=<JSON({vendor, items:[{name, qty, memo}]})> 형태로 전달됨. 형식이 잘못돼도 화면은 정상 동작해야 하므로 실패 시 무시)
   function getPrefillFromUrl() {
     try {
       const raw = new URLSearchParams(window.location.search).get('prefill');
@@ -941,7 +946,9 @@
 
   const prefillItems = (prefill && prefill.items || []).filter(it => it && it.name);
   if (prefillItems.length) {
-    prefillItems.forEach(it => addItemRow(it));
+    const prefillRows = prefillItems.map(it => addItemRow(it));
+    // 상담/타일량 계산기에서 넘어온 품목은 품목등록마스터에 같은 이름이 있으면 규격 · 단가까지 채운다
+    loadItemMaster().then(() => prefillRows.forEach(row => row.fillIfExact()));
   } else {
     for (let i = 0; i < 6; i++) addItemRow();
   }

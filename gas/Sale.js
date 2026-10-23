@@ -30,6 +30,14 @@
  '품목코드', '품목명', '규격명', '수량', '단가(vat포함)', '외화금액', '공급가액', '부가세', '적요',
  '원본품목명(자동,수정금지)', '원본규격(자동,수정금지)'];
 
+ // 적요 칸에서 공간명과 확인용 경고(⚠ ...)를 구분하는 구분자
+ const NOTE_SEP = ' / ';
+
+ // 확인용 경고는 판매확인중 시트에서만 보이고, 판매입력 시트 · 이카운트 적요에는 공간명만 남긴다
+ function stripSaleWarning(note) {
+ return String(note || '').split(NOTE_SEP).filter(function (part) { return part.trim().indexOf('⚠') !== 0; }).join(NOTE_SEP).trim();
+ }
+
  const SALE_VENDOR_HEADERS = ['거래처명', '사업자등록번호', '대표자명', '전화', '이카운트거래처코드'];
 
  // ---- 판매거래처 시트 최초 1회 세팅 (없으면 자동 생성) ----
@@ -293,7 +301,8 @@
  spec: String(it.spec || '').trim(),
  unit: String(it.unit || 'EA').trim(),
  qty: Number(it.qty) || 0,
- price: Number(it.unitPrice) || 0
+ price: Number(it.unitPrice) || 0,
+ memo: String(it.memo || '').trim() // 적요 — 상담/타일량 계산기에서 넘어온 공간명 (외욕실, 현관 등)
  };
  })
  .filter(function (it) { return it.name && it.qty; });
@@ -420,7 +429,7 @@
  itemCode: code,
  itemName: masterMatch ? masterMatch.name : r[10],
  spec: masterMatch ? masterMatch.spec : r[11],
- qty: qty, unitPrice: unitPrice, foreignAmount: r[14], supply: supply, vat: vat, note: r[17]
+ qty: qty, unitPrice: unitPrice, foreignAmount: r[14], supply: supply, vat: vat, note: stripSaleWarning(r[17])
  };
  });
 
@@ -506,9 +515,11 @@
  const supply = Math.round((unitPrice * qty) / 1.1);
  const vat = Math.round(unitPrice * qty) - supply;
 
- let note = '';
- if (!match) note = '⚠ 품목마스터에 등록된 품목이 없어 매칭하지 못했어요 - 품목코드 칸에서 직접 선택해주세요';
- else if (entry.guessed) note = '⚠ 가장 비슷한 기존 품목으로 자동 매칭됨 - 맞는지 확인해주세요';
+ let warning = '';
+ if (!match) warning = '⚠ 품목마스터에 등록된 품목이 없어 매칭하지 못했어요 - 품목코드 칸에서 직접 선택해주세요';
+ else if (entry.guessed) warning = '⚠ 가장 비슷한 기존 품목으로 자동 매칭됨 - 맞는지 확인해주세요';
+ // 적요 = 공간명. 확인용 경고는 뒤에 붙였다가 확정할 때 stripSaleWarning으로 떼어낸다
+ const note = [it.memo || '', warning].filter(String).join(NOTE_SEP);
 
  return {
  date: normalizeDateYyyyMmDd(it.date) || docDate,

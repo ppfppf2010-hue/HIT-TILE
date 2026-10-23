@@ -74,6 +74,14 @@
   }
   .del:hover{ color:var(--warn); }
 
+  .add-size{
+    flex:0 0 auto; width:40px; height:40px; padding:0;
+    border:1px dashed var(--brass); border-radius:9px; background:var(--brass-soft);
+    color:var(--brass-deep); font-size:20px; line-height:1; cursor:pointer;
+  }
+  .add-size:hover{ background:#e0e7ff; }
+  .more-size .del{ align-self:center; }
+
   .sub-label{ font-size:12px; font-weight:600; color:var(--brass-deep); margin:12px 0 6px; }
 
   .result{
@@ -147,6 +155,7 @@
   <div class="card">
     <div class="row">
       <label class="f wide">현장명<input id="site" type="text" placeholder="예) ○○아파트 ○동"></label>
+      <label class="f wide">거래처 (판매등록용)<input id="vendor" type="text" placeholder="상담에서 넘어오면 자동"></label>
       <label class="f">발주일<input id="date" type="date"></label>
       <label class="f">할증 (800각 제외)<input id="loss" type="number" step="0.05" min="1" value="1.2"></label>
     </div>
@@ -195,8 +204,17 @@
       </div>
       <div class="btns">
         <a class="btn" href="../checklist/index.html" style="text-decoration:none;">상담 목록</a>
-        <button class="btn primary" type="button" id="saveConsultBtn">상담에 저장</button>
+        <button class="btn" type="button" id="saveConsultBtn">상담에 저장</button>
       </div>
+    </div>
+  </div>
+
+  <div class="card no-print">
+    <div class="row" style="align-items:center; justify-content:space-between;">
+      <div style="font-size:13px; line-height:1.5;">
+        <b>판매등록</b><br><span id="saleHint" style="color:var(--muted);">위 합계 수량으로 판매등록 화면을 채워서 열어요</span>
+      </div>
+      <button class="btn primary" type="button" id="saleBtn">판매등록 진행 →</button>
     </div>
   </div>
 
@@ -218,6 +236,7 @@
       <li>800×800: 3장 = 1박스(1.92㎡). 1.2배 할증 없이 +1박스 → 바닥 · 벽면은 ㎡ ÷ 1.92 (올림) + 1박스</li>
       <li>주방 300×600 · 600×600: 가로 × 세로 ㎡ × 할증 ÷ 1.44 (올림)</li>
       <li>주방 800×800: 가로 × 800, 길이로 계산 → 장수 = 가로 ÷ 800 (올림), 박스 = 장수 ÷ 3 (올림) + 1박스. 상부장이 없으면 세로 ÷ 800 (올림)줄만큼 곱함</li>
+      <li>바닥: 가로 × 세로. 앞베란다 · 뒷베란다처럼 같은 타일 구역이 여러 개면 + 버튼으로 사이즈를 더 넣으면 합쳐서 계산</li>
       <li>욕실 벽체: (가로 + 세로) × 2 × 높이 · 바닥: 가로 × 세로</li>
       <li>평 환산: 2박스 = 1평 (업계 관행)</li>
       <li>압착: 1평에 1포 → 압착 박스 ÷ 2 (올림)</li>
@@ -259,18 +278,19 @@ const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyGTRMKSfiTQvhAeFDH0
 let uid = 0;
 function newSpace(kind) {
   const base = { id: ++uid, kind, name: KINDS[kind], w: '', d: '', h: '', size: '600×600', code: '', adh: kind === 'floor' ? '압착' : '본드' };
+  if (kind === 'floor') base.more = []; // 앞베란다 · 뒷베란다처럼 같은 타일을 까는 구역을 더 넣을 때 [{w, d}]
   if (kind === 'bath') Object.assign(base, { name: '욕실', h: 2300, wallSize: '300×600', wallCode: '', wallAdh: '본드', floorSize: '300×300', floorCode: '', floorAdh: '압착', ttebari: true });
   if (kind === 'kitchen') Object.assign(base, { size: '300×600', upper: true });
   return base;
 }
 
 function defaultState() {
-  const s = { site: '', date: new Date().toISOString().slice(0, 10), loss: 1.2, memo: '', mortar: { w: '', l: '', t: '' }, extras: {}, spaces: [] };
+  const s = { site: '', vendor: '', date: new Date().toISOString().slice(0, 10), loss: 1.2, memo: '', mortar: { w: '', l: '', t: '' }, extras: {}, spaces: [] };
   const add = (kind, name) => { const sp = newSpace(kind); sp.name = name; s.spaces.push(sp); };
   add('floor', '현관');
   add('kitchen', '주방');
-  add('bath', '거실욕실');
-  add('bath', '안방욕실');
+  add('bath', '외욕실');
+  add('bath', '내욕실');
   add('floor', '베란다');
   return s;
 }
@@ -324,7 +344,7 @@ function spacesFromConsult(rows) {
       const extra = { wallCode: codeOf(wall), floorCode: codeOf(floor) };
       if (sizeOf(wall)) extra.wallSize = sizeOf(wall);
       if (sizeOf(floor)) extra.floorSize = sizeOf(floor);
-      push('bath', zone === 'common' ? '공동욕실' : '안방욕실', extra);
+      push('bath', zone === 'common' ? '외욕실' : '내욕실', extra);
     } else {
       // 현관 · 베란다 · 바닥 등은 바닥(가로 × 세로)
       push('floor', r.label, withSize({ code: codeOf(r) }, size));
@@ -341,20 +361,27 @@ function spacesFromConsult(rows) {
   // 새로고침해도 다시 덮어쓰지 않도록 주소에서 지운다
   history.replaceState(null, '', location.pathname);
   const id = data.id || '';
+  const vendor = data.vendor || '';
+  // 상담의 도기 · 집기류 — 계산은 안 하고 판매등록으로 같이 넘긴다
+  const fixtures = Array.isArray(data.fixtures) ? data.fixtures.filter(f => f && f.name) : [];
   const saved = data.calc && Array.isArray(data.calc.spaces) ? data.calc : null;
   // 같은 상담을 이 기기에서 이어 하던 중이고 시트에 저장된 값이 없으면 그대로 이어 간다
-  if (id && state.consultId === id && !saved) return;
-  const hasWork = state.spaces.some(sp => sp.w || sp.d);
+  if (id && state.consultId === id && !saved) { if (vendor) state.vendor = vendor; state.fixtures = fixtures; return; }
+  const hasWork = state.spaces.some(sp => sp.w || sp.d || (sp.more || []).some(m => m.w || m.d));
   if (hasWork && state.consultId !== id && !confirm('상담 내용으로 새로 채울까요?\n지금 입력된 사이즈는 지워집니다.')) return;
   if (saved) {
     state = Object.assign(defaultState(), saved, { consultId: id });
+    if (vendor) state.vendor = vendor;
+    state.fixtures = fixtures;
     uid = state.spaces.reduce((m, sp) => Math.max(m, sp.id), 0);
     return;
   }
   const next = defaultState();
   next.consultId = id;
+  next.vendor = vendor;
   next.site = data.site || '';
   if (data.date) next.memo = '배송일정: ' + data.date;
+  next.fixtures = fixtures;
   uid = 0;
   next.spaces = spacesFromConsult(Array.isArray(data.rows) ? data.rows : []);
   if (!next.spaces.length) next.spaces = defaultState().spaces;
@@ -395,7 +422,13 @@ function calcSpace(sp, loss) {
     const note = pcs ? `${lines}줄 · ${pcs}장 → ${Math.ceil(pcs / 3)}박스 + 할증 1박스` : (!sp.upper && w && !h ? '상부장이 없으면 세로를 입력하세요' : '');
     return [{ label: sp.name, size: sp.size, code: sp.code, area: pcs * 0.64, boxes, adh: sp.adh, note }];
   }
-  const area = sp.kind === 'floor' ? w * d / 1e6 : w * h / 1e6;
+  if (sp.kind === 'floor') {
+    const parts = [[w, d], ...(sp.more || []).map(m => [num(m.w), num(m.d)])].filter(([a, b]) => a && b);
+    const area = parts.reduce((sum, [a, b]) => sum + a * b / 1e6, 0);
+    const note = parts.length > 1 ? `${parts.length}구역 합계` : '';
+    return [{ label: sp.name, size: sp.size, code: sp.code, area, boxes: boxesByArea(area, sp.size, loss), adh: sp.adh, note }];
+  }
+  const area = w * h / 1e6;
   return [{ label: sp.name, size: sp.size, code: sp.code, area, boxes: boxesByArea(area, sp.size, loss), adh: sp.adh }];
 }
 
@@ -451,13 +484,20 @@ function spaceHtml(sp) {
     // 주방 800각 + 상부장이면 1줄 고정이라 세로를 800으로 잠근다
     const kitchenFixed = sp.kind === 'kitchen' && sp.size === BIG && sp.upper;
     const dims = sp.kind === 'floor'
-      ? field(id, 'w', '가로', sp.w) + field(id, 'd', '세로', sp.d)
+      ? field(id, 'w', '가로', sp.w) + field(id, 'd', '세로', sp.d) +
+        `<button class="add-size no-print" type="button" data-addsize="${id}" aria-label="사이즈 추가" title="다른 구역 사이즈 추가">+</button>`
       : sp.kind === 'kitchen'
         ? field(id, 'w', '가로', sp.w) + (kitchenFixed ? field(id, 'h', '세로', 800, 'disabled') : field(id, 'h', '세로', sp.h))
         : field(id, 'w', '길이', sp.w) + field(id, 'h', '높이', sp.h);
     const upper = sp.kind === 'kitchen' && sp.size === BIG
       ? `<label class="check"><input type="checkbox" data-id="${id}" data-k="upper"${sp.upper ? ' checked' : ''}>상부장 있음 (1줄)</label>` : '';
+    const more = sp.kind === 'floor' ? (sp.more || []).map((m, i) => `<div class="row more-size">
+        <label class="f">가로 ${i + 2}<input type="number" inputmode="numeric" data-id="${id}" data-more="${i}" data-k="w" value="${esc(m.w)}"></label>
+        <label class="f">세로 ${i + 2}<input type="number" inputmode="numeric" data-id="${id}" data-more="${i}" data-k="d" value="${esc(m.d)}"></label>
+        <button class="del no-print" type="button" data-delsize="${id}" data-idx="${i}" aria-label="이 사이즈 삭제">×</button>
+      </div>`).join('') : '';
     body = `<div class="row">${dims}</div>
+      ${more}
       <div class="row">
         <label class="f">규격<select data-id="${id}" data-k="size" data-rerender="1">${sizeOptions(sp.size)}</select></label>
         <label class="f wide">품번<input type="text" data-id="${id}" data-k="code" value="${esc(sp.code)}"></label>
@@ -516,21 +556,24 @@ function update() {
 
   document.getElementById('orderText').textContent = orderText(r);
   document.getElementById('consultBar').style.display = state.consultId ? '' : 'none';
+  const nFix = (state.fixtures || []).length;
+  document.getElementById('saleHint').textContent = '위 합계 수량으로 판매등록 화면을 채워서 열어요' + (nFix ? ` · 상담의 도기 · 집기 ${nFix}개도 함께` : '');
   save();
 }
 
-// 판매등록으로 넘길 품목: 타일은 품번(없으면 공간 · 규격)별 박스 합계, 부자재는 계산 수량
+// 이카운트 적요에 넣을 공간명: 공동(공용 · 거실)욕실 → 외욕실, 안방욕실 → 내욕실, " 벽체/바닥" 꼬리표는 뺀다
+const saleSpaceName = label => String(label || '')
+  .replace(/\s*(벽체|바닥)$/, '').replace(/(공동|공용|거실)욕실/, '외욕실').replace('안방욕실', '내욕실').trim();
+
+// 판매등록으로 넘길 품목: 타일은 공간별 한 줄(적요 = 공간명), 부자재는 계산 수량, 도기는 상담에서 넘어온 그대로
 function saleItems(r) {
-  const tiles = {};
-  r.lines.filter(l => l.boxes).forEach(l => {
-    const name = l.code || `타일 ${l.size} (${l.label})`;
-    tiles[name] = (tiles[name] || 0) + l.boxes;
-  });
-  const items = Object.entries(tiles).map(([name, qty]) => ({ name, qty, unit: '박스' }));
+  const items = r.lines.filter(l => l.boxes).map(l =>
+    ({ name: l.code || `타일 ${l.size}`, qty: l.boxes, unit: '박스', memo: saleSpaceName(l.label) }));
   [['압착', r.press, '포'], ['드라이픽스', r.dry, '포'], ['본드', r.bond, '말'], ['에폭시', r.epoxy, '조'],
    ['떠발이 몰탈', r.ttebari, '포'], ['레미탈 40kg', r.mortar40, '포']]
     .forEach(([name, qty, unit]) => { if (qty) items.push({ name, qty, unit }); });
   EXTRAS.forEach(([n, u]) => { if (num(state.extras[n])) items.push({ name: n, qty: num(state.extras[n]), unit: u }); });
+  (state.fixtures || []).forEach(f => items.push({ name: f.name, qty: f.qty || 1, memo: f.memo || '', fixture: true }));
   return items;
 }
 
@@ -550,11 +593,30 @@ async function saveToConsult() {
     const t = new Date();
     status.textContent = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')} 상담에 저장됨` + (json.calendarUpdated ? ' · 발주 캘린더 반영' : '');
     toast('상담에 저장됐어요');
+    return true;
   } catch (err) {
     status.textContent = '저장 실패: ' + err.message;
     toast('저장 실패');
+    return false;
   } finally {
     btn.disabled = false; btn.textContent = '상담에 저장';
+  }
+}
+
+// 계산 결과로 판매등록 화면(../sale/)을 채워서 연다. 상담에서 왔으면 상담에 먼저 저장해 둔다
+async function goToSale() {
+  const items = saleItems(calcAll());
+  if (!items.some(it => !it.fixture)) { toast('계산된 수량이 없어요 — 치수를 먼저 넣어 주세요'); return; }
+  const btn = document.getElementById('saleBtn');
+  btn.disabled = true;
+  try {
+    if (state.consultId && !(await saveToConsult()) &&
+        !confirm('상담 저장에 실패했어요. 그래도 판매등록으로 넘어갈까요?')) return;
+    const payload = { items: items.map(({ name, qty, memo }) => ({ name, qty, memo: memo || '' })) };
+    if ((state.vendor || '').trim()) payload.vendor = state.vendor.trim();
+    location.href = '../sale/index.html?prefill=' + encodeURIComponent(JSON.stringify(payload));
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -599,6 +661,7 @@ function bindTop(id, key) {
   el.addEventListener('input', () => { state[key] = el.value; update(); });
 }
 bindTop('site', 'site');
+bindTop('vendor', 'vendor');
 bindTop('date', 'date');
 bindTop('loss', 'loss');
 bindTop('memo', 'memo');
@@ -612,12 +675,28 @@ document.getElementById('spaces').addEventListener('input', e => {
   const t = e.target, id = +t.dataset.id, k = t.dataset.k;
   const sp = state.spaces.find(s => s.id === id);
   if (!sp || !k) return;
+  if (t.dataset.more !== undefined) { sp.more[+t.dataset.more][k] = t.value; update(); return; }
   sp[k] = t.type === 'checkbox' ? t.checked : t.value;
   if (sp.kind === 'kitchen' && k === 'size') sp.adh = kitchenAdh(sp.size);
   if (t.dataset.rerender || k === 'upper') renderSpaces(); else update();
 });
 document.getElementById('spaces').addEventListener('click', e => {
-  const id = +e.target.dataset.del;
+  const t = e.target;
+  if (t.dataset.addsize) {
+    const sp = state.spaces.find(s => s.id === +t.dataset.addsize);
+    (sp.more = sp.more || []).push({ w: '', d: '' });
+    renderSpaces();
+    const inputs = document.querySelectorAll(`[data-id="${sp.id}"][data-more="${sp.more.length - 1}"]`);
+    if (inputs[0]) inputs[0].focus();
+    return;
+  }
+  if (t.dataset.delsize) {
+    const sp = state.spaces.find(s => s.id === +t.dataset.delsize);
+    sp.more.splice(+t.dataset.idx, 1);
+    renderSpaces();
+    return;
+  }
+  const id = +t.dataset.del;
   if (!id) return;
   const sp = state.spaces.find(s => s.id === id);
   if (!confirm(`'${sp.name}'을(를) 삭제할까요?`)) return;
@@ -650,6 +729,7 @@ document.getElementById('copyBtn').addEventListener('click', () => {
   else fallback();
 });
 document.getElementById('saveConsultBtn').addEventListener('click', saveToConsult);
+document.getElementById('saleBtn').addEventListener('click', goToSale);
 document.getElementById('resetBtn').addEventListener('click', () => {
   if (!confirm('입력한 내용을 모두 지울까요?')) return;
   try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}

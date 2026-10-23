@@ -610,29 +610,54 @@ async function cancelConsultation(idx){
   }
 }
 
-// ---- 상담 기록(타일/집기류)에서 판매등록 페이지로 넘길 품목 목록을 뽑아낸다 ----
-function buildSaleItemsFromRecord(rec){
-  const tile = safeParse(pickField(rec, ['tile_json']) || '{}');
+// ---- 이카운트 적요에 넣을 공간명: 공동(공용)욕실 → 외욕실, 안방욕실 → 내욕실, "(벽체)" 같은 꼬리표는 뺀다 ----
+function saleSpaceName(label){
+  return String(label || '').split('\n')[0]
+    .replace(/(공동|공용|거실)욕실/, '외욕실')
+    .replace('안방욕실', '내욕실')
+    .trim();
+}
+
+function tileRowLabel(key, entry){
+  if(entry && entry.label) return entry.label;
+  const row = DEFAULT_TILE_ROWS.find(r => r.key === key);
+  if(row) return row.label;
+  const veranda = key.match(/^veranda(\d+)$/);
+  return veranda ? '베란다 ' + veranda[1] : key;
+}
+
+// 도기 · 집기류: 품목마다 욕실(외욕실/내욕실)을 적요로 붙인다
+function buildFixtureSaleItems(rec){
   const fixture = safeParse(pickField(rec, ['fixture_json']) || '{}');
-  const calc = safeParse(pickField(rec, ['calc_json']) || '{}');
   const items = [];
-  // 타일량 계산기에서 저장한 수량이 있으면 타일 · 부자재는 그 수량으로 넘긴다
-  if(Array.isArray(calc.items) && calc.items.length){
-    calc.items.forEach(it => { if(it && it.name) items.push({ name: it.name, qty: it.qty || 1 }); });
-  } else {
-    Object.keys(tile).forEach(key => {
-      const name = ((tile[key] || {}).name || '').trim();
-      if(name) items.push({ name, qty: 1 });
-    });
-  }
   Object.keys(fixture).forEach(zone => {
     const zoneData = fixture[zone] || {};
+    const zoneInfo = FIXTURE_ZONES.find(z => z.key === zone);
+    const memo = saleSpaceName(zoneInfo ? zoneInfo.label : zone);
     Object.keys(zoneData).forEach(key => {
       const name = (zoneData[key] || '').trim();
-      if(name) items.push({ name, qty: 1 });
+      if(name) items.push({ name, qty: 1, memo });
     });
   });
   return items;
+}
+
+// ---- 상담 기록(타일/집기류)에서 판매등록 페이지로 넘길 품목 목록을 뽑아낸다 ----
+function buildSaleItemsFromRecord(rec){
+  const tile = safeParse(pickField(rec, ['tile_json']) || '{}');
+  const calc = safeParse(pickField(rec, ['calc_json']) || '{}');
+  const items = [];
+  // 타일량 계산기에서 저장한 수량이 있으면 타일 · 부자재는 그 수량으로 넘긴다 (도기는 계산기 저장분에 이미 들어있음)
+  if(Array.isArray(calc.items) && calc.items.length){
+    calc.items.forEach(it => { if(it && it.name) items.push({ name: it.name, qty: it.qty || 1, memo: it.memo || '' }); });
+    if(calc.items.some(it => it && it.fixture)) return items;
+  } else {
+    Object.keys(tile).forEach(key => {
+      const name = ((tile[key] || {}).name || '').trim();
+      if(name) items.push({ name, qty: 1, memo: saleSpaceName(tileRowLabel(key, tile[key])) });
+    });
+  }
+  return items.concat(buildFixtureSaleItems(rec));
 }
 
 // ---- 상담 1건을 골라 판매등록 페이지(../sale/)로 이동한다 (거래처명·품목을 미리 채워줌) ----
@@ -665,12 +690,14 @@ async function goToTileCalc(rec){
     const d = tile[key] || {};
     const name = (d.name || '').trim();
     const item = name ? itemMasterCache.find(it => it.name === name) : null;
-    return { key, label: (d.label || key).replace('\n', ' '), name, spec: item && item.spec ? item.spec : '', memo: d.memo || '' };
+    return { key, label: tileRowLabel(key, d).replace('\n', ' '), name, spec: item && item.spec ? item.spec : '', memo: d.memo || '' };
   }).filter(r => r.name);
   const calc = safeParse(pickField(rec, ['calc_json']) || '{}');
   const payload = {
     id: pickField(rec, ['id']),
     calc: calc.state || null,
+    vendor: pickField(rec, ['업체','company']),
+    fixtures: buildFixtureSaleItems(rec),
     site: [pickField(rec, ['업체','company']), pickField(rec, ['현장주소','address'])].filter(Boolean).join(' '),
     date: formatDateOnly(pickField(rec, ['배송일정','deliveryDate','타일시공일','tileDate'])),
     rows,
