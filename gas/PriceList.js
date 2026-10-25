@@ -6,25 +6,32 @@
  * - 내보내는 값은 품명 / 규격 / 단위 / 출고단가(+VAT 포함 여부) 뿐이다.
  *   입고단가, 거래처명(=매입처), 품목코드(접두어로 매입처가 드러남)는 절대 응답에 넣지 않는다.
  * - 스크립트 속성 PRICE_PAGE_CODE(접속코드)를 아는 사람만 조회할 수 있다. 속성이 비어 있으면 아무에게도 응답하지 않는다.
- * - 접속코드 오입력이 짧은 시간에 많이 쌓이면 잠시 잠근다(무작위 대입 방지).
+ * - 접속코드를 여러 번 틀리면 그 방문자(브라우저)만 잠시 잠근다. 한 거래처의 오입력이 다른 거래처를 막지 않도록
+ *   방문자별로 센다. 전체 합산이 아주 많아지면(무작위 대입 의심) 전체를 잠시 잠그는 안전장치도 따로 둔다.
  * - 한 번에 최대 PRICE_SEARCH_LIMIT건만 내려준다(전체 목록을 통째로 가져가기 어렵게).
  *
  * 품목등록마스터 열: A코드 B품목명 C규격구분 D규격 E입고단가 F입고VAT G단위 H품목구분 I세트 J재고관리 K출고단가 L출고VAT M거래처명
  */
 const PRICE_SEARCH_LIMIT = 50;
-const PRICE_FAIL_LIMIT = 30;       // 이 횟수만큼 틀리면
-const PRICE_FAIL_WINDOW_SEC = 600; // 10분 동안 잠근다
+const PRICE_FAIL_PER_CLIENT = 10;   // 한 방문자가 10분 안에 이만큼 틀리면 그 방문자만 잠근다
+const PRICE_FAIL_GLOBAL = 300;      // 전체 합산이 이만큼이면(무작위 대입 의심) 모두 잠시 잠근다
+const PRICE_FAIL_WINDOW_SEC = 600;  // 10분
 
 function handlePriceSearch(body) {
   const need = String(PropertiesService.getScriptProperties().getProperty('PRICE_PAGE_CODE') || '').trim();
   if (!need) throw new Error('가격표가 아직 열려 있지 않아요. 히트타일로 문의해주세요.');
 
   const cache = CacheService.getScriptCache();
-  const fails = Number(cache.get('price_fail') || 0);
-  if (fails >= PRICE_FAIL_LIMIT) throw new Error('접속코드를 여러 번 잘못 입력해서 잠시 막혔어요. 10분 뒤에 다시 시도해주세요.');
+  const cid = String(body.cid || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40) || 'anon';
+  const clientKey = 'price_fail_c_' + cid;
+  const clientFails = Number(cache.get(clientKey) || 0);
+  const globalFails = Number(cache.get('price_fail_all') || 0);
+  if (clientFails >= PRICE_FAIL_PER_CLIENT) throw new Error('접속코드를 여러 번 잘못 입력해서 잠시 막혔어요. 10분 뒤에 다시 시도해주세요.');
+  if (globalFails >= PRICE_FAIL_GLOBAL) throw new Error('지금 접속이 몰려 잠시 막혀 있어요. 잠시 후 다시 시도해주세요.');
 
   if (String(body.code || '').trim() !== need) {
-    cache.put('price_fail', String(fails + 1), PRICE_FAIL_WINDOW_SEC);
+    cache.put(clientKey, String(clientFails + 1), PRICE_FAIL_WINDOW_SEC);
+    cache.put('price_fail_all', String(globalFails + 1), PRICE_FAIL_WINDOW_SEC);
     throw new Error('접속코드가 맞지 않아요.');
   }
 

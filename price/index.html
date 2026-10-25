@@ -165,8 +165,20 @@
   function showError(msg) { errorBox.textContent = msg; errorBox.classList.add('show'); }
   function clearError() { errorBox.classList.remove('show'); }
 
+  // 방문자(브라우저)별 식별자: 한 사람이 코드를 여러 번 틀려도 그 사람만 잠기고 다른 거래처는 영향이 없게 한다.
+  function clientId() {
+    try {
+      let id = localStorage.getItem('hittile_price_cid');
+      if (!id) {
+        id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+        localStorage.setItem('hittile_price_cid', id);
+      }
+      return id;
+    } catch (e) { return 'anon'; }
+  }
+
   function callApi(q) {
-    return fetch(ENDPOINT, { method: 'POST', body: JSON.stringify({ action: 'price_search', code: accessCode, q: q }) }).then((r) => r.json());
+    return fetch(ENDPOINT, { method: 'POST', body: JSON.stringify({ action: 'price_search', code: accessCode, q: q, cid: clientId() }) }).then((r) => r.json());
   }
 
   function saveCode(c) { try { localStorage.setItem(STORE_KEY, c); } catch (e) { /* 저장 못 해도 사용엔 문제 없음 */ } }
