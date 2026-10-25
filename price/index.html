@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>히트타일 출고단가 조회</title>
+<style>
+  :root{
+    --bg:#f5f6f8;
+    --ink:#1a1a1a;
+    --muted:#6b7280;
+    --line:rgba(17,17,17,0.09);
+    --brass:#2563eb;
+    --brass-deep:#1d4ed8;
+    --err:#b1503f;
+    --card:#ffffff;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Malgun Gothic',sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    padding:0 0 60px;
+  }
+  header{
+    padding:32px 6vw 20px;
+    border-bottom:1px solid var(--line);
+  }
+  header h1{ margin:0 0 6px; font-size:22px; }
+  header p{ margin:0; color:var(--muted); font-size:13.5px; line-height:1.5; }
+  main{ max-width:560px; margin:24px auto 0; padding:0 6vw; }
+
+  .field label{ display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; }
+  .field input{
+    width:100%;
+    padding:13px 14px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--card);
+    color:var(--ink);
+    font-size:16px;
+    font-family:inherit;
+  }
+  .field input:focus{ outline:none; border-color:var(--brass); }
+
+  button.submit{
+    margin-top:12px;
+    width:100%;
+    padding:14px;
+    border:none;
+    border-radius:10px;
+    background:var(--brass);
+    color:#fff;
+    font-size:15px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  button.submit:disabled{ background:#d1d5db; cursor:default; }
+  button.submit:not(:disabled):hover{ background:var(--brass-deep); }
+
+  .error-box{
+    margin-top:14px;
+    display:none;
+    background:#fbeeeb;
+    border:1px solid rgba(177,80,63,0.3);
+    color:var(--err);
+    border-radius:10px;
+    padding:12px 14px;
+    font-size:13px;
+    line-height:1.5;
+  }
+  .error-box.show{ display:block; }
+
+  #searchPanel{ display:none; }
+  .count{ margin:12px 2px 0; font-size:12.5px; color:var(--muted); min-height:18px; }
+  .item{
+    margin-top:10px;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:14px 16px;
+    display:flex;
+    gap:12px;
+    justify-content:space-between;
+    align-items:flex-start;
+  }
+  .item .name{ font-size:15px; font-weight:600; line-height:1.4; word-break:keep-all; }
+  .item .sub{ margin-top:4px; font-size:12.5px; color:var(--muted); }
+  .item .price{ text-align:right; white-space:nowrap; }
+  .item .price b{ font-size:17px; color:var(--brass-deep); }
+  .item .price span{ display:block; margin-top:3px; font-size:11px; color:var(--muted); }
+  .empty{ margin-top:30px; text-align:center; color:var(--muted); font-size:14px; }
+
+  footer{
+    max-width:560px;
+    margin:36px auto 0;
+    padding:0 6vw;
+    font-size:12px;
+    color:var(--muted);
+    line-height:1.7;
+  }
+  .logout{ margin-top:16px; text-align:center; }
+  .logout a{ color:var(--muted); font-size:12.5px; text-decoration:underline; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>히트타일 출고단가 조회</h1>
+  <p>품명이나 규격을 입력하면 출고단가를 확인할 수 있어요.</p>
+</header>
+
+<main>
+
+  <div id="codePanel">
+    <div class="field">
+      <label for="codeInput">접속코드</label>
+      <input type="password" id="codeInput" placeholder="히트타일에서 안내드린 접속코드" autocomplete="off">
+    </div>
+    <button class="submit" id="codeBtn">확인</button>
+  </div>
+
+  <div id="searchPanel">
+    <div class="field">
+      <label for="qInput">품명 또는 규격 (띄어쓰기로 여러 단어 검색)</label>
+      <input type="search" id="qInput" placeholder="예: 양변기, 포셀린 600" autocomplete="off">
+    </div>
+    <div class="count" id="countText"></div>
+    <div id="results"></div>
+    <div class="logout"><a id="logoutLink">접속코드 다시 입력하기</a></div>
+  </div>
+
+  <div class="error-box" id="errorBox"></div>
+
+</main>
+
+<footer>
+  표시된 금액은 조회 시점의 출고단가이며, 재고와 납기는 별도로 문의해주세요.<br>
+  히트타일 / 대구 수성구 수성로 58 / 인스타 @HITTILE58
+</footer>
+
+<script>
+  const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec';
+  const STORE_KEY = 'hittile_price_code';
+
+  const codePanel = document.getElementById('codePanel');
+  const searchPanel = document.getElementById('searchPanel');
+  const codeInput = document.getElementById('codeInput');
+  const codeBtn = document.getElementById('codeBtn');
+  const qInput = document.getElementById('qInput');
+  const countText = document.getElementById('countText');
+  const results = document.getElementById('results');
+  const errorBox = document.getElementById('errorBox');
+  const logoutLink = document.getElementById('logoutLink');
+
+  let accessCode = '';
+  let searchSeq = 0;
+  let timer = null;
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+  function showError(msg) { errorBox.textContent = msg; errorBox.classList.add('show'); }
+  function clearError() { errorBox.classList.remove('show'); }
+
+  function callApi(q) {
+    return fetch(ENDPOINT, { method: 'POST', body: JSON.stringify({ action: 'price_search', code: accessCode, q: q }) }).then((r) => r.json());
+  }
+
+  function saveCode(c) { try { localStorage.setItem(STORE_KEY, c); } catch (e) { /* 저장 못 해도 사용엔 문제 없음 */ } }
+  function loadCode() { try { return localStorage.getItem(STORE_KEY) || ''; } catch (e) { return ''; } }
+  function forgetCode() { try { localStorage.removeItem(STORE_KEY); } catch (e) { /* ignore */ } }
+
+  async function unlock(code, silent) {
+    accessCode = code;
+    codeBtn.disabled = true;
+    clearError();
+    try {
+      const data = await callApi('');
+      if (!data.ok) throw new Error(data.error || '확인 중 오류가 발생했어요.');
+      saveCode(code);
+      codePanel.style.display = 'none';
+      searchPanel.style.display = 'block';
+      qInput.focus();
+    } catch (err) {
+      accessCode = '';
+      if (!silent) showError(err.message || String(err));
+      else forgetCode();
+    } finally {
+      codeBtn.disabled = false;
+    }
+  }
+
+  codeBtn.addEventListener('click', () => {
+    const c = codeInput.value.trim();
+    if (!c) { codeInput.focus(); return; }
+    unlock(c, false);
+  });
+  codeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') codeBtn.click(); });
+
+  logoutLink.addEventListener('click', () => {
+    forgetCode();
+    accessCode = '';
+    qInput.value = '';
+    results.innerHTML = '';
+    countText.textContent = '';
+    searchPanel.style.display = 'none';
+    codePanel.style.display = '';
+    codeInput.value = '';
+    codeInput.focus();
+  });
+
+  async function runSearch() {
+    const q = qInput.value.trim();
+    const seq = ++searchSeq;
+    clearError();
+    if (!q) { results.innerHTML = ''; countText.textContent = ''; return; }
+    countText.textContent = '찾는 중이에요...';
+    try {
+      const data = await callApi(q);
+      if (seq !== searchSeq) return; // 더 최근에 입력한 검색이 있으면 이 결과는 버린다
+      if (!data.ok) throw new Error(data.error || '조회 중 오류가 발생했어요.');
+      render(data);
+    } catch (err) {
+      if (seq !== searchSeq) return;
+      countText.textContent = '';
+      results.innerHTML = '';
+      showError(err.message || String(err));
+    }
+  }
+
+  function render(data) {
+    results.innerHTML = '';
+    if (!data.items.length) {
+      countText.textContent = '';
+      results.innerHTML = '<div class="empty">검색 결과가 없어요. 다른 단어로 찾아보시거나 문의해주세요.</div>';
+      return;
+    }
+    countText.textContent = data.total > data.items.length
+      ? `${data.total}건 중 ${data.items.length}건을 보여드려요. 검색어를 더 구체적으로 입력해보세요.`
+      : `${data.total}건`;
+    data.items.forEach((it) => {
+      const div = document.createElement('div');
+      div.className = 'item';
+      const sub = [it.spec, it.unit].filter(Boolean).join(' · ');
+      div.innerHTML =
+        '<div><div class="name">' + escapeHtml(it.name) + '</div>' +
+        (sub ? '<div class="sub">' + escapeHtml(sub) + '</div>' : '') + '</div>' +
+        '<div class="price"><b>' + Number(it.price).toLocaleString() + '원</b><span>VAT ' + escapeHtml(it.vat) + '</span></div>';
+      results.appendChild(div);
+    });
+  }
+
+  qInput.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(runSearch, 350);
+  });
+
+  // 링크로 접속코드를 같이 보낸 경우(?c=...) 또는 이전에 입력해둔 코드가 있으면 자동으로 연다.
+  (function init() {
+    const fromUrl = new URLSearchParams(location.search).get('c') || '';
+    const code = (fromUrl || loadCode()).trim();
+    if (fromUrl) { try { history.replaceState(null, '', location.pathname); } catch (e) { /* ignore */ } }
+    if (code) { codeInput.value = ''; unlock(code, true); }
+  })();
+</script>
+
+</body>
+</html>
