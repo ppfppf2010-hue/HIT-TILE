@@ -106,7 +106,7 @@ function runItemSyncAll() {
       let code = String(row[0] || '').trim();
       if (!code) return;
       let p = byCode[code];
-      if (!p && typeof row[0] === 'number') {
+      if (!p && /^\d+$/.test(code)) {
         // 시트가 앞자리 0을 먹은 행(예: 1 <- 000001)이면 이카운트 코드로 복구한다.
         const fixed = byNormCode[normalizeNumericCode(code)];
         if (fixed) {
@@ -266,4 +266,33 @@ function handleDebugEcountItems() {
   const result = ecountRelayCall('/list-items', { debug: true });
   Logger.log(JSON.stringify(result, null, 2));
   return jsonOut(result);
+}
+// ==== 관리자용 1회성 정리: O열에 "⚠ 중복 행"으로 표시된 행을 품목등록마스터에서 삭제 ====
+// 2026-10-25 앞자리 0 품목코드(000001 등)가 숫자로 깨져 중복 추가된 행을 정리하는 용도.
+// 먼저 runItemSyncAll(또는 웹 sync_items_now)을 한 번 돌려 중복 행에 표시가 된 걸 확인한 뒤,
+// Apps Script 편집기에서 이 함수를 선택하고 [Run] 하면 된다. 이카운트에는 아무 영향이 없다(시트 행만 삭제).
+// 삭제 직전에 삭제 대상 수와 앞쪽 몇 건을 로그에 남기고, 대상이 3000행을 넘으면 중단한다(오표시 사고 방지).
+function removeDuplicateItemRows() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName(MASTER_SHEET);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) { Logger.log('데이터가 없습니다.'); return; }
+  const statuses = sheet.getRange(2, ITEM_STATUS_COL, lastRow - 1, 1).getValues();
+  const targets = [];
+  statuses.forEach(function (r, i) {
+    if (String(r[0] || '').indexOf('⚠ 중복 행') === 0) targets.push(i + 2);
+  });
+  Logger.log('삭제 대상 중복 행: ' + targets.length + '개 (예: ' + targets.slice(0, 5).join(', ') + ')');
+  if (!targets.length) return;
+  if (targets.length > 3000) throw new Error('삭제 대상이 너무 많아 중단했습니다(' + targets.length + '행). 시트를 먼저 확인해주세요.');
+
+  // 아래쪽부터 연속 구간 단위로 지운다 (위쪽 행 번호가 밀리지 않게)
+  let end = targets.length - 1;
+  while (end >= 0) {
+    let start = end;
+    while (start > 0 && targets[start - 1] === targets[start] - 1) start--;
+    sheet.deleteRows(targets[start], end - start + 1);
+    end = start - 1;
+  }
+  Logger.log('중복 행 ' + targets.length + '개 삭제 완료');
 }
