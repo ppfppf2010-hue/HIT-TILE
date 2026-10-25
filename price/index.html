@@ -109,15 +109,15 @@
 
 <header>
   <h1>히트타일 출고단가 조회</h1>
-  <p>품명이나 규격을 입력하면 출고단가를 확인할 수 있어요.</p>
+  <p id="headerSub">품명이나 규격을 입력하면 출고단가를 확인할 수 있어요.</p>
 </header>
 
 <main>
 
   <div id="codePanel">
     <div class="field">
-      <label for="codeInput">접속코드</label>
-      <input type="password" id="codeInput" placeholder="히트타일에서 안내드린 접속코드" autocomplete="off">
+      <label for="codeInput">거래처 접속코드</label>
+      <input type="text" id="codeInput" placeholder="히트타일에서 안내드린 접속코드" autocomplete="off" autocapitalize="off" spellcheck="false">
     </div>
     <button class="submit" id="codeBtn">확인</button>
   </div>
@@ -153,6 +153,7 @@
   const countText = document.getElementById('countText');
   const results = document.getElementById('results');
   const errorBox = document.getElementById('errorBox');
+  const headerSub = document.getElementById('headerSub');
   const logoutLink = document.getElementById('logoutLink');
 
   let accessCode = '';
@@ -193,6 +194,7 @@
       const data = await callApi('');
       if (!data.ok) throw new Error(data.error || '확인 중 오류가 발생했어요.');
       saveCode(code);
+      if (data.customer) headerSub.textContent = data.customer + ' 님의 출고단가예요. 품명이나 규격을 입력해 확인하세요.';
       codePanel.style.display = 'none';
       searchPanel.style.display = 'block';
       qInput.focus();
@@ -219,6 +221,7 @@
     results.innerHTML = '';
     countText.textContent = '';
     searchPanel.style.display = 'none';
+    headerSub.textContent = '품명이나 규격을 입력하면 출고단가를 확인할 수 있어요.';
     codePanel.style.display = '';
     codeInput.value = '';
     codeInput.focus();
