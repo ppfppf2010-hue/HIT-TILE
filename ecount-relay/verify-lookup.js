@@ -1,4 +1,5 @@
-// 일회용: 이카운트 조회 API(품목조회·거래처조회) 검증 스크립트.
+// 일회용: 이카운트 품목조회 API(GetBasicProductsList) 검증 스크립트.
+// (거래처조회로 쓰던 GetBasicCustList는 이카운트에 없는 주소로 확인돼 뺐다.)
 // 이카운트는 API마다 테스트 인증키(sboapi)로 한 번 호출해야 [API인증현황]에 검증 완료로 올라가고,
 // 그 뒤에야 정식키(oapi)로 쓸 수 있다. 테스트 서버도 IP 등록이 필요하므로 IP가 등록된 이 VPS에서 실행한다.
 //
@@ -46,9 +47,7 @@ async function main(testKey) {
   const base = `https://sboapi${zone}.ecount.com/OAPI/V2`;
   const q = `?SESSION_ID=${encodeURIComponent(sessionId)}`;
   console.log('품목조회(GetBasicProductsList):', brief(await post(`${base}/InventoryBasic/GetBasicProductsList${q}`, { COMMA_FLAG: 'N' })));
-  await new Promise(r => setTimeout(r, 11000)); // 테스트 전송 기준: 조회 10초에 1회
-  console.log('거래처조회(GetBasicCustList):', brief(await post(`${base}/AccountBasic/GetBasicCustList${q}`, {})));
-  console.log('끝. 이카운트 [API인증현황]에서 두 API가 검증 완료로 보이는지 확인하세요.');
+  console.log('끝. 이카운트 [API인증현황]에서 품목조회가 검증 완료로 보이는지 확인하세요.');
 }
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
