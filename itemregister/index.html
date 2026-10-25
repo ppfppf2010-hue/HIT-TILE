@@ -342,6 +342,7 @@
     <div class="field">
       <label for="mMargin">품목 종류 (출고단가 마진)</label>
       <select id="mMargin">
+        <option value="auto">자동 판별 (품목명·거래처로 타일/도기·악세사리 구분)</option>
         <option value="1.5">타일 (×1.5)</option>
         <option value="1.2">브랜드 도기·악세사리 (×1.2) — 아메리칸스탠다드, 대림, 계림 등</option>
         <option value="1.4">비브랜드 도기·악세사리 (×1.4) — 비엔트, 베르사체 등</option>
@@ -353,7 +354,7 @@
         <input type="number" id="mPrice" inputmode="numeric" min="0" placeholder="0">
       </div>
       <div class="field">
-        <label for="mOutPrice" id="mOutLabel">출고단가 (비우면 입고×1.5)</label>
+        <label for="mOutPrice" id="mOutLabel">출고단가 (비우면 마진으로 자동 계산)</label>
         <input type="number" id="mOutPrice" inputmode="numeric" min="0" placeholder="자동">
       </div>
     </div>
@@ -795,7 +796,9 @@
   const mOutPrice = document.getElementById('mOutPrice');
   const mMargin = document.getElementById('mMargin');
   const mOutLabel = document.getElementById('mOutLabel');
-  mMargin.addEventListener('change', () => { mOutLabel.textContent = '출고단가 (비우면 입고×' + mMargin.value + ')'; });
+  mMargin.addEventListener('change', () => {
+    mOutLabel.textContent = mMargin.value === 'auto' ? '출고단가 (비우면 마진으로 자동 계산)' : '출고단가 (비우면 입고×' + mMargin.value + ')';
+  });
   const mNewVendorCard = document.getElementById('mNewVendorCard');
   const mPrefix = document.getElementById('mPrefix');
   const mBusinessNo = document.getElementById('mBusinessNo');
@@ -953,6 +956,7 @@
     mSubmitBtn.style.display = 'none';
     mDoneCode.textContent = data.code;
     mDoneDetail.textContent = `${data.vendorName} · ${data.name}${data.spec ? ' (' + data.spec + ')' : ''} · 입고 ${Number(data.inPrice).toLocaleString()}원 / 출고 ${Number(data.outPrice).toLocaleString()}원` +
+      (data.marginLabel ? ` (마진 ×${data.margin}, ${data.marginLabel})` : '') +
       (data.newVendor ? ' · 신규 거래처로 함께 등록됨' : '');
     const ec = data.ecount || {};
     const vendorBad = ec.vendor && !ec.vendor.ok;
