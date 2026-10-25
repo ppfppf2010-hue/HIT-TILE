@@ -309,7 +309,7 @@
  const startNumber = Math.max(vendorInfo.lastUsed, sharedMax) + 1;
  const newRows = assignCodesAndPrices(toRegister, vendorInfo.prefix, startNumber, vendorName);
  appendToMasterSheet(vendorName, newRows);
- newRows.forEach(function (r) { ecountSyncItem(r); }); // 실패해도 로컬 등록은 이미 끝났으니 무시하고 진행
+ newRows.forEach(function (r) { ecountSyncItem(r, vendorName); }); // 실패해도 로컬 등록은 이미 끝났으니 무시하고 진행
  saveLastUsedByPrefix(vendorInfo.prefix, Math.max(startNumber + newRows.length - 1, sharedMax));
 
  const codeByKey = {};

@@ -294,7 +294,7 @@
  // ---- 이카운트 중계서버로 거래처/품목 동기화 (실패해도 시트 저장은 이미 끝났으므로 결과만 담아 돌려준다) ----
  const ecountVendorResult = ecountSyncVendor(vendorName, vendorInfo ? vendorInfo.businessNo : reviewBusinessNo);
  const ecountItemResults = items.map(function (it) {
- return { code: it.code, result: ecountSyncItem(it) };
+ return { code: it.code, result: ecountSyncItem(it, vendorName) };
  });
 
  return jsonOut({ ok: true, vendorName: vendorName, items: items, savedCount: items.length,
@@ -1488,8 +1488,11 @@
  return ecountRelayCall('/push-sale', { rows: pushRows });
  }
 
- function ecountSyncItem(item) {
+ // vendorName: 이 품목의 구매처(품목등록마스터 M열). 이카운트 품목의 "구매처"로 같이 보낸다 —
+ // 안 보내면 이카운트가 직전에 등록한 품목의 구매처를 그대로 채워 엉뚱한 거래처가 붙는다.
+ function ecountSyncItem(item, vendorName) {
  return ecountRelayCall('/register-item', {
+ custCd: ecountVendorCodeFor_(vendorName),
  prodCd: item.code,
  prodDes: item.name,
  spec: item.spec || '',
@@ -1499,6 +1502,16 @@
  outPrice: item.outPrice,
  outPriceVat: !!Number(item.outVat)
  });
+ }
+
+ // 거래처명 -> 이카운트 거래처코드. 구매전표(Purchase.js)와 같은 기준: 거래처코드관리 E열(이카운트거래처코드)이
+ // 있으면 그것, 없으면 사업자등록번호(숫자만). 못 찾으면 ''(구매처를 보내지 않음).
+ function ecountVendorCodeFor_(vendorName) {
+ const name = String(vendorName || '').trim();
+ if (!name) return '';
+ const info = findVendor(name);
+ if (!info) return '';
+ return info.ecountCode || String(info.businessNo || '').replace(/\D/g, '');
  }
 
  // 품목등록마스터에서 코드로 조회해서 이카운트에 동기화한다 (구매확정 시, 시트에 이미 있는 코드 기준으로 재동기화할 때 사용).
@@ -1513,7 +1526,7 @@
  if (!row) return { code: code, result: { ok: false, error: '품목등록마스터에서 코드를 찾지 못했습니다.' } };
  return {
  code: code,
- result: ecountSyncItem({ code: code, name: row[1], spec: row[3], unit: row[6], inPrice: row[4], inVat: row[5], outPrice: row[10], outVat: row[11] })
+ result: ecountSyncItem({ code: code, name: row[1], spec: row[3], unit: row[6], inPrice: row[4], inVat: row[5], outPrice: row[10], outVat: row[11] }, row[12])
  };
  });
  }
