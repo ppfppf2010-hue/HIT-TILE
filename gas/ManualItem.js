@@ -8,6 +8,7 @@
  * - 신규 거래처(거래처코드관리에 없음)면 needsPrefix를 돌려주고, 접두어 + 사업자등록번호를 받아 다시 호출하면
  *   거래처도 같이 만든다(이카운트 거래처 동기화는 사업자등록번호가 있을 때만).
  * - 같은 거래처에 같은 품명+규격이 이미 있으면 duplicate를 돌려주고 등록하지 않는다(force:true면 무시하고 등록).
+ * - 출고단가는 직접 넣지 않으면 입고단가 x margin(타일 1.5 / 브랜드 도기·악세사리 1.2 / 비브랜드 1.4)으로 계산한다.
  * - dryRun:true면 아무것도 저장하지 않고 "이 코드로 등록될 것"만 돌려준다.
  * - 코드 번호가 겹치지 않게 스크립트 락을 잡고 채번~저장을 한 번에 처리한다.
  */
@@ -21,6 +22,8 @@ function handleItemManualAdd(body) {
   const price = Number(body.price);
   const hasOutPrice = body.outPrice !== '' && body.outPrice != null && !isNaN(Number(body.outPrice));
   const outPriceInput = hasOutPrice ? Number(body.outPrice) : null;
+  // 마진(출고단가 = 입고단가 x 마진): 타일 1.5 / 브랜드 도기·악세사리 1.2 / 비브랜드 도기·악세사리 1.4. 그 외 값은 1.5로 본다.
+  const margin = [1.5, 1.2, 1.4].indexOf(Number(body.margin)) !== -1 ? Number(body.margin) : 1.5;
   const force = !!body.force;
   const dryRun = !!body.dryRun;
 
@@ -60,7 +63,7 @@ function handleItemManualAdd(body) {
     const row = assignCodesAndPrices([{ name: name, spec: spec, unit: unit, price: price }], prefix, startNumber, storedVendorName)[0];
     // 직접 입력한 단가는 100원 단위로 반올림하지 않고 그대로 쓴다(서류 인식값만 반올림하는 기존 규칙).
     row.inPrice = Math.round(price);
-    if (hasOutPrice) row.outPrice = Math.round(outPriceInput);
+    row.outPrice = hasOutPrice ? Math.round(outPriceInput) : Math.round((row.inPrice * margin) / 100) * 100;
 
     if (dryRun) {
       return jsonOut({ ok: true, dryRun: true, code: row.code, willCreateVendor: !vendorInfo, vendorName: storedVendorName, row: row });
@@ -80,7 +83,7 @@ function handleItemManualAdd(body) {
 
     return jsonOut({
       ok: true, code: row.code, name: row.name, spec: row.spec, unit: row.unit,
-      inPrice: row.inPrice, outPrice: row.outPrice, vendorName: storedVendorName,
+      inPrice: row.inPrice, outPrice: row.outPrice, margin: margin, vendorName: storedVendorName,
       newVendor: isNewVendor,
       ecount: {
         vendor: ecountVendorResult ? summarizeEcountResult_(ecountVendorResult) : null,
