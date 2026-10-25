@@ -229,7 +229,7 @@ function onMasterSheetEdit(e) {
     const res = ecountSyncItem({
       code: code, name: r[1], spec: r[3], unit: r[6],
       inPrice: r[4], inVat: r[5], outPrice: r[10], outVat: r[11]
-    });
+    }, r[12]);
     return [res && res.ok
       ? '↑ 시트 수정 이카운트 반영 (' + label + ')'
       : '⚠ 이카운트 반영 실패: ' + ((res && res.error) || '알 수 없는 오류') + ' - 다음 대조 때 이카운트 값으로 되돌아갈 수 있음'];

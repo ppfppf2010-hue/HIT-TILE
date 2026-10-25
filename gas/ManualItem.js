@@ -110,7 +110,7 @@ function handleItemManualAdd(body) {
 
     appendToMasterSheet(storedVendorName, [row]);
     saveLastUsedByPrefix(prefix, startNumber);
-    const ecountItemResult = ecountSyncItem(row);
+    const ecountItemResult = ecountSyncItem(row, storedVendorName);
 
     return jsonOut({
       ok: true, code: row.code, name: row.name, spec: row.spec, unit: row.unit,

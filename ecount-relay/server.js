@@ -175,7 +175,7 @@ app.post('/list-vendors', async (req, res) => {
 // prodCd는 우리 시스템에서 이미 채번한 코드를 그대로 쓴다(이카운트 PROD_CD는 자유 코드).
 app.post('/register-item', async (req, res) => {
   try {
-    const { prodCd, prodDes, spec, unit, inPrice, inPriceVat, outPrice, outPriceVat } = req.body;
+    const { prodCd, prodDes, spec, unit, inPrice, inPriceVat, outPrice, outPriceVat, custCd } = req.body;
     if (!prodCd || !prodDes) throw new Error('prodCd, prodDes 필요');
 
     const data = await ecountCall('/OAPI/V2/InventoryBasic/SaveBasicProduct', {
@@ -190,7 +190,9 @@ app.post('/register-item', async (req, res) => {
           IN_PRICE: inPrice != null ? String(inPrice) : undefined,
           IN_PRICE_VAT: inPriceVat ? '1' : '0',
           OUT_PRICE: outPrice != null ? String(outPrice) : undefined,
-          OUT_PRICE_VAT: outPriceVat ? '1' : '0'
+          OUT_PRICE_VAT: outPriceVat ? '1' : '0',
+          // 구매처(이카운트 거래처코드). 안 보내면 이카운트가 직전 품목의 구매처를 그대로 채운다
+          CUST: custCd || undefined
         }
       }]
     });
