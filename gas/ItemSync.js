@@ -46,6 +46,13 @@ function normalizeVatFlag(v) {
   return null;
 }
 
+// 숫자로만 된 품목코드의 앞자리 0을 뗀 값. 구글시트는 '000001'을 숫자 1로 바꿔 저장해서, 앞자리 0이 붙은
+// 이카운트 코드가 다음 대조 때 '시트에 없음'으로 오인되고 매번 새 행으로 중복 추가되는 사고가 있었다(2026-10-25).
+function normalizeNumericCode(code) {
+  const c = String(code || '').trim();
+  return /^\d+$/.test(c) ? (c.replace(/^0+/, '') || '0') : c;
+}
+
 function nowLabel() {
   return Utilities.formatDate(new Date(), 'Asia/Seoul', 'MM/dd HH:mm');
 }
@@ -72,7 +79,12 @@ function runItemSyncAll() {
     if (!ecItems.length) throw new Error('이카운트에서 품목을 0건 받았습니다. debug_ecount_items로 원본 응답을 확인해주세요.');
 
     const byCode = {};
-    ecItems.forEach(function (p) { byCode[p.prodCd] = p; });
+    const byNormCode = {}; // 앞자리 0이 있는 이카운트 코드만, 0을 뗀 값으로 찾기 위한 보조 색인
+    ecItems.forEach(function (p) {
+      byCode[p.prodCd] = p;
+      const k = normalizeNumericCode(p.prodCd);
+      if (k !== p.prodCd && !byNormCode[k]) byNormCode[k] = p;
+    });
 
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const sheet = ss.getSheetByName(MASTER_SHEET);
@@ -82,16 +94,28 @@ function runItemSyncAll() {
     }
 
     const lastRow = sheet.getLastRow();
+    // 품목코드 열을 텍스트로 고정해서 앞자리 0이 다시 사라지지 않게 한다.
+    if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, 1).setNumberFormat('@');
     const data = lastRow > 1 ? sheet.getRange(2, 1, lastRow - 1, ITEM_STATUS_COL).getValues() : [];
     const label = nowLabel();
     const seenCodes = {};
-    let updated = 0, unchanged = 0, flagged = 0;
+    let updated = 0, unchanged = 0, flagged = 0, repaired = 0, duplicates = 0;
+    const dupLabel = function () { return '⚠ 중복 행 (같은 품목코드가 이미 있음) - 삭제 권장 (' + label + ')'; };
 
     data.forEach(function (row) {
-      const code = String(row[0] || '').trim();
+      let code = String(row[0] || '').trim();
       if (!code) return;
+      let p = byCode[code];
+      if (!p && typeof row[0] === 'number') {
+        // 시트가 앞자리 0을 먹은 행(예: 1 <- 000001)이면 이카운트 코드로 복구한다.
+        const fixed = byNormCode[normalizeNumericCode(code)];
+        if (fixed) {
+          if (seenCodes[fixed.prodCd]) { row[ITEM_STATUS_COL - 1] = dupLabel(); duplicates++; return; }
+          p = fixed; code = fixed.prodCd; row[0] = fixed.prodCd; repaired++;
+        }
+      }
+      if (seenCodes[code]) { row[ITEM_STATUS_COL - 1] = dupLabel(); duplicates++; return; }
       seenCodes[code] = true;
-      const p = byCode[code];
       if (!p) {
         row[ITEM_STATUS_COL - 1] = '⚠ 이카운트에 없음 - 직접 확인 필요 (' + label + ')';
         flagged++;
@@ -148,7 +172,9 @@ function runItemSyncAll() {
       ]);
     });
     if (newRows.length) {
-      sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, ITEM_STATUS_COL).setValues(newRows);
+      const startRow = sheet.getLastRow() + 1;
+      sheet.getRange(startRow, 1, newRows.length, 1).setNumberFormat('@');
+      sheet.getRange(startRow, 1, newRows.length, ITEM_STATUS_COL).setValues(newRows);
     }
 
     // 이카운트에서 직접 만든 코드(예: VG00050)가 마지막사용번호를 앞지르면 따라 올려서 자동채번 충돌을 막는다.
@@ -171,7 +197,7 @@ function runItemSyncAll() {
 
     const result = {
       ok: true, ecountItemCount: ecItems.length, updated: updated, unchanged: unchanged,
-      flagged: flagged, added: newRows.length, bumpedPrefixes: bumpedPrefixes
+      flagged: flagged, added: newRows.length, repaired: repaired, duplicates: duplicates, bumpedPrefixes: bumpedPrefixes
     };
     Logger.log(JSON.stringify(result));
     return result;

@@ -232,6 +232,62 @@
   }
   .badge.ok{ background:rgba(22,128,60,0.12); color:var(--ok); }
   .badge.warn{ background:rgba(176,130,79,0.14); color:var(--warn); }
+
+  .tabs{
+    display:flex;
+    gap:6px;
+    margin-bottom:22px;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:4px;
+  }
+  .tabs button{
+    flex:1;
+    padding:10px;
+    border:none;
+    border-radius:9px;
+    background:none;
+    color:var(--muted);
+    font-size:14px;
+    font-weight:600;
+    font-family:inherit;
+    cursor:pointer;
+  }
+  .tabs button.active{ background:var(--brass); color:#fff; }
+
+  .row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .code-big{
+    font-size:26px;
+    font-weight:700;
+    letter-spacing:.5px;
+    margin:8px 0 6px;
+    color:var(--brass-deep);
+  }
+
+  .ac-wrap{ position:relative; }
+  .ac-list{
+    position:absolute;
+    left:0; right:0; top:100%;
+    margin-top:4px;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:10px;
+    box-shadow:0 6px 20px rgba(17,17,17,0.12);
+    max-height:240px;
+    overflow-y:auto;
+    z-index:30;
+    display:none;
+  }
+  .ac-list.show{ display:block; }
+  .ac-item{
+    padding:11px 12px;
+    font-size:14px;
+    cursor:pointer;
+    border-bottom:1px solid var(--line);
+  }
+  .ac-item:last-child{ border-bottom:none; }
+  .ac-item:hover{ background:#f2f5ff; }
 </style>
 </head>
 <body>
@@ -242,6 +298,82 @@
 </header>
 
 <main>
+
+  <div class="tabs">
+    <button type="button" id="tabUpload" class="active">문서 업로드</button>
+    <button type="button" id="tabManual">직접 입력</button>
+  </div>
+
+  <div id="manualPanel" style="display:none;">
+    <p class="note" style="margin-top:0;">서류 없이 품목 1개를 바로 등록해요. 거래처를 고르면 그 거래처의 코드 접두어로 품목코드가 자동으로 만들어지고, 품목등록마스터와 이카운트에 같이 등록됩니다.</p>
+
+    <div class="field">
+      <label for="mVendor">거래처명</label>
+      <div class="ac-wrap">
+        <input type="text" id="mVendor" placeholder="거래처명 (등록된 거래처는 자동완성)" autocomplete="off">
+        <div class="ac-list" id="mVendorAc"></div>
+      </div>
+    </div>
+    <div class="field">
+      <label for="mName">품목명</label>
+      <input type="text" id="mName" placeholder="품목명" autocomplete="off">
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="mSpec">규격 (없으면 비워두세요)</label>
+        <input type="text" id="mSpec" placeholder="예: 600*600" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="mUnit">단위</label>
+        <input type="text" id="mUnit" value="EA" autocomplete="off">
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
+        <label for="mPrice">입고단가 (VAT포함)</label>
+        <input type="number" id="mPrice" inputmode="numeric" min="0" placeholder="0">
+      </div>
+      <div class="field">
+        <label for="mOutPrice">출고단가 (비우면 입고×1.5)</label>
+        <input type="number" id="mOutPrice" inputmode="numeric" min="0" placeholder="자동">
+      </div>
+    </div>
+
+    <div class="card" id="mNewVendorCard">
+      <h2>신규 거래처예요</h2>
+      <p>처음 등록되는 거래처라, 품목코드에 쓸 접두어를 정해주세요.</p>
+      <div class="field">
+        <label for="mPrefix">코드 접두어 (영문 2~4자, 예: VG)</label>
+        <input type="text" id="mPrefix" maxlength="4" placeholder="VG" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="mBusinessNo">사업자등록번호 (이카운트 거래처 등록용, 모르면 비워둬도 됩니다)</label>
+        <input type="text" id="mBusinessNo" placeholder="123-45-67890" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="card" id="mDupCard">
+      <h2>이미 등록된 품목 같아요</h2>
+      <p id="mDupText"></p>
+      <button class="submit" id="mForceBtn" style="background:var(--warn);">그래도 새 코드로 등록하기</button>
+    </div>
+
+    <button class="submit" id="mSubmitBtn">등록하기</button>
+    <div class="status" id="mStatus">
+      <span class="spinner"></span>
+      <span>코드를 만들고 시트와 이카운트에 등록하는 중이에요...</span>
+    </div>
+    <div class="error-box" id="mError"></div>
+
+    <div class="card" id="mDoneCard">
+      <h2>등록 완료 <span class="badge ok">저장됨</span></h2>
+      <div class="code-big" id="mDoneCode"></div>
+      <p id="mDoneDetail"></p>
+      <p id="mDoneEcount" style="font-size:13px; font-weight:600;"></p>
+      <button class="submit" id="mNextBtn">같은 거래처로 하나 더 등록하기</button>
+      <div class="again"><a id="mNewVendorLink">다른 거래처로 등록하기</a></div>
+    </div>
+  </div>
 
   <div id="uploadPanel">
     <div class="drop" id="dropZone">
@@ -629,6 +761,214 @@
       confirmBtn.disabled = false;
       confirmStatusBox.classList.remove('show');
     }
+  });
+
+  // ===================== 직접 입력 탭 (품목 1개씩 등록) =====================
+  const tabUpload = document.getElementById('tabUpload');
+  const tabManual = document.getElementById('tabManual');
+  const manualPanel = document.getElementById('manualPanel');
+  const mVendor = document.getElementById('mVendor');
+  const mVendorAc = document.getElementById('mVendorAc');
+  const mName = document.getElementById('mName');
+  const mSpec = document.getElementById('mSpec');
+  const mUnit = document.getElementById('mUnit');
+  const mPrice = document.getElementById('mPrice');
+  const mOutPrice = document.getElementById('mOutPrice');
+  const mNewVendorCard = document.getElementById('mNewVendorCard');
+  const mPrefix = document.getElementById('mPrefix');
+  const mBusinessNo = document.getElementById('mBusinessNo');
+  const mDupCard = document.getElementById('mDupCard');
+  const mDupText = document.getElementById('mDupText');
+  const mForceBtn = document.getElementById('mForceBtn');
+  const mSubmitBtn = document.getElementById('mSubmitBtn');
+  const mStatus = document.getElementById('mStatus');
+  const mError = document.getElementById('mError');
+  const mDoneCard = document.getElementById('mDoneCard');
+  const mDoneCode = document.getElementById('mDoneCode');
+  const mDoneDetail = document.getElementById('mDoneDetail');
+  const mDoneEcount = document.getElementById('mDoneEcount');
+  const mNextBtn = document.getElementById('mNextBtn');
+  const mNewVendorLink = document.getElementById('mNewVendorLink');
+
+  // 탭을 오가도 문서 업로드 쪽 진행 상황(검토 대기 등)이 사라지지 않게 보이던 상태를 기억해둔다.
+  let savedUploadState = null;
+  function showTab(which) {
+    const manual = which === 'manual';
+    tabManual.classList.toggle('active', manual);
+    tabUpload.classList.toggle('active', !manual);
+    if (manual && !savedUploadState) {
+      savedUploadState = {
+        panel: uploadPanel.style.display,
+        prefix: prefixCard.classList.contains('show'),
+        review: reviewCard.classList.contains('show'),
+        done: doneCard.classList.contains('show')
+      };
+      uploadPanel.style.display = 'none';
+      prefixCard.classList.remove('show');
+      reviewCard.classList.remove('show');
+      doneCard.classList.remove('show');
+      manualPanel.style.display = '';
+      loadVendorNames();
+    } else if (!manual && savedUploadState) {
+      uploadPanel.style.display = savedUploadState.panel;
+      prefixCard.classList.toggle('show', savedUploadState.prefix);
+      reviewCard.classList.toggle('show', savedUploadState.review);
+      doneCard.classList.toggle('show', savedUploadState.done);
+      savedUploadState = null;
+      manualPanel.style.display = 'none';
+    }
+  }
+  tabUpload.addEventListener('click', () => showTab('upload'));
+  tabManual.addEventListener('click', () => showTab('manual'));
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  // ---- 거래처 자동완성 (등록된 거래처 목록) ----
+  let vendorNames = [];
+  let vendorNamesLoaded = false;
+  async function loadVendorNames() {
+    if (vendorNamesLoaded) return;
+    try {
+      const data = await callApi({ action: 'list_vendor_names' });
+      if (data.ok) { vendorNames = data.names || []; vendorNamesLoaded = true; }
+    } catch (e) { /* 자동완성만 안 될 뿐, 직접 타이핑은 가능 */ }
+  }
+  function renderVendorAc() {
+    const q = mVendor.value.trim().toLowerCase();
+    mVendorAc.innerHTML = '';
+    if (!q) { mVendorAc.classList.remove('show'); return; }
+    const hits = vendorNames.filter((n) => n.toLowerCase().indexOf(q) !== -1).slice(0, 30);
+    if (!hits.length) { mVendorAc.classList.remove('show'); return; }
+    hits.forEach((n) => {
+      const div = document.createElement('div');
+      div.className = 'ac-item';
+      div.innerHTML = escapeHtml(n);
+      div.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        mVendor.value = n;
+        mVendorAc.classList.remove('show');
+        resetManualPrompts();
+      });
+      mVendorAc.appendChild(div);
+    });
+    mVendorAc.classList.add('show');
+  }
+  mVendor.addEventListener('input', () => { resetManualPrompts(); renderVendorAc(); });
+  mVendor.addEventListener('focus', renderVendorAc);
+  mVendor.addEventListener('blur', () => setTimeout(() => mVendorAc.classList.remove('show'), 150));
+
+  // 거래처/품목을 바꾸면 이전에 뜬 신규 거래처·중복 안내는 무효이므로 닫는다.
+  function resetManualPrompts() {
+    mNewVendorCard.classList.remove('show');
+    mDupCard.classList.remove('show');
+    mError.classList.remove('show');
+  }
+  [mName, mSpec].forEach((el) => el.addEventListener('input', () => { mDupCard.classList.remove('show'); }));
+
+  function showManualError(msg) {
+    mError.textContent = msg;
+    mError.classList.add('show');
+  }
+
+  async function manualSubmit(force) {
+    mError.classList.remove('show');
+    mDupCard.classList.remove('show');
+    const vendorName = mVendor.value.trim();
+    const name = mName.value.trim();
+    if (!vendorName) { mVendor.focus(); showManualError('거래처명을 입력해주세요.'); return; }
+    if (!name) { mName.focus(); showManualError('품목명을 입력해주세요.'); return; }
+    if (mPrice.value.trim() === '' || Number(mPrice.value) < 0) { mPrice.focus(); showManualError('입고단가(VAT포함)를 숫자로 입력해주세요. 모르면 0을 넣고 나중에 이카운트에서 고치세요.'); return; }
+
+    const payload = {
+      action: 'item_manual_add',
+      vendorName: vendorName,
+      name: name,
+      spec: mSpec.value.trim(),
+      unit: mUnit.value.trim() || 'EA',
+      price: mPrice.value.trim(),
+      outPrice: mOutPrice.value.trim(),
+      force: !!force
+    };
+    if (mNewVendorCard.classList.contains('show')) {
+      payload.prefix = mPrefix.value.trim().toUpperCase();
+      payload.businessNo = mBusinessNo.value.trim();
+      if (!payload.prefix) { mPrefix.focus(); showManualError('코드 접두어를 입력해주세요.'); return; }
+    }
+
+    mSubmitBtn.disabled = true;
+    mForceBtn.disabled = true;
+    mStatus.classList.add('show');
+    try {
+      const data = await callApi(payload);
+      if (!data.ok) throw new Error(data.error || '처리 중 오류가 발생했어요.');
+      if (data.needsPrefix) {
+        if (!mPrefix.value.trim()) mPrefix.value = data.suggestedPrefix || '';
+        mNewVendorCard.classList.add('show');
+        mPrefix.focus();
+        return;
+      }
+      if (data.duplicate) {
+        mDupText.textContent = `같은 거래처에 "${data.matchedName}" (${data.matchedCode}) 이(가) 이미 있어요. 다른 품목이 맞다면 아래 버튼으로 등록하세요.`;
+        mDupCard.classList.add('show');
+        return;
+      }
+      showManualDone(data);
+    } catch (err) {
+      showManualError(err.message || String(err));
+    } finally {
+      mSubmitBtn.disabled = false;
+      mForceBtn.disabled = false;
+      mStatus.classList.remove('show');
+    }
+  }
+
+  function showManualDone(data) {
+    mNewVendorCard.classList.remove('show');
+    mDupCard.classList.remove('show');
+    mSubmitBtn.style.display = 'none';
+    mDoneCode.textContent = data.code;
+    mDoneDetail.textContent = `${data.vendorName} · ${data.name}${data.spec ? ' (' + data.spec + ')' : ''} · 입고 ${Number(data.inPrice).toLocaleString()}원 / 출고 ${Number(data.outPrice).toLocaleString()}원` +
+      (data.newVendor ? ' · 신규 거래처로 함께 등록됨' : '');
+    const ec = data.ecount || {};
+    const vendorBad = ec.vendor && !ec.vendor.ok;
+    const itemBad = ec.item && !ec.item.ok;
+    if (!vendorBad && !itemBad) {
+      mDoneEcount.textContent = '✓ 이카운트에도 등록됐어요.';
+      mDoneEcount.style.color = 'var(--ok)';
+    } else {
+      const reasons = [];
+      if (itemBad) reasons.push('품목: ' + ec.item.message);
+      if (vendorBad) reasons.push('거래처: ' + ec.vendor.message);
+      mDoneEcount.textContent = '⚠ 시트에는 저장됐지만 이카운트 등록은 실패했어요 — ' + reasons.join(' / ');
+      mDoneEcount.style.color = 'var(--err)';
+    }
+    mDoneCard.classList.add('show');
+    if (data.newVendor && vendorNames.indexOf(data.vendorName) === -1) vendorNames.push(data.vendorName);
+  }
+
+  mSubmitBtn.addEventListener('click', () => manualSubmit(false));
+  mForceBtn.addEventListener('click', () => manualSubmit(true));
+
+  function clearItemFields() {
+    mName.value = '';
+    mSpec.value = '';
+    mPrice.value = '';
+    mOutPrice.value = '';
+    mDoneCard.classList.remove('show');
+    mDupCard.classList.remove('show');
+    mError.classList.remove('show');
+    mSubmitBtn.style.display = '';
+  }
+  mNextBtn.addEventListener('click', () => { clearItemFields(); mName.focus(); });
+  mNewVendorLink.addEventListener('click', () => {
+    clearItemFields();
+    mVendor.value = '';
+    mPrefix.value = '';
+    mBusinessNo.value = '';
+    mNewVendorCard.classList.remove('show');
+    mVendor.focus();
   });
 </script>
 
