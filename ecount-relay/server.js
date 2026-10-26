@@ -142,33 +142,19 @@ app.post('/register-vendor', async (req, res) => {
   }
 });
 
-// ---- 거래처 목록 조회 (GetBasicCustList) ----
-// 구글시트(거래처코드관리/판매거래처)를 "이카운트 기준"으로 주기적으로 대조/보정하기 위해 쓴다.
-// 주의: 이카운트 OAPI 문서를 이 서버 개발 환경에서 직접 열람하지 못한 상태로, 기존 Save류 API의
-// 명명 규칙(AccountBasic/SaveBasicCust)에 맞춰 GetBasicCustList로 우선 구현했다. 응답 구조가
-// 다르면(예: Data.Result가 아니라 다른 필드) 아래 파싱 부분만 실제 응답 모양 보고 고치면 된다 -
-// debug:true로 호출하면 이카운트 원본 응답을 그대로 돌려주니 그걸로 확인 가능하다.
-app.post('/list-vendors', async (req, res) => {
-  try {
-    const data = await ecountCall('/OAPI/V2/AccountBasic/GetBasicCustList', {});
-    const failMsg = ecountFailureMessage(data);
-    if (failMsg) return res.json({ ok: false, error: failMsg, ecount: data });
-
-    const list = (data && data.Data && (data.Data.Result || data.Data.Datas || data.Data.List)) || [];
-    const vendors = list.map(function (v) {
-      return {
-        custCd: v.CUST_CD || v.CUST || '',
-        name: v.CUST_NAME || v.CUST_DES || '',
-        businessNo: v.BUSINESS_NO || v.BUSINESS_NUMBER || ''
-      };
-    }).filter(function (v) { return v.custCd || v.name; });
-
-    const payload = { ok: true, vendors: vendors, count: vendors.length };
-    if (req.body && req.body.debug) payload.raw = data;
-    res.json(payload);
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
+// ---- 거래처 목록 조회 ----
+// 구글시트(거래처코드관리/판매거래처)를 "이카운트 기준"으로 대조하려고 만들었던 라우트.
+// 2026-10 확인: 이카운트 OAPI V2에는 거래처 조회 API가 없다(거래처는 AccountBasic/SaveBasicCust 저장만 제공).
+// 처음에 이름을 추측해서 쓴 AccountBasic/GetBasicCustList는 운영서버(oapibb)에서
+// "No HTTP resource was found that matches the request URI"로 실패했다.
+// 없는 API를 계속 호출하면 이카운트 "시간당 연속 오류 제한"만 깎이므로, 이카운트를 부르지 않고
+// unsupported 표시와 함께 바로 실패를 돌려준다. GAS(runVendorSyncAll)는 이 표시를 보고 대조를 건너뛴다.
+app.post('/list-vendors', (req, res) => {
+  res.json({
+    ok: false,
+    unsupported: true,
+    error: '이카운트 OAPI에 거래처 목록 조회 API가 없습니다 (거래처는 SaveBasicCust 저장만 가능). 대조 기능은 사용할 수 없습니다.'
+  });
 });
 
 // ---- 품목 등록/동기화 (SaveBasicProduct) ----
@@ -209,7 +195,9 @@ app.post('/register-item', async (req, res) => {
 // 가져가서 "이카운트 기준"으로 대조/보정한다(gas/ItemSync.js의 runItemSyncAll).
 // /list-vendors와 마찬가지로 실제 계정에서 처음 돌려볼 때 debug:true로 원본 응답(raw)을 보고
 // 리스트 경로/필드명이 맞는지 한 번 확인해야 한다. 다르면 아래 파싱 부분만 고치면 된다.
-// 숫자에 천단위 콤마가 붙어오지 않도록 COMMA_FLAG:'N'으로 요청한다.
+// API 이름(InventoryBasic/GetBasicProductsList)과 응답 위치(Data.Result)는 이카운트 OAPI 문서 기준으로 맞다.
+// 단, 이 API는 이카운트 제한이 "10분에 1회"라 그보다 자주 부르면 실패한다.
+// COMMA_FLAG는 "품목코드 자체에 콤마가 들어 있는지" 여부(기본 N)이지 천단위 콤마 옵션이 아니다.
 function toNumberOrNull(v) {
   if (v === undefined || v === null || String(v).trim() === '') return null;
   const n = Number(String(v).replace(/,/g, ''));
@@ -285,8 +273,9 @@ app.post('/push-purchase', async (req, res) => {
 });
 
 // ---- 판매전표 저장 (SaveSale) ----
-// rows: [{ date(YYYYMMDD), custDes, whCd, prodCd, prodDes, qty, unitPriceVat, supply, vat, remarks }]
+// rows: [{ date(YYYYMMDD), custCd, custDes, whCd, prodCd, prodDes, qty, unitPriceVat, supply, vat, remarks }]
 // 한 번의 호출에 들어온 rows는 전부 같은 순번(UPLOAD_SER_NO)을 줘서 하나의 전표로 묶는다.
+// custCd(이카운트 거래처코드)가 있으면 CUST_CD로 보내 이름 매칭 없이 그 거래처 잔액에 잡히게 한다.
 // SavePurchases와 구조는 동일하고, whCd는 출하창고(구매의 입고창고와 반대 방향)라는 점만 다르다.
 app.post('/push-sale', async (req, res) => {
   try {
@@ -298,6 +287,7 @@ app.post('/push-sale', async (req, res) => {
       BulkDatas: {
         UPLOAD_SER_NO: '1',
         IO_DATE: r.date,
+        ...(r.custCd ? { CUST_CD: r.custCd } : {}),
         CUST_DES: r.custDes,
         WH_CD: r.whCd,
         PROD_CD: r.prodCd,
