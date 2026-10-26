@@ -285,8 +285,9 @@ app.post('/push-purchase', async (req, res) => {
 });
 
 // ---- 판매전표 저장 (SaveSale) ----
-// rows: [{ date(YYYYMMDD), custDes, whCd, prodCd, prodDes, qty, unitPriceVat, supply, vat, remarks }]
+// rows: [{ date(YYYYMMDD), custCd, custDes, whCd, prodCd, prodDes, qty, unitPriceVat, supply, vat, remarks }]
 // 한 번의 호출에 들어온 rows는 전부 같은 순번(UPLOAD_SER_NO)을 줘서 하나의 전표로 묶는다.
+// custCd(이카운트 거래처코드)가 있으면 CUST_CD로 보내 이름 매칭 없이 그 거래처 잔액에 잡히게 한다.
 // SavePurchases와 구조는 동일하고, whCd는 출하창고(구매의 입고창고와 반대 방향)라는 점만 다르다.
 app.post('/push-sale', async (req, res) => {
   try {
@@ -298,6 +299,7 @@ app.post('/push-sale', async (req, res) => {
       BulkDatas: {
         UPLOAD_SER_NO: '1',
         IO_DATE: r.date,
+        ...(r.custCd ? { CUST_CD: r.custCd } : {}),
         CUST_DES: r.custDes,
         WH_CD: r.whCd,
         PROD_CD: r.prodCd,

@@ -61,6 +61,15 @@
  if (action === 'purchase_register_vendor') return handlePurchaseRegisterVendor(body);
  if (action === 'purchase_confirm') return handlePurchaseConfirm();
  if (action === 'create_order') return handleCreateOrder(body);
+ if (action === 'korean_name_preview') return handleKoreanNamePreview(body);
+ if (action === 'korean_name_apply') return handleKoreanNameApply(body);
+ if (action === 'korean_name_check') return handleKoreanNameCheck(body);
+ if (action === 'korean_name_set') return handleKoreanNameSet(body);
+ if (action === 'korean_name_seed') return handleKoreanNameSeed(body);
+ if (action === 'setup_korean_name_auto') return handleSetupKoreanNameAuto();
+ if (action === 'setup_item_sync') return handleSetupItemSync(body);
+ if (action === 'list_triggers') return handleListTriggers();
+ if (action === 'remove_trigger') return handleRemoveTrigger(body);
  if (action === 'delivery_extract') return handleDeliveryExtract(body);
  if (action === 'save_invoice') return handleSaveInvoice(body);
  if (action === 'save_payment') return handleSavePayment(body);
@@ -1484,7 +1493,15 @@
  payload: JSON.stringify(payload),
  muteHttpExceptions: true
  });
- return JSON.parse(res.getContentText());
+ const code = res.getResponseCode();
+ const text = res.getContentText();
+ try {
+ return JSON.parse(text);
+ } catch (parseErr) {
+ // 중계서버가 JSON이 아닌 걸 돌려준 경우(구버전이라 라우트가 없어 Express 404 HTML,
+ // nginx 502 등) 원문을 잘라 같이 돌려줘야 원인을 알 수 있다.
+ return { ok: false, error: '중계서버가 JSON이 아닌 응답을 보냈습니다 (HTTP ' + code + ')', httpStatus: code, rawBody: text.slice(0, 500) };
+ }
  } catch (e) {
  return { ok: false, error: e.message };
  }
