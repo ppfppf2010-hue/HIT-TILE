@@ -180,7 +180,8 @@ function runItemSyncAll() {
     // 이카운트에서 직접 만든 코드(예: VG00050)가 마지막사용번호를 앞지르면 따라 올려서 자동채번 충돌을 막는다.
     const maxByPrefix = {};
     Object.keys(seenCodes).forEach(function (code) {
-      const m = code.match(/^([A-Za-z]+)(\d+)$/);
+      // 접두어는 숫자가 아닌 부분 전체 — 'VG' 같은 영문뿐 아니라 '대경목간', '히든' 같은 한글 접두어도 잡는다
+      const m = code.match(/^(\D+)(\d+)$/);
       if (!m) return;
       const prefix = m[1].toUpperCase();
       const n = parseInt(m[2], 10);

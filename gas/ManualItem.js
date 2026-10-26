@@ -22,6 +22,10 @@ const MARGIN_NONBRAND = 1.4;
 const BRAND_KEYWORDS = ['아메리칸스탠다드', 'american standard', '스탠다드', '대림', '계림'];
 // 도기·악세사리 품목 키워드 (욕실 위생도기/수전/부속/액세서리)
 const CERAMIC_ACC_KEYWORDS = ['변기', '세면대', '세면기', '소변기', '비데', '욕조', '수전', '꼭지', '싱크', '부속', '샤워', '슬라이드바', '슬바', '유가', '세면', '청소건', '휴지걸이', '수건걸이', '수건장', '타올', '비누대', '컵대', '선반', '욕실장', '거울', '파티션', '환풍기', '배수', '트랩', '앵글밸브', '폽업', '도기', '악세사리', '액세서리', '악세서리'];
+// 거래처별 고정 마진 — 거래처명(또는 품목명)에 들어 있으면 품목 종류와 상관없이 이 마진을 쓴다
+const VENDOR_MARGINS = [
+  { keyword: '히든', margin: MARGIN_NONBRAND, label: '히든바스 1.4' }
+];
 // 이 단어가 들어 있으면 위 키워드가 있어도 타일로 본다
 const TILE_KEYWORDS = ['타일', '포셀린', '모자이크', '폴리싱', '데코타일'];
 
@@ -29,6 +33,8 @@ function classifyMargin(name, vendorName) {
   const n = String(name || '').toLowerCase();
   const v = String(vendorName || '').toLowerCase();
   const has = function (text, list) { return list.some(function (k) { return text.indexOf(k.toLowerCase()) !== -1; }); };
+  const fixed = VENDOR_MARGINS.find(function (r) { return has(v + ' ' + n, [r.keyword]); });
+  if (fixed) return { margin: fixed.margin, label: fixed.label };
   if (has(n, TILE_KEYWORDS)) return { margin: MARGIN_TILE, label: '타일' };
   // 이름에 브랜드가 직접 들어 있으면(예: '아메리칸 스탠다드 오슬로 무광') 종류 단어가 없어도 브랜드 도기·악세사리로 본다.
   if (has(n, BRAND_KEYWORDS)) return { margin: MARGIN_BRAND, label: '브랜드 도기·악세사리' };

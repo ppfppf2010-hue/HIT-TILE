@@ -1409,6 +1409,19 @@
  if (n > max) max = n;
  }
  }
+ // 마지막사용번호가 실제 코드보다 뒤처져 있을 수 있다(이카운트에서 직접 만든 품목 등).
+ // 품목등록마스터에 이미 있는 같은 접두어 코드의 최대 번호도 함께 봐서, 기존 품목 코드를 다시 발급해
+ // 이카운트 품목을 덮어쓰는 일을 막는다 (예: 대경목간00004, 히든00002가 다시 발급될 뻔함).
+ if (target) {
+ const master = ss.getSheetByName(MASTER_SHEET);
+ const codes = master && master.getLastRow() > 1 ? master.getRange(2, 1, master.getLastRow() - 1, 1).getValues() : [];
+ codes.forEach(function (r) {
+ const code = String(r[0] || '').trim().toUpperCase();
+ if (code.indexOf(target) !== 0) return;
+ const rest = code.slice(target.length);
+ if (/^\d+$/.test(rest) && Number(rest) > max) max = Number(rest);
+ });
+ }
  return max;
  }
 
