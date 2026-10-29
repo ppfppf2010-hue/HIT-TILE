@@ -41,34 +41,20 @@
 
   h2{ font-size:15px; margin:24px 4px 10px; }
 
-  .space{
-    background:var(--card);
-    border:1px solid var(--line);
-    border-radius:14px;
-    padding:14px 16px;
-    margin-bottom:10px;
-  }
-  .space-name{ font-size:13px; font-weight:700; color:var(--accent); margin-bottom:8px; }
-  .tile{ display:flex; gap:12px; align-items:center; }
-  .tile + .tile{ margin-top:12px; padding-top:12px; border-top:1px dashed var(--line); }
-  .swatch{
-    flex:0 0 56px; height:56px; border-radius:10px;
-    background:var(--paper) center/cover no-repeat;
-    border:1px solid var(--line);
+  /* 타일 카드: 사진을 크게, 설명은 아래에 작게 */
+  .cards{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .tcard{ background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden; break-inside:avoid; }
+  .photo{
+    aspect-ratio:1 / 1; background:var(--paper) center/cover no-repeat;
     display:flex; align-items:center; justify-content:center;
-    font-size:11px; color:var(--muted);
+    color:#9CA3AF; font-size:13px; border-bottom:1px solid var(--line);
   }
-  .tile-body{ min-width:0; }
-  .part{ font-size:11.5px; color:var(--muted); }
-  .tile-name{ font-size:15.5px; font-weight:700; line-height:1.4; word-break:keep-all; overflow-wrap:anywhere; }
-  .tile-spec{ font-size:13px; color:var(--muted); margin-top:2px; }
+  .cap{ padding:8px 10px 10px; }
+  .cap .where{ font-size:11.5px; font-weight:700; color:var(--accent); }
+  .cap .name{ font-size:13px; font-weight:700; line-height:1.35; margin-top:2px; word-break:keep-all; overflow-wrap:anywhere; }
+  .cap .spec{ font-size:11.5px; color:var(--muted); margin-top:1px; }
+  .none{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; color:var(--muted); }
 
-  .fixtures{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:6px 16px; margin-bottom:10px; }
-  .fixtures .zone{ font-size:13px; font-weight:700; color:var(--accent); padding:10px 0 4px; }
-  .fx-row{ display:flex; justify-content:space-between; gap:12px; padding:7px 0; border-bottom:1px solid var(--line); font-size:14px; }
-  .fx-row:last-child{ border-bottom:none; }
-  .fx-row .k{ color:var(--muted); flex:0 0 auto; }
-  .fx-row .v{ text-align:right; font-weight:500; word-break:keep-all; overflow-wrap:anywhere; }
 
   .notice{
     background:#FFF7ED; border:1px solid #FED7AA; color:#9A3412;
@@ -95,26 +81,35 @@
     .hero{ background:#fff; color:var(--ink); border:none; border-bottom:3px solid var(--ink); border-radius:0; padding:0 0 12px; }
     .hero p{ color:var(--muted); }
     h2{ margin:16px 0 8px; break-after:avoid; }
-    .spaces{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-    .space{ margin:0; padding:10px 12px; break-inside:avoid; border-color:#D1D5DB; }
+    .cards{ grid-template-columns:repeat(3, 1fr); gap:8px; }
+    .photo{ aspect-ratio:4 / 3; }
+    .page + .page{ margin-top:0; break-before:page; }
+    .memo .lines{ height:74px; }
+    .memo{ margin-top:10px; }
+    .hero{ position:relative; }
+    .hero-contact{ display:block !important; }
+    .contact{ display:none; }
+    .notice{ padding:8px 12px; font-size:11.5px; line-height:1.6; margin-top:10px; }
+    h2{ margin:12px 0 6px; }
+    .tcard{ border-color:#D1D5DB; }
     .hero h1{ font-size:22px; }
     .hero p{ font-size:13.5px; }
-    .space{ padding:12px 14px; }
-    .swatch{ flex-basis:56px; height:56px; }
-    .tile-name{ font-size:15px; }
-    .tile-spec{ font-size:13px; }
-    .fx-row{ font-size:13.5px; }
-    .memo{ display:block !important; }
-    .fixtures{ break-inside:avoid; border-color:#D1D5DB; }
-    .fixtures .zones{ display:grid; grid-template-columns:1fr 1fr; column-gap:24px; }
-    .notice{ background:#fff; border-color:#D1D5DB; color:var(--ink); break-inside:avoid; }
+      .memo{ display:block !important; }
+      .notice{ background:#fff; border-color:#D1D5DB; color:var(--ink); break-inside:avoid; }
     .contact{ margin-top:12px; }
   }
 
+  .hero-contact{ display:none; position:absolute; right:0; top:2px; text-align:right; font-size:11.5px; line-height:1.6; color:var(--muted); }
+  .hero-contact b{ color:var(--ink); }
   .memo{ display:none; margin-top:14px; break-inside:avoid; }
   .memo .label{ font-size:13px; font-weight:700; margin-bottom:6px; }
   .memo .lines{ border:1px solid #D1D5DB; border-radius:12px; height:112px;
     background:repeating-linear-gradient(#fff 0 36px, #E5E7EB 36px 37px); }
+
+  .page + .page{ margin-top:28px; }
+  body[data-only="tile"] #pg-fixture, body[data-only="fixture"] #pg-tile{ display:none; }
+  .actions{ flex-wrap:wrap; }
+  .actions button{ flex:1 1 40%; }
 
   .empty{ background:var(--card); border-radius:14px; padding:40px 20px; text-align:center; color:var(--muted); margin-top:20px; line-height:1.7; }
 </style>
@@ -123,7 +118,9 @@
 <main>
   <div id="report"></div>
   <div class="actions" id="actions" style="display:none;">
-    <button class="primary" type="button" id="printBtn">인쇄 (A4)</button>
+    <button class="primary" type="button" id="printBtn">전체 인쇄</button>
+    <button type="button" id="onlyTile">타일만 인쇄</button>
+    <button type="button" id="onlyFixture">도기만 인쇄</button>
     <button type="button" id="saveImg">이미지로 저장</button>
   </div>
 </main>
@@ -161,61 +158,77 @@ function render(data){
   }
   document.title = `HIT TILE 상담 정리 - ${data.co || ''}`;
 
-  // 같은 공간(예: 공용욕실 벽체 · 바닥)은 한 카드로 묶는다
-  const groups = [];
+  // 같은 공간에서 같은 타일이면(예: 공용욕실 벽체 · 바닥) 사진 한 장으로 합친다
+  const cards = [];
   (data.t || []).forEach(t => {
-    let g = groups.find(x => x.name === t.g);
-    if(!g){ g = { name: t.g, tiles: [] }; groups.push(g); }
-    g.tiles.push(t);
+    const same = cards.find(c => c.g === t.g && c.n === t.n);
+    if(same){ if(t.p) same.parts.push(t.p); return; }
+    cards.push({ g: t.g, n: t.n, s: t.s, img: t.img, parts: t.p ? [t.p] : [] });
   });
 
-  const tilesHtml = groups.length ? groups.map(g => `
-    <div class="space">
-      <div class="space-name">${esc(g.name)}</div>
-      ${g.tiles.map(t => `
-        <div class="tile">
-          <div class="swatch"${t.img ? ` style="background-image:url('${esc(t.img)}')"` : ''}>${t.img ? '' : '샘플'}</div>
-          <div class="tile-body">
-            ${t.p ? `<div class="part">${esc(t.p)}</div>` : ''}
-            <div class="tile-name">${esc(t.n)}</div>
-            ${t.s ? `<div class="tile-spec">${esc(t.s)}</div>` : ''}
-          </div>
-        </div>`).join('')}
-    </div>`).join('') : '<div class="space">고르신 타일이 없습니다.</div>';
+  const tilesHtml = cards.length ? `<div class="cards">${cards.map(c => `
+      <div class="tcard">
+        <div class="photo"${c.img ? ` style="background-image:url('${esc(c.img)}')"` : ''}>${c.img ? '' : '샘플 사진'}</div>
+        <div class="cap">
+          <div class="where">${esc(c.g)}${c.parts.length ? ' · ' + esc(c.parts.join(' · ')) : ''}</div>
+          <div class="name">${esc(c.n)}</div>
+          ${c.s ? `<div class="spec">${esc(c.s)}</div>` : ''}
+        </div>
+      </div>`).join('')}</div>` : '<div class="none">고르신 타일이 없습니다.</div>';
 
-  const zones = [];
+  // 도기 · 욕실 제품도 같은 카드. 같은 제품이 두 욕실에 다 들어가면 한 장으로 합친다
+  const fx = [];
   (data.f || []).forEach(f => {
-    let z = zones.find(x => x.name === f.z);
-    if(!z){ z = { name: f.z, rows: [] }; zones.push(z); }
-    z.rows.push(f);
+    const same = fx.find(c => c.i === f.i && c.n === f.n);
+    if(same){ same.zones.push(f.z); return; }
+    fx.push({ i: f.i, n: f.n, img: f.img, zones: [f.z] });
   });
-  const fixturesHtml = zones.length ? `
-    <h2>욕실 제품</h2>
-    <div class="fixtures"><div class="zones">
-      ${zones.map(z => `<div>
-        <div class="zone">${esc(z.name)}</div>
-        ${z.rows.map(r => `<div class="fx-row"><span class="k">${esc(r.i)}</span><span class="v">${esc(r.n)}</span></div>`).join('')}
-      </div>`).join('')}
-    </div></div>` : '';
+  const fixturesHtml = fx.length ? `<div class="cards">${fx.map(c => `
+      <div class="tcard">
+        <div class="photo"${c.img ? ` style="background-image:url('${esc(c.img)}')"` : ''}>${c.img ? '' : '제품 사진'}</div>
+        <div class="cap">
+          <div class="where">${esc(c.zones.join(' · '))} · ${esc(c.i)}</div>
+          <div class="name">${esc(c.n)}</div>
+        </div>
+      </div>`).join('')}</div>` : '';
 
+  const contact = '<div class="hero-contact"><b>히트타일</b> 053-767-1663<br>대구 수성구 수성로 58</div>';
+  const memo = '<div class="memo"><div class="label">메모</div><div class="lines"></div></div>';
+  const info = `${data.date ? `상담일 ${esc(formatDate(data.date))}` : ''}${data.site ? `<br>현장 ${esc(data.site)}` : ''}${data.dl ? `<br>배송 예정 ${esc(formatDate(data.dl))}` : ''}`;
+
+  // 타일 한 장, 도기 한 장 — 인쇄하면 각각 A4 한 장씩 나온다
   root.innerHTML = `
-    <div class="hero">
-      <div class="logo">HIT <span>TILE</span></div>
-      <h1>${esc(data.co || '고객')}님,<br>오늘 고르신 타일을 정리해 드려요</h1>
-      <p>${data.date ? `상담일 ${esc(formatDate(data.date))}` : ''}${data.site ? `<br>현장 ${esc(data.site)}` : ''}${data.dl ? `<br>배송 예정 ${esc(formatDate(data.dl))}` : ''}</p>
-    </div>
-    <h2>공간별 타일</h2>
-    <div class="spaces">${tilesHtml}</div>
-    ${fixturesHtml}
-    <div class="notice">
-      타일은 생산 시기(로트)와 조명에 따라 색감이 조금 다르게 보일 수 있어요.<br>
-      변경하실 부분이 있으면 편하게 연락 주세요.
-    </div>
-    <div class="memo"><div class="label">메모</div><div class="lines"></div></div>
+    <section class="page" id="pg-tile">
+      <div class="hero">
+        <div class="logo">HIT <span>TILE</span></div>${contact}
+        <h1>${esc(data.co || '고객')}님,<br>오늘 고르신 타일을 정리해 드려요</h1>
+        <p>${info}</p>
+      </div>
+      <h2>타일</h2>
+      ${tilesHtml}
+      <div class="notice">
+        타일은 생산 시기(로트)와 조명에 따라 색감이 조금 다르게 보일 수 있어요.
+        변경하실 부분이 있으면 편하게 연락 주세요.
+      </div>
+      ${memo}
+    </section>
+    ${fixturesHtml ? `
+    <section class="page" id="pg-fixture">
+      <div class="hero">
+        <div class="logo">HIT <span>TILE</span></div>${contact}
+        <h1>${esc(data.co || '고객')}님,<br>오늘 고르신 욕실 도기 · 제품이에요</h1>
+        <p>${info}</p>
+      </div>
+      <h2>도기 · 욕실 제품</h2>
+      ${fixturesHtml}
+      ${memo}
+    </section>` : ''}
     <div class="contact">
       <b>히트타일</b> · <a href="tel:053-767-1663">053-767-1663</a><br>
       대구 수성구 수성로 58
     </div>`;
+  document.getElementById('onlyTile').style.display = fixturesHtml ? '' : 'none';
+  document.getElementById('onlyFixture').style.display = fixturesHtml ? '' : 'none';
   document.getElementById('actions').style.display = '';
 }
 
@@ -241,7 +254,15 @@ async function saveImage(){
 }
 
 document.getElementById('saveImg').addEventListener('click', saveImage);
-document.getElementById('printBtn').addEventListener('click', () => window.print());
+// 타일만 / 도기만 인쇄: 다른 페이지를 잠깐 숨기고 인쇄한 뒤 되돌린다
+function printOnly(which){
+  if(which) document.body.dataset.only = which; else delete document.body.dataset.only;
+  window.print();
+}
+window.addEventListener('afterprint', () => { delete document.body.dataset.only; });
+document.getElementById('printBtn').addEventListener('click', () => printOnly(''));
+document.getElementById('onlyTile').addEventListener('click', () => printOnly('tile'));
+document.getElementById('onlyFixture').addEventListener('click', () => printOnly('fixture'));
 render(decodeData());
 </script>
 </body>
