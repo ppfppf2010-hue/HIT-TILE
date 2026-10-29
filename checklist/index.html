@@ -440,6 +440,7 @@
     <div id="detailContainer"></div>
     <button class="secondary" id="tileCalcBtn" onclick="goToTileCalcFromCurrent()">📐 타일 수량 계산 (사이즈 입력)</button>
     <button class="secondary" id="saleLinkBtn" onclick="goToSaleRegistrationFromCurrent()">🧾 판매등록으로 연결</button>
+    <button class="secondary" id="reportBtn" onclick="shareCustomerReport()">📤 고객 리포트 보내기 (고르신 타일 정리)</button>
     <button class="secondary" id="imageBtn" onclick="saveAsImage()">🖼 이미지로 저장</button>
     <button class="primary" style="margin-top:10px;" onclick="startNewEntry()">+ 새 상담 입력하기</button>
   </section>
@@ -727,6 +728,7 @@ function showConsultationDetail(idx){
     'fixture_json': pickField(rec, ['fixture_json']) || '{}',
     '특이사항': pickField(rec, ['특이사항','note']),
     'id': pickField(rec, ['id']),
+    'timestamp': pickField(rec, ['timestamp']),
     'calc_json': pickField(rec, ['calc_json']) || '',
     '수량요약': pickField(rec, ['수량요약']),
   };
@@ -1173,6 +1175,74 @@ async function saveAsImage(){
     showToast('이미지 생성 실패: ' + err.message);
     btn.disabled = false;
     btn.textContent = originalText;
+  }
+}
+
+// ---- 고객 리포트: 고객이 오늘 고른 타일 · 욕실 제품만 정리한 화면(../report/) 링크를 만들어 보낸다 ----
+// 단가 · 현장비번 · 연락처 · 메모는 넣지 않는다. 내용은 링크 주소(#) 안에만 담겨서, 서버에서 다른 상담을 읽지 않는다.
+function encodeReportData(obj){
+  const bytes = new TextEncoder().encode(JSON.stringify(obj));
+  let bin = '';
+  bytes.forEach(b => { bin += String.fromCharCode(b); });
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function buildCustomerReportUrl(rec){
+  await loadItemMaster();
+  const tile = safeParse(rec['tile_json']);
+  const fixture = safeParse(rec['fixture_json']);
+  const tiles = Object.keys(tile).map(key => {
+    const d = tile[key] || {};
+    const name = (d.name || '').trim();
+    if(!name) return null;
+    // "공동욕실\n(벽체)" -> 공간 "공동욕실", 부위 "벽체"
+    const [group, part] = tileRowLabel(key, d).split('\n');
+    const item = itemMasterCache.find(it => it.name === name);
+    return { g: group.trim(), p: (part || '').replace(/[()]/g, '').trim(), n: name, s: item && item.spec ? item.spec : '' };
+  }).filter(Boolean);
+  const fixtures = [];
+  FIXTURE_ZONES.forEach(zone => {
+    const zoneData = fixture[zone.key] || {};
+    FIXTURE_ITEMS.forEach(item => {
+      const name = (zoneData[item.key] || '').trim();
+      if(name) fixtures.push({ z: zone.label, i: item.label, n: name });
+    });
+  });
+  const data = {
+    v: 1,
+    co: rec['업체'] || '',
+    site: rec['현장주소'] || '',
+    date: formatDateOnly(rec['timestamp']) || formatDateOnly(new Date().toISOString()),
+    dl: rec['배송일정'] || '',
+    t: tiles,
+    f: fixtures,
+  };
+  return new URL('../report/', location.href).href + '#d=' + encodeReportData(data);
+}
+
+async function shareCustomerReport(){
+  if(!currentRecord) return;
+  const btn = document.getElementById('reportBtn');
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '리포트 만드는 중...';
+  try {
+    const url = await buildCustomerReportUrl(currentRecord);
+    const company = currentRecord['업체'] || '고객';
+    const text = `[히트타일] ${company}님, 오늘 고르신 타일을 정리해 드렸어요.`;
+    if(navigator.share){
+      try { await navigator.share({ title: 'HIT TILE 상담 정리', text, url }); return; } catch(e){ /* 취소 시 복사로 */ }
+    }
+    try {
+      await navigator.clipboard.writeText(text + '\n' + url);
+      showToast('리포트 링크를 복사했어요. 카톡에 붙여 넣으세요.');
+    } catch(e){
+      prompt('아래 링크를 복사해서 보내 주세요.', url);
+    }
+    window.open(url, '_blank');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
   }
 }
 
