@@ -55,7 +55,6 @@
   .cap .spec{ font-size:11.5px; color:var(--muted); margin-top:1px; }
   .none{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; color:var(--muted); }
 
-
   .notice{
     background:#FFF7ED; border:1px solid #FED7AA; color:#9A3412;
     border-radius:12px; padding:12px 14px; font-size:12.5px; line-height:1.7; margin-top:16px;
@@ -84,8 +83,6 @@
     .cards{ grid-template-columns:repeat(3, 1fr); gap:8px; }
     .photo{ aspect-ratio:4 / 3; }
     .page + .page{ margin-top:0; break-before:page; }
-    .memo .lines{ height:74px; }
-    .memo{ margin-top:10px; }
     .hero{ position:relative; }
     .hero-contact{ display:block !important; }
     .contact{ display:none; }
@@ -94,17 +91,12 @@
     .tcard{ border-color:#D1D5DB; }
     .hero h1{ font-size:22px; }
     .hero p{ font-size:13.5px; }
-      .memo{ display:block !important; }
       .notice{ background:#fff; border-color:#D1D5DB; color:var(--ink); break-inside:avoid; }
     .contact{ margin-top:12px; }
   }
 
   .hero-contact{ display:none; position:absolute; right:0; top:2px; text-align:right; font-size:11.5px; line-height:1.6; color:var(--muted); }
   .hero-contact b{ color:var(--ink); }
-  .memo{ display:none; margin-top:14px; break-inside:avoid; }
-  .memo .label{ font-size:13px; font-weight:700; margin-bottom:6px; }
-  .memo .lines{ border:1px solid #D1D5DB; border-radius:12px; height:112px;
-    background:repeating-linear-gradient(#fff 0 36px, #E5E7EB 36px 37px); }
 
   .page + .page{ margin-top:28px; }
   body[data-only="tile"] #pg-fixture, body[data-only="fixture"] #pg-tile{ display:none; }
@@ -193,7 +185,6 @@ function render(data){
       </div>`).join('')}</div>` : '';
 
   const contact = '<div class="hero-contact"><b>히트타일</b> 053-767-1663<br>대구 수성구 수성로 58</div>';
-  const memo = '<div class="memo"><div class="label">메모</div><div class="lines"></div></div>';
   const info = `${data.date ? `상담일 ${esc(formatDate(data.date))}` : ''}${data.site ? `<br>현장 ${esc(data.site)}` : ''}${data.dl ? `<br>배송 예정 ${esc(formatDate(data.dl))}` : ''}`;
 
   // 타일 한 장, 도기 한 장 — 인쇄하면 각각 A4 한 장씩 나온다
@@ -210,7 +201,6 @@ function render(data){
         타일은 생산 시기(로트)와 조명에 따라 색감이 조금 다르게 보일 수 있어요.
         변경하실 부분이 있으면 편하게 연락 주세요.
       </div>
-      ${memo}
     </section>
     ${fixturesHtml ? `
     <section class="page" id="pg-fixture">
@@ -221,7 +211,6 @@ function render(data){
       </div>
       <h2>도기 · 욕실 제품</h2>
       ${fixturesHtml}
-      ${memo}
     </section>` : ''}
     <div class="contact">
       <b>히트타일</b> · <a href="tel:053-767-1663">053-767-1663</a><br>
