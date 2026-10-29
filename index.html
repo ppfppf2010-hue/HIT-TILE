@@ -1,943 +1,252 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>히트타일 업무용 사이트</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --bg:#ffffff;
-    --bg-sub:#f5f6f8;
-    --ink:#1a1a1a;
-    --muted:#6b7280;
-    --line:rgba(17,17,17,0.09);
-    --blue:#2563eb;
-    --blue-deep:#1d4ed8;
-    --blue-soft:#eef2ff;
-    --blue-pale:#f2f5ff;
-  }
-  *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;}
-  body{
-    background:var(--bg-sub);
-    color:var(--ink);
-    font-family:'Inter',sans-serif;
-    -webkit-font-smoothing:antialiased;
-  }
-
-  /* ---------- profile header (mypage style) ---------- */
-  .hub-header{
-    background:var(--blue-pale);
-    padding:20px 6vw 22px;
-  }
-  .profile-row{
-    display:flex;
-    align-items:center;
-    gap:14px;
-  }
-  .avatar{
-    width:44px;height:44px;
-    border-radius:50%;
-    background:#dbe4fb;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-size:20px;
-    flex-shrink:0;
-  }
-  .profile-text{ flex:1; min-width:0; }
-  .profile-text .brand{
-    font-family:'Space Grotesk',sans-serif;
-    font-weight:700;
-    font-size:19px;
-    line-height:1.25;
-  }
-  .profile-text .sub{
-    font-size:12.5px;
-    color:var(--muted);
-    margin-top:2px;
-  }
-  .gear-btn{
-    width:38px;height:38px;
-    border-radius:50%;
-    border:none;
-    background:rgba(255,255,255,0.7);
-    color:var(--ink);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    cursor:pointer;
-    flex-shrink:0;
-    transition:background .15s ease, color .15s ease, transform .15s ease;
-  }
-  .gear-btn:hover{ background:#fff; color:var(--blue); }
-  .gear-btn.active{ background:var(--blue); color:#fff; transform:rotate(20deg); }
-  .gear-btn svg{ width:19px; height:19px; }
-
-  /* ---------- banner ---------- */
-  .hub-banner{
-    margin-top:16px;
-    background:var(--bg);
-    border-radius:16px;
-    padding:16px 18px;
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:14px;
-    box-shadow:0 1px 3px rgba(17,17,17,0.06);
-  }
-  .hub-banner .txt{ font-size:13.5px; line-height:1.55; }
-  .hub-banner .txt b{ color:var(--blue); font-weight:700; }
-  .hub-banner .txt span{ display:block; color:var(--muted); margin-top:2px; font-size:12.5px; }
-  .hub-banner .go-btn{
-    flex-shrink:0;
-    font-family:inherit;
-    font-size:12.5px;
-    font-weight:600;
-    color:#fff;
-    background:var(--blue);
-    border:none;
-    border-radius:999px;
-    padding:9px 14px;
-    cursor:pointer;
-    text-decoration:none;
-    white-space:nowrap;
-    transition:background .15s ease;
-  }
-  .hub-banner .go-btn:hover{ background:var(--blue-deep); }
-
-  /* ---------- quick menu ---------- */
-  .quick-menu{
-    background:var(--bg);
-    padding:20px 4vw 18px;
-    display:grid;
-    grid-template-columns:repeat(5,1fr);
-    gap:6px;
-    border-bottom:8px solid var(--bg-sub);
-  }
-  .quick-menu a{
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    gap:8px;
-    text-decoration:none;
-    color:var(--ink);
-    padding:4px 2px;
-    border-radius:10px;
-    transition:background .12s ease;
-  }
-  .quick-menu a:hover{ background:var(--bg-sub); }
-  .quick-menu .qicon{
-    width:46px;height:46px;
-    border-radius:14px;
-    background:var(--blue);
-    color:#fff;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-  }
-  .quick-menu .qicon svg{ width:22px; height:22px; }
-  .quick-menu .qlabel{
-    font-size:11.5px;
-    font-weight:500;
-    text-align:center;
-    line-height:1.3;
-  }
-
-  /* ---------- horizontal scroll: recent work ---------- */
-  .recent{
-    background:var(--bg);
-    padding:22px 6vw 26px;
-    border-bottom:8px solid var(--bg-sub);
-  }
-  .recent-head{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    margin-bottom:14px;
-  }
-  .recent-head h2{
-    font-family:'Space Grotesk',sans-serif;
-    font-size:17px;
-    font-weight:700;
-    margin:0;
-  }
-  .recent-head a{
-    font-size:12.5px;
-    font-weight:600;
-    color:var(--blue);
-    text-decoration:none;
-    display:inline-flex;
-    align-items:center;
-    gap:3px;
-  }
-  .recent-scroll{
-    display:flex;
-    gap:12px;
-    overflow-x:auto;
-    padding-bottom:4px;
-    scroll-snap-type:x proximity;
-    -webkit-overflow-scrolling:touch;
-  }
-  .recent-scroll::-webkit-scrollbar{ height:0; }
-  .recent-card{
-    flex:0 0 auto;
-    width:168px;
-    text-decoration:none;
-    color:var(--ink);
-    scroll-snap-align:start;
-  }
-  .recent-thumb{
-    width:168px;height:110px;
-    border-radius:14px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-size:34px;
-    margin-bottom:10px;
-  }
-  .recent-badge{
-    display:inline-block;
-    font-size:10.5px;
-    font-weight:700;
-    padding:3px 8px;
-    border-radius:999px;
-    margin-bottom:6px;
-    letter-spacing:0.02em;
-  }
-  .recent-badge.new{ background:var(--blue-soft); color:var(--blue); }
-  .recent-badge.update{ background:#eafaf0; color:#16803c; }
-  .recent-badge.fix{ background:#fff1ee; color:#c4432b; }
-  .recent-title{
-    font-size:13.5px;
-    font-weight:600;
-    line-height:1.4;
-  }
-
-  /* ---------- section (전체 메뉴 grid) ---------- */
-  main{ padding:8px 6vw 90px; }
-  .all-menu-label{
-    font-family:'Space Grotesk',sans-serif;
-    font-size:17px;
-    font-weight:700;
-    margin:26px 0 2px;
-  }
-  .all-menu-sub{
-    font-size:12.5px;
-    color:var(--muted);
-    margin:0 0 22px;
-  }
-  section{margin-top:32px;}
-  section:first-of-type{ margin-top:0; scroll-margin-top:16px; }
-  .section-head{
-    display:flex;
-    align-items:baseline;
-    gap:8px;
-    margin-bottom:14px;
-  }
-  .section-head h2{
-    font-size:15px;
-    font-weight:700;
-    margin:0;
-  }
-  .section-head .count{
-    font-size:12px;
-    color:var(--muted);
-  }
-
-  /* ---------- tile grid ---------- */
-  .grid{
-    display:grid;
-    grid-template-columns:repeat(auto-fill,minmax(190px,1fr));
-    gap:12px;
-  }
-  a.tile{
-    position:relative;
-    background:var(--bg);
-    color:var(--ink);
-    text-decoration:none;
-    border-radius:16px;
-    border:1px solid var(--line);
-    overflow:hidden;
-    display:flex;
-    flex-direction:column;
-    transition:transform .16s ease, box-shadow .16s ease, border-color .16s ease;
-  }
-  a.tile:hover{
-    transform:translateY(-3px);
-    box-shadow:0 10px 22px rgba(37,99,235,0.13);
-    border-color:rgba(37,99,235,0.3);
-    z-index:1;
-  }
-  a.tile:active{ transform:translateY(-1px) scale(0.985); }
-
-  .tile-thumb{
-    height:74px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-size:28px;
-  }
-  .tile-body{ padding:12px 14px 14px; }
-  .tile-title{
-    font-weight:700;
-    font-size:14.5px;
-    margin:0 0 4px;
-    line-height:1.3;
-  }
-  .tile-desc{
-    font-size:11.5px;
-    color:var(--muted);
-    line-height:1.5;
-    margin:0 0 10px;
-    min-height:33px;
-  }
-  .tile-foot{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-  }
-  .tile-foot .status{
-    font-size:10.5px;
-    color:var(--muted);
-    background:var(--bg-sub);
-    padding:3px 8px;
-    border-radius:6px;
-  }
-  .tile-foot .go{
-    color:var(--blue);
-    font-weight:700;
-    font-size:13px;
-    transition:transform .16s ease;
-  }
-  a.tile:hover .go{ transform:translateX(3px); }
-
-  .copy-btn{
-    position:absolute;
-    top:10px;
-    right:10px;
-    width:26px;
-    height:26px;
-    border-radius:8px;
-    border:none;
-    background:rgba(255,255,255,0.85);
-    color:var(--muted);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    cursor:pointer;
-    transition:background .15s ease, border-color .15s ease, color .15s ease;
-    backdrop-filter:blur(2px);
-  }
-  .copy-btn:hover{
-    background:var(--bg);
-    border-color:var(--blue);
-    color:var(--blue);
-  }
-  .copy-btn svg{width:14px;height:14px;pointer-events:none;}
-  .copy-btn.copied{
-    color:#fff;
-    background:var(--blue);
-    border-color:var(--blue);
-  }
-  .copy-btn .tip{
-    position:absolute;
-    top:-28px;
-    right:0;
-    font-family:'IBM Plex Mono',monospace;
-    font-size:10px;
-    letter-spacing:0.03em;
-    background:var(--ink);
-    color:#fff;
-    padding:4px 7px;
-    border-radius:5px;
-    white-space:nowrap;
-    opacity:0;
-    transform:translateY(3px);
-    transition:opacity .12s ease, transform .12s ease;
-    pointer-events:none;
-  }
-  .copy-btn.copied .tip{ opacity:1; transform:translateY(0); }
-
-  /* ---------- edit mode ---------- */
-  body.edit-mode a.tile{
-    outline:1px dashed rgba(37,99,235,0.55);
-    outline-offset:2px;
-  }
-
-  .section-move{
-    display:none;
-    margin-left:auto;
-    gap:4px;
-  }
-  body.edit-mode .section-move{ display:flex; }
-
-  .tile-move{
-    position:absolute;
-    top:10px;
-    left:10px;
-    display:none;
-    gap:4px;
-  }
-  body.edit-mode .tile-move{ display:flex; }
-
-  .move-btn{
-    width:24px;
-    height:24px;
-    border-radius:6px;
-    border:1px solid var(--line);
-    background:rgba(255,255,255,0.9);
-    color:var(--muted);
-    font-size:10px;
-    line-height:1;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    cursor:pointer;
-    transition:background .15s ease, border-color .15s ease, color .15s ease, opacity .15s ease;
-  }
-  .move-btn:hover:not(:disabled){
-    border-color:var(--blue);
-    color:var(--blue);
-    background:var(--bg);
-  }
-  .move-btn:disabled{ opacity:0.28; cursor:default; }
-
-  footer{
-    padding:26px 6vw 60px;
-    border-top:1px solid var(--line);
-    font-size:12.5px;
-    color:var(--muted);
-    display:flex;
-    flex-wrap:wrap;
-    gap:8px 18px;
-    justify-content:space-between;
-  }
-  footer span{font-family:'IBM Plex Mono',monospace;letter-spacing:0.02em;}
-
-  @media (prefers-reduced-motion: reduce){
-    a.tile{transition:none;}
-  }
-
-  @media (max-width:520px){
-    .quick-menu{ grid-template-columns:repeat(5,1fr); gap:2px; padding:18px 2vw 16px; }
-    .quick-menu .qicon{ width:42px; height:42px; }
-    .quick-menu .qlabel{ font-size:10.5px; }
-    .hub-banner{ flex-direction:column; align-items:flex-start; }
-  }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>히트타일 업무용 허브</title>
+    <!--
+      스타일: Tailwind CSS 3.4로 미리 만들어 아래 <style>에 넣었다(인터넷에서 매번 불러오지 않아 빨리 뜸).
+      새 Tailwind 클래스를 쓰면 다시 만들어 넣어야 한다 — 시스템담당에게 "첫 화면 스타일 다시 빌드"라고 요청.
+    -->
+    <style>*,:after,:before{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgba(59,130,246,.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgba(59,130,246,.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/*! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com*/*,:after,:before{box-sizing:border-box;border:0 solid #e5e7eb}:after,:before{--tw-content:""}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;-o-tab-size:4;tab-size:4;font-family:ui-sans-serif,system-ui,sans-serif,Apple Color Emoji,Segoe UI Emoji,Segoe UI Symbol,Noto Color Emoji;font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,Liberation Mono,Courier New,monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0}fieldset,legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::-moz-placeholder,textarea::-moz-placeholder{opacity:1;color:#9ca3af}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.container{width:100%}@media (min-width:640px){.container{max-width:640px}}@media (min-width:768px){.container{max-width:768px}}@media (min-width:1024px){.container{max-width:1024px}}@media (min-width:1280px){.container{max-width:1280px}}@media (min-width:1536px){.container{max-width:1536px}}.pointer-events-none{pointer-events:none}.fixed{position:fixed}.absolute{position:absolute}.relative{position:relative}.sticky{position:sticky}.inset-y-0{top:0;bottom:0}.bottom-0{bottom:0}.bottom-20{bottom:5rem}.left-0{left:0}.left-1\/2{left:50%}.right-0{right:0}.top-0{top:0}.z-30{z-index:30}.z-40{z-index:40}.z-50{z-index:50}.mx-auto{margin-left:auto;margin-right:auto}.mb-1{margin-bottom:.25rem}.mb-2{margin-bottom:.5rem}.mb-6{margin-bottom:1.5rem}.ml-1{margin-left:.25rem}.ml-2{margin-left:.5rem}.mt-0\.5{margin-top:.125rem}.block{display:block}.inline-block{display:inline-block}.flex{display:flex}.inline-flex{display:inline-flex}.h-11{height:2.75rem}.h-2{height:.5rem}.h-8{height:2rem}.min-h-screen{min-height:100vh}.w-1\/3{width:33.333333%}.w-11{width:2.75rem}.w-2{width:.5rem}.w-8{width:2rem}.w-full{width:100%}.min-w-0{min-width:0}.max-w-md{max-width:28rem}.flex-1{flex:1 1 0%}.shrink-0{flex-shrink:0}.-translate-x-1\/2{--tw-translate-x:-50%;transform:translate(var(--tw-translate-x),var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y))}@keyframes pulse{50%{opacity:.5}}.animate-pulse{animation:pulse 2s cubic-bezier(.4,0,.6,1) infinite}.flex-col{flex-direction:column}.items-center{align-items:center}.justify-center{justify-content:center}.justify-between{justify-content:space-between}.justify-around{justify-content:space-around}.space-x-1\.5>:not([hidden])~:not([hidden]){--tw-space-x-reverse:0;margin-right:calc(.375rem*var(--tw-space-x-reverse));margin-left:calc(.375rem*(1 - var(--tw-space-x-reverse)))}.space-x-2>:not([hidden])~:not([hidden]){--tw-space-x-reverse:0;margin-right:calc(.5rem*var(--tw-space-x-reverse));margin-left:calc(.5rem*(1 - var(--tw-space-x-reverse)))}.space-x-2\.5>:not([hidden])~:not([hidden]){--tw-space-x-reverse:0;margin-right:calc(.625rem*var(--tw-space-x-reverse));margin-left:calc(.625rem*(1 - var(--tw-space-x-reverse)))}.space-x-3>:not([hidden])~:not([hidden]){--tw-space-x-reverse:0;margin-right:calc(.75rem*var(--tw-space-x-reverse));margin-left:calc(.75rem*(1 - var(--tw-space-x-reverse)))}.space-y-3>:not([hidden])~:not([hidden]){--tw-space-y-reverse:0;margin-top:calc(.75rem*(1 - var(--tw-space-y-reverse)));margin-bottom:calc(.75rem*var(--tw-space-y-reverse))}.overflow-hidden{overflow:hidden}.overflow-x-auto{overflow-x:auto}.truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rounded{border-radius:.25rem}.rounded-2xl{border-radius:1rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:.5rem}.rounded-xl{border-radius:.75rem}.border{border-width:1px}.border-b{border-bottom-width:1px}.border-t{border-top-width:1px}.border-borderGray{--tw-border-opacity:1;border-color:rgb(226 232 240/var(--tw-border-opacity,1))}.border-red-200{--tw-border-opacity:1;border-color:rgb(254 202 202/var(--tw-border-opacity,1))}.bg-cardBg{--tw-bg-opacity:1;background-color:rgb(255 255 255/var(--tw-bg-opacity,1))}.bg-gray-100{--tw-bg-opacity:1;background-color:rgb(243 244 246/var(--tw-bg-opacity,1))}.bg-gray-700{--tw-bg-opacity:1;background-color:rgb(55 65 81/var(--tw-bg-opacity,1))}.bg-primary{--tw-bg-opacity:1;background-color:rgb(185 28 28/var(--tw-bg-opacity,1))}.bg-red-50{--tw-bg-opacity:1;background-color:rgb(254 242 242/var(--tw-bg-opacity,1))}.bg-surface{--tw-bg-opacity:1;background-color:rgb(243 244 246/var(--tw-bg-opacity,1))}.bg-textMain{--tw-bg-opacity:1;background-color:rgb(30 41 59/var(--tw-bg-opacity,1))}.p-2{padding:.5rem}.p-2\.5{padding:.625rem}.p-3{padding:.75rem}.p-3\.5{padding:.875rem}.p-4{padding:1rem}.px-1\.5{padding-left:.375rem;padding-right:.375rem}.px-2{padding-left:.5rem;padding-right:.5rem}.px-3{padding-left:.75rem;padding-right:.75rem}.px-4{padding-left:1rem;padding-right:1rem}.py-0\.5{padding-top:.125rem;padding-bottom:.125rem}.py-1\.5{padding-top:.375rem;padding-bottom:.375rem}.py-12{padding-top:3rem;padding-bottom:3rem}.py-2{padding-top:.5rem;padding-bottom:.5rem}.py-2\.5{padding-top:.625rem;padding-bottom:.625rem}.py-3{padding-top:.75rem;padding-bottom:.75rem}.pb-2{padding-bottom:.5rem}.pb-24{padding-bottom:6rem}.pl-3{padding-left:.75rem}.pl-9{padding-left:2.25rem}.pr-1{padding-right:.25rem}.pr-4{padding-right:1rem}.pt-3{padding-top:.75rem}.pt-4{padding-top:1rem}.text-center{text-align:center}.text-3xl{font-size:1.875rem;line-height:2.25rem}.text-\[10px\]{font-size:10px}.text-\[11px\]{font-size:11px}.text-base{font-size:1rem;line-height:1.5rem}.text-lg{font-size:1.125rem;line-height:1.75rem}.text-sm{font-size:.875rem;line-height:1.25rem}.text-xl{font-size:1.25rem;line-height:1.75rem}.text-xs{font-size:.75rem;line-height:1rem}.font-bold{font-weight:700}.font-medium{font-weight:500}.font-semibold{font-weight:600}.leading-tight{line-height:1.25}.text-gray-300{--tw-text-opacity:1;color:rgb(209 213 219/var(--tw-text-opacity,1))}.text-gray-400{--tw-text-opacity:1;color:rgb(156 163 175/var(--tw-text-opacity,1))}.text-primary{--tw-text-opacity:1;color:rgb(185 28 28/var(--tw-text-opacity,1))}.text-textMain{--tw-text-opacity:1;color:rgb(30 41 59/var(--tw-text-opacity,1))}.text-textSub{--tw-text-opacity:1;color:rgb(71 85 105/var(--tw-text-opacity,1))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255/var(--tw-text-opacity,1))}.opacity-0{opacity:0}.shadow-lg{--tw-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1);--tw-shadow-colored:0 10px 15px -3px var(--tw-shadow-color),0 4px 6px -4px var(--tw-shadow-color)}.shadow-lg,.shadow-sm{box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}.shadow-sm{--tw-shadow:0 1px 2px 0 rgba(0,0,0,.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color)}.filter{filter:var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale) var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia) var(--tw-drop-shadow)}.transition{transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,-webkit-backdrop-filter;transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter;transition-property:color,background-color,border-color,text-decoration-color,fill,stroke,opacity,box-shadow,transform,filter,backdrop-filter,-webkit-backdrop-filter;transition-timing-function:cubic-bezier(.4,0,.2,1);transition-duration:.15s}.hover\:border-primary:hover{--tw-border-opacity:1;border-color:rgb(185 28 28/var(--tw-border-opacity,1))}.hover\:text-amber-500:hover{--tw-text-opacity:1;color:rgb(245 158 11/var(--tw-text-opacity,1))}.hover\:text-primary:hover{--tw-text-opacity:1;color:rgb(185 28 28/var(--tw-text-opacity,1))}.hover\:underline:hover{text-decoration-line:underline}.focus\:border-primary:focus{--tw-border-opacity:1;border-color:rgb(185 28 28/var(--tw-border-opacity,1))}.focus\:outline-none:focus{outline:2px solid transparent;outline-offset:2px}</style>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; -webkit-tap-highlight-color: transparent; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
 </head>
-<body>
+<body class="bg-surface text-textMain min-h-screen flex flex-col pb-24">
 
-<div class="hub-header">
-  <div class="profile-row">
-    <div class="avatar">🧱</div>
-    <div class="profile-text">
-      <div class="brand">히트타일</div>
-      <div class="sub">업무용 허브</div>
-    </div>
-    <button id="editToggle" class="gear-btn" type="button" aria-label="편집 모드">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-    </button>
-  </div>
-
-  <div class="hub-banner">
-    <div class="txt">
-      <b>오늘의 업데이트</b>
-      <span>배송기사 전용 페이지 · 배송 수량 부족분 기록 기능이 추가됐어요</span>
-    </div>
-    <a class="go-btn" href="https://ppfppf2010-hue.github.io/HIT-TILE/driver/" target="_blank" rel="noopener">보러가기 →</a>
-  </div>
-</div>
-
-<div class="quick-menu">
-  <a href="https://ppfppf2010-hue.github.io/HIT-TILE/checklist/" target="_blank" rel="noopener">
-    <span class="qicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V2.6a.6.6 0 0 1 .6-.6h4.8a.6.6 0 0 1 .6.6V4"/><path d="M9 12.5l2 2 4-4.5"/></svg></span>
-    <span class="qlabel">상담<br>체크리스트</span>
-  </a>
-  <a href="https://ppfppf2010-hue.github.io/HIT-TILE/delivery/" target="_blank" rel="noopener">
-    <span class="qicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="7" width="13" height="10" rx="1"/><path d="M14 10h4l3.5 3.5V17h-7.5z"/><circle cx="6" cy="19" r="1.6"/><circle cx="16.5" cy="19" r="1.6"/></svg></span>
-    <span class="qlabel">배송관리</span>
-  </a>
-  <a href="https://ppfppf2010-hue.github.io/HIT-TILE/purchase/" target="_blank" rel="noopener">
-    <span class="qicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2.5h12v19l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></span>
-    <span class="qlabel">구매등록</span>
-  </a>
-  <a href="https://ppfppf2010-hue.github.io/HIT-TILE/balance/" target="_blank" rel="noopener">
-    <span class="qicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="14" rx="2.5"/><path d="M2 10.5h20"/><circle cx="17" cy="15" r="1.3" fill="currentColor" stroke="none"/></svg></span>
-    <span class="qlabel">거래처 잔액</span>
-  </a>
-  <a href="#all-menu">
-    <span class="qicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.6"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.6"/></svg></span>
-    <span class="qlabel">전체보기</span>
-  </a>
-</div>
-
-<div class="recent">
-  <div class="recent-head">
-    <h2>최근 업데이트</h2>
-    <a href="#all-menu">전체 메뉴 →</a>
-  </div>
-  <div class="recent-scroll">
-
-    <a class="recent-card" href="https://ppfppf2010-hue.github.io/HIT-TILE/driver/" target="_blank" rel="noopener">
-      <div class="recent-thumb" style="background:linear-gradient(135deg,#dbe4ff,#eef2ff);">🚚</div>
-      <span class="recent-badge new">NEW</span>
-      <div class="recent-title">배송기사 페이지</div>
-    </a>
-
-    <a class="recent-card" href="https://ppfppf2010-hue.github.io/HIT-TILE/delivery/" target="_blank" rel="noopener">
-      <div class="recent-thumb" style="background:linear-gradient(135deg,#e3f4e8,#f2faf4);">📦</div>
-      <span class="recent-badge update">UPDATE</span>
-      <div class="recent-title">배송관리 · 수량 부족분 기록</div>
-    </a>
-
-    <a class="recent-card" href="https://ppfppf2010-hue.github.io/HIT-TILE/purchase/" target="_blank" rel="noopener">
-      <div class="recent-thumb" style="background:linear-gradient(135deg,#ffe9e3,#fff4f0);">🧾</div>
-      <span class="recent-badge fix">FIX</span>
-      <div class="recent-title">구매등록 · 월별 등록 버그 수정</div>
-    </a>
-
-    <a class="recent-card" href="https://ppfppf2010-hue.github.io/HIT-TILE/balance/" target="_blank" rel="noopener">
-      <div class="recent-thumb" style="background:linear-gradient(135deg,#e3edff,#f2f6ff);">💰</div>
-      <span class="recent-badge update">UPDATE</span>
-      <div class="recent-title">거래처 잔액 · 입금 자동차감</div>
-    </a>
-
-  </div>
-</div>
-
-<main>
-  <div class="all-menu-label">전체 메뉴</div>
-  <p class="all-menu-sub">카테고리별로 정리된 모든 업무 도구예요. ⚙ 아이콘을 누르면 순서를 바꿀 수 있어요.</p>
-
-  <section id="all-menu">
-    <div class="section-head">
-      <h2>고객 상담</h2>
-      <span class="count">002 LINKS</span>
-    </div>
-    <div class="grid">
-
-      <a class="tile" href="https://ppfppf2010-hue.github.io/HIT-TILE/checklist/" target="_blank" rel="noopener">
-        <div class="tile-thumb" style="background:linear-gradient(135deg,#dbe4ff,#eef2ff);">📋</div>
-        <button class="copy-btn" type="button" data-url="https://ppfppf2010-hue.github.io/HIT-TILE/checklist/" aria-label="주소 복사">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          <span class="tip">복사됨</span>
-        </button>
-        <div class="tile-body">
-          <div class="tile-title">상담 체크리스트</div>
-          <p class="tile-desc">현장 실측 · 자재 선택 · 발주서 PDF 생성</p>
-          <div class="tile-foot">
-            <span class="status">GitHub Pages</span>
-            <span class="go">→</span>
-          </div>
+    <!-- 상단 헤더 -->
+    <header class="bg-cardBg border-b border-borderGray sticky top-0 z-30 px-4 py-3 shadow-sm">
+        <div class="max-w-md mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+                <div class="w-8 h-8 rounded-lg bg-primary text-white flex items-center justify-center font-bold text-sm shadow-sm">🧱</div>
+                <div>
+                    <h1 class="font-bold text-base leading-tight">히트타일</h1>
+                    <p class="text-xs text-textSub">업무용 허브</p>
+                </div>
+            </div>
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-red-50 text-primary border border-red-200">LIVE</span>
         </div>
-      </a>
+    </header>
 
-      <a class="tile" href="https://ppfppf2010-hue.github.io/HIT-TILE/tile-calc/" target="_blank" rel="noopener">
-        <div class="tile-thumb" style="background:linear-gradient(135deg,#e0f2fe,#f0f9ff);">📐</div>
-        <button class="copy-btn" type="button" data-url="https://ppfppf2010-hue.github.io/HIT-TILE/tile-calc/" aria-label="주소 복사">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          <span class="tip">복사됨</span>
-        </button>
-        <div class="tile-body">
-          <div class="tile-title">타일량 계산기</div>
-          <p class="tile-desc">공간별 타일 박스 · 압착 · 본드 · 레미탈 · 발주서</p>
-          <div class="tile-foot">
-            <span class="status">GitHub Pages</span>
-            <span class="go">→</span>
-          </div>
+    <!-- 공지 배너 (최신 업데이트 1건) -->
+    <div class="max-w-md mx-auto w-full px-4 pt-3">
+        <div class="bg-cardBg border border-borderGray rounded-xl p-3 shadow-sm flex items-center justify-between">
+            <div class="flex items-center space-x-2.5 overflow-hidden">
+                <span class="shrink-0 w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+                <p class="text-xs text-textSub truncate" id="bannerText"></p>
+            </div>
+            <a id="bannerLink" href="#" target="_blank" rel="noopener" class="shrink-0 text-xs font-medium text-primary hover:underline ml-2">확인 →</a>
         </div>
-      </a>
-
     </div>
-  </section>
-  <section>
-    <div class="section-head">
-      <h2>사진 · 카탈로그</h2>
-      <span class="count">002 LINKS</span>
-    </div>
-    <div class="grid">
 
-      <a class="tile" href="https://ppfppf2010-hue.github.io/HIT-TILE/photo-upload/" target="_blank" rel="noopener">
-        <div class="tile-thumb" style="background:linear-gradient(135deg,#fff3d6,#fffaf0);">📤</div>
-        <button class="copy-btn" type="button" data-url="https://ppfppf2010-hue.github.io/HIT-TILE/photo-upload/" aria-label="주소 복사">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          <span class="tip">복사됨</span>
-        </button>
-        <div class="tile-body">
-          <div class="tile-title">사진 업로드 도우미</div>
-          <p class="tile-desc">시공사진 일괄 업로드 · 시트 자동 등록</p>
-          <div class="tile-foot">
-            <span class="status">GitHub Pages</span>
-            <span class="go">→</span>
-          </div>
+    <!-- 검색 바 -->
+    <div class="max-w-md mx-auto w-full px-4 pt-3">
+        <div class="relative">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">🔍</span>
+            <input type="text" id="searchInput" oninput="renderMenus()" placeholder="업무 메뉴, 설명 검색..." class="w-full pl-9 pr-4 py-2.5 bg-cardBg border border-borderGray rounded-xl text-sm focus:outline-none focus:border-primary transition shadow-sm">
         </div>
-      </a>
-
-      <a class="tile" href="https://ppfppf2010-hue.github.io/HIT-TILE/catalog/" target="_blank" rel="noopener">
-        <div class="tile-thumb" style="background:linear-gradient(135deg,#efe3ff,#f7f2ff);">🖼️</div>
-        <button class="copy-btn" type="button" data-url="https://ppfppf2010-hue.github.io/HIT-TILE/catalog/" aria-label="주소 복사">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          <span class="tip">복사됨</span>
-        </button>
-        <div class="tile-body">
-          <div class="tile-title">시공사진 카탈로그</div>
-          <p class="tile-desc">고객에게 보여주는 시공 사례 갤러리</p>
-          <div class="tile-foot">
-            <span class="status">GitHub Pages</span>
-            <span class="go">→</span>
-          </div>
-        </div>
-      </a>
-
     </div>
-  </section>
-  <section>
-    <div class="section-head">
-      <h2>일정</h2>
-      <span class="count">001 LINK</span>
-    </div>
-    <div class="grid">
 
-      <a class="tile" href="https://calendar.google.com/calendar/embed?src=38bc0fbbfaf776f1ec42c0996473cfa79e91257a3162c50af55ab7d2461aeeef%40group.calendar.google.com&ctz=Asia%2FSeoul" target="_blank" rel="noopener">
-        <div class="tile-thumb" style="background:linear-gradient(135deg,#dff5f2,#f1fbfa);">📅</div>
-        <button class="copy-btn" type="button" data-url="https://calendar.google.com/calendar/embed?src=38bc0fbbfaf776f1ec42c0996473cfa79e91257a3162c50af55ab7d2461aeeef%40group.calendar.google.com&ctz=Asia%2FSeoul" aria-label="주소 복사">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          <span class="tip">복사됨</span>
-        </button>
-        <div class="tile-body">
-          <div class="tile-title">히트타일 배송일정</div>
-          <p class="tile-desc">배송 · 반품 픽업 캘린더</p>
-          <div class="tile-foot">
-            <span class="status">Google Calendar</span>
-            <span class="go">→</span>
-          </div>
+    <!-- 카테고리 탭 -->
+    <div class="max-w-md mx-auto w-full px-4 pt-3 overflow-x-auto no-scrollbar flex space-x-1.5 shrink-0" id="categoryBar"></div>
+
+    <!-- 메뉴 -->
+    <main class="max-w-md mx-auto w-full px-4 pt-4 space-y-3 flex-1 mb-6" id="menuContainer"></main>
+
+    <!-- 하단 네비게이션 -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-cardBg border-t border-borderGray z-40 shadow-lg">
+        <div class="max-w-md mx-auto flex justify-around py-2">
+            <button onclick="switchTab('home')" id="nav-home" class="flex flex-col items-center justify-center w-1/3 text-primary">
+                <span class="text-lg">🏠</span><span class="text-[10px] font-medium mt-0.5">홈</span>
+            </button>
+            <button onclick="switchTab('starred')" id="nav-starred" class="flex flex-col items-center justify-center w-1/3 text-gray-400">
+                <span class="text-lg">⭐</span><span class="text-[10px] font-medium mt-0.5">즐겨찾기</span>
+            </button>
+            <button onclick="switchTab('updates')" id="nav-updates" class="flex flex-col items-center justify-center w-1/3 text-gray-400">
+                <span class="text-lg">📢</span><span class="text-[10px] font-medium mt-0.5">업데이트</span>
+            </button>
         </div>
-      </a>
+    </nav>
 
-    </div>
-  </section>
-  <section>
-    <div class="section-head">
-      <h2>배송</h2>
-      <span class="count">002 LINKS</span>
-    </div>
-    <div class="grid">
+    <!-- 복사 알림 -->
+    <div id="toast" class="fixed left-1/2 -translate-x-1/2 bottom-20 z-50 px-4 py-2 rounded-full bg-textMain text-white text-xs shadow-lg opacity-0 transition pointer-events-none"></div>
 
-      <a class="tile" href="https://ppfppf2010-hue.github.io/HIT-TILE/delivery/" target="_blank" rel="noopener">
-        <div class="tile-thumb" style="background:linear-gradient(135deg,#e3f4e8,#f2faf4);">📦</div>
-        <button class="copy-btn" type="button" data-url="https://ppfppf2010-hue.github.io/HIT-TILE/delivery/" aria-label="주소 복사">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          <span class="tip">복사됨</span>
-        </button>
-        <div class="tile-body">
-          <div class="tile-title">배송관리</div>
-          <p class="tile-desc">날짜별 배송 등록 · 전표 · 입금 · 배송체크 · 반품</p>
-          <div class="tile-foot">
-            <span class="status">GitHub Pages</span>
-            <span class="go">→</span>
-          </div>
-        </div>
-      </a>
+    <script>
+        const BASE = 'https://ppfppf2010-hue.github.io/HIT-TILE/';
+        const SHEET = 'https://docs.google.com/spreadsheets/d/1XBzkR5oVC1kmRkT270FnbIm_IdRzzumpB48TGorKJSM/edit';
+        const CALENDAR = 'https://calendar.google.com/calendar/embed?src=38bc0fbbfaf776f1ec42c0996473cfa79e91257a3162c50af55ab7d2461aeeef%40group.calendar.google.com&ctz=Asia%2FSeoul';
 
-      <a class="tile" href="https://ppfppf2010-hue.github.io/HIT-TILE/driver/" target="_blank" rel="noopener">
-        <div class="tile-thumb" style="background:linear-gradient(135deg,#dbe4ff,#eef2ff);">🚚</div>
-        <button class="copy-btn" type="button" data-url="https://ppfppf2010-hue.github.io/HIT-TILE/driver/" aria-label="주소 복사">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          <span class="tip">복사됨</span>
-        </button>
-        <div class="tile-body">
-          <div class="tile-title">배송기사 페이지</div>
-          <p class="tile-desc">현장명 확인 · 배송체크 전용 (전표·금액 없음)</p>
-          <div class="tile-foot">
-            <span class="status">GitHub Pages</span>
-            <span class="go">→</span>
-          </div>
-        </div>
-      </a>
+        const categories = [
+            { id: 'all', name: '전체' },
+            { id: 'consult', name: '고객상담' },
+            { id: 'photo', name: '사진·카탈로그' },
+            { id: 'schedule', name: '일정' },
+            { id: 'delivery', name: '배송' },
+            { id: 'material', name: '자재·판매·구매' },
+            { id: 'payment', name: '결제' }
+        ];
 
-    </div>
-  </section>
-  <section>
-    <div class="section-head">
-      <h2>자재 · 재고</h2>
-      <span class="count">003 LINKS</span>
-    </div>
-    <div class="grid">
+        // badge: 누가 쓰는 화면인지 (사무실 / 고객용 / 기사용 / 시트 / 캘린더)
+        const menuData = [
+            { id: 'checklist', title: '상담 체크리스트', category: 'consult', desc: '상담 기록 · 고객 리포트(A4) · 수량계산 · 판매등록 연결', url: BASE + 'checklist/', icon: '📋', badge: '사무실' },
+            { id: 'tilecalc', title: '타일량 계산기', category: 'consult', desc: '공간별 박스 · 압착 · 본드 · 에폭시 · 몰탈 → 판매등록', url: BASE + 'tile-calc/', icon: '📐', badge: '사무실' },
+            { id: 'catalog', title: '시공사진 카탈로그', category: 'photo', desc: '고객에게 보여주는 시공 사례 갤러리', url: BASE + 'catalog/', icon: '🖼️', badge: '고객용' },
+            { id: 'photoupload', title: '사진 업로드 도우미', category: 'photo', desc: '시공사진 일괄 업로드 · 시트 자동 등록', url: BASE + 'photo-upload/', icon: '📤', badge: '사무실' },
+            { id: 'calendar', title: '히트타일 배송일정', category: 'schedule', desc: '배송 · 반품 픽업 캘린더', url: CALENDAR, icon: '📅', badge: '캘린더' },
+            { id: 'delivery', title: '배송관리', category: 'delivery', desc: '날짜별 배송 등록 · 전표 · 입금 · 배송체크 · 반품', url: BASE + 'delivery/', icon: '📦', badge: '사무실' },
+            { id: 'driver', title: '배송기사 페이지', category: 'delivery', desc: '현장 확인 · 배송체크 · 완료 사진 (금액 없음)', url: BASE + 'driver/', icon: '🚚', badge: '기사용' },
+            { id: 'sale', title: '판매등록', category: 'material', desc: '거래처 · 품목 · 수량 직접 입력 → 판매확인중 → 이카운트', url: BASE + 'sale/', icon: '💰', badge: '사무실' },
+            { id: 'purchase', title: '구매등록', category: 'material', desc: '매입 거래명세서 사진 업로드 · 거래처/품목 자동 인식', url: BASE + 'purchase/', icon: '🧾', badge: '사무실' },
+            { id: 'itemreg', title: '품목등록', category: 'material', desc: '거래명세서 업로드 또는 직접 입력 → 마스터 · 이카운트', url: BASE + 'itemregister/', icon: '🏷️', badge: '사무실' },
+            { id: 'master', title: '히트타일 구글 시트', category: 'material', desc: '품목등록마스터 · 거래처코드관리 · 판매/구매입력', url: SHEET, icon: '📁', badge: '시트' },
+            { id: 'balance', title: '거래처 잔액', category: 'payment', desc: '거래처별 미수금 현황 · 금액순 정렬', url: BASE + 'balance/', icon: '💳', badge: '사무실' }
+        ];
 
-      <a class="tile" href="https://docs.google.com/spreadsheets/d/1XBzkR5oVC1kmRkT270FnbIm_IdRzzumpB48TGorKJSM/edit" target="_blank" rel="noopener">
-        <div class="tile-thumb" style="background:linear-gradient(135deg,#efe3ff,#f7f2ff);">📁</div>
-        <button class="copy-btn" type="button" data-url="https://docs.google.com/spreadsheets/d/1XBzkR5oVC1kmRkT270FnbIm_IdRzzumpB48TGorKJSM/edit" aria-label="주소 복사">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          <span class="tip">복사됨</span>
-        </button>
-        <div class="tile-body">
-          <div class="tile-title">품목등록마스터</div>
-          <p class="tile-desc">전체 자재 원장 · 거래처코드관리 · 검토중 탭 확인</p>
-          <div class="tile-foot">
-            <span class="status">Google Sheets</span>
-            <span class="go">→</span>
-          </div>
-        </div>
-      </a>
+        // 최근 업데이트 — 새로 바뀐 게 있으면 맨 위에 추가한다(첫 줄이 상단 배너에 나옴)
+        const updates = [
+            { tag: 'NEW', date: '10/29', title: '상담 고객 리포트 (A4 출력)', body: '상담체크리스트에서 고르신 타일 · 도기를 사진 카드로 정리해 출력. 타일 1장 · 도기 1장', link: BASE + 'checklist/' },
+            { tag: 'NEW', date: '10/23', title: '타일량 계산기 → 판매등록 바로 진행', body: '계산 결과로 판매등록 화면이 채워지고, 적요에 공간명(외욕실 · 내욕실 · 현관 등)이 들어감. 베란다 등 바닥은 + 버튼으로 구역 추가', link: BASE + 'tile-calc/' },
+            { tag: 'UPDATE', date: '10/20', title: '타일량 계산기 추가', body: '공간별 박스 · 압착 · 본드 · 에폭시 · 몰탈 · 발주서, 상담 체크리스트와 연결', link: BASE + 'tile-calc/' },
+            { tag: 'UPDATE', date: '', title: '배송기사 전용 페이지', body: '현장명 확인 · 배송 부족분 기록 (전표 · 금액 비공개)', link: BASE + 'driver/' }
+        ];
 
-      <a class="tile" href="https://ppfppf2010-hue.github.io/HIT-TILE/purchase/" target="_blank" rel="noopener">
-        <div class="tile-thumb" style="background:linear-gradient(135deg,#ffe9e3,#fff4f0);">🧾</div>
-        <button class="copy-btn" type="button" data-url="https://ppfppf2010-hue.github.io/HIT-TILE/purchase/" aria-label="주소 복사">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          <span class="tip">복사됨</span>
-        </button>
-        <div class="tile-body">
-          <div class="tile-title">구매등록</div>
-          <p class="tile-desc">매입 거래명세서 업로드 · 거래처/품목 자동 인식 등록</p>
-          <div class="tile-foot">
-            <span class="status">GitHub Pages</span>
-            <span class="go">→</span>
-          </div>
-        </div>
-      </a>
+        // 시크릿 창 · 카톡 인앱브라우저처럼 저장이 막힌 곳에서도 화면은 떠야 하므로 저장 실패는 무시한다
+        function loadStarred() {
+            try { return JSON.parse(localStorage.getItem('hittile_starred') || '[]') || []; } catch (e) { return []; }
+        }
+        function saveStarred() {
+            try { localStorage.setItem('hittile_starred', JSON.stringify(starredIds)); } catch (e) { /* 저장 불가 환경 */ }
+        }
 
-      <a class="tile" href="https://ppfppf2010-hue.github.io/HIT-TILE/sale/" target="_blank" rel="noopener">
-        <div class="tile-thumb" style="background:linear-gradient(135deg,#e3f6ec,#f0fff5);">💰</div>
-        <button class="copy-btn" type="button" data-url="https://ppfppf2010-hue.github.io/HIT-TILE/sale/" aria-label="주소 복사">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          <span class="tip">복사됨</span>
-        </button>
-        <div class="tile-body">
-          <div class="tile-title">판매등록</div>
-          <p class="tile-desc">판매 거래명세서 업로드 · 거래처/품목 자동 인식 등록</p>
-          <div class="tile-foot">
-            <span class="status">GitHub Pages</span>
-            <span class="go">→</span>
-          </div>
-        </div>
-      </a>
+        let currentCategory = 'all';
+        let currentTab = 'home';
+        let starredIds = loadStarred();
 
-      <a class="tile" href="https://ppfppf2010-hue.github.io/HIT-TILE/itemregister/" target="_blank" rel="noopener">
-        <div class="tile-thumb" style="background:linear-gradient(135deg,#eef2ff,#f5f7ff);">📦</div>
-        <button class="copy-btn" type="button" data-url="https://ppfppf2010-hue.github.io/HIT-TILE/itemregister/" aria-label="주소 복사">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          <span class="tip">복사됨</span>
-        </button>
-        <div class="tile-body">
-          <div class="tile-title">품목등록</div>
-          <p class="tile-desc">거래명세서 업로드 → 검토중 시트 확인 → 확정해서 품목등록마스터에 저장</p>
-          <div class="tile-foot">
-            <span class="status">GitHub Pages</span>
-            <span class="go">→</span>
-          </div>
-        </div>
-      </a>
+        function renderCategories() {
+            document.getElementById('categoryBar').innerHTML = categories.map(c => `
+                <button onclick="setCategory('${c.id}')" class="px-3 py-1.5 rounded-lg text-xs font-medium transition shrink-0 ${c.id === currentCategory ? 'bg-primary text-white shadow-sm' : 'bg-cardBg text-textSub border border-borderGray'}">${c.name}</button>
+            `).join('');
+        }
 
-    </div>
-  </section>
+        function renderMenus() {
+            const container = document.getElementById('menuContainer');
+            const searchVal = document.getElementById('searchInput').value.trim().toLowerCase();
 
-  <section>
-    <div class="section-head">
-      <h2>결제</h2>
-      <span class="count">001 LINK</span>
-    </div>
-    <div class="grid">
+            if (currentTab === 'updates') {
+                container.innerHTML = `
+                    <div class="bg-cardBg border border-borderGray rounded-2xl p-4 shadow-sm space-y-3">
+                        <h2 class="font-bold text-sm text-textMain border-b border-borderGray pb-2">📋 최근 업데이트 내역</h2>
+                        <div class="space-y-3 text-xs text-textSub">
+                            ${updates.map(u => `
+                                <a href="${u.link}" target="_blank" rel="noopener" class="block p-2.5 bg-surface rounded-xl border border-borderGray">
+                                    <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${u.tag === 'NEW' ? 'bg-primary' : 'bg-gray-700'} text-white mb-1">${u.tag}</span>
+                                    ${u.date ? `<span class="text-[10px] text-gray-400 ml-1">${u.date}</span>` : ''}
+                                    <p class="font-semibold text-textMain">${u.title}</p>
+                                    <p class="text-[11px] mt-0.5">${u.body}</p>
+                                </a>`).join('')}
+                        </div>
+                    </div>`;
+                return;
+            }
 
-      <a class="tile" href="https://ppfppf2010-hue.github.io/HIT-TILE/balance/" target="_blank" rel="noopener">
-        <div class="tile-thumb" style="background:linear-gradient(135deg,#e3edff,#f2f6ff);">💰</div>
-        <button class="copy-btn" type="button" data-url="https://ppfppf2010-hue.github.io/HIT-TILE/balance/" aria-label="주소 복사">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          <span class="tip">복사됨</span>
-        </button>
-        <div class="tile-body">
-          <div class="tile-title">거래처 잔액</div>
-          <p class="tile-desc">거래처별 미수금 현황 · 금액순 정렬</p>
-          <div class="tile-foot">
-            <span class="status">GitHub Pages</span>
-            <span class="go">→</span>
-          </div>
-        </div>
-      </a>
+            const catName = id => (categories.find(c => c.id === id) || {}).name || '';
+            const filtered = menuData.filter(item => {
+                const matchCat = currentCategory === 'all' || item.category === currentCategory;
+                const matchTab = currentTab !== 'starred' || starredIds.includes(item.id);
+                const text = (item.title + ' ' + item.desc + ' ' + catName(item.category)).toLowerCase();
+                return matchCat && matchTab && (!searchVal || text.includes(searchVal));
+            });
 
-    </div>
-  </section>
+            if (filtered.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12 text-gray-400">
+                        <p class="text-3xl mb-2">${currentTab === 'starred' ? '⭐' : '🔍'}</p>
+                        <p class="text-sm">${currentTab === 'starred' && !starredIds.length ? '메뉴 오른쪽 ☆을 눌러 즐겨찾기에 추가하세요.' : '검색 결과가 없습니다.'}</p>
+                    </div>`;
+                return;
+            }
 
-</main>
+            container.innerHTML = filtered.map(item => {
+                const isStarred = starredIds.includes(item.id);
+                return `
+                    <div class="bg-cardBg border border-borderGray rounded-2xl p-3.5 shadow-sm hover:border-primary transition flex items-center justify-between">
+                        <a href="${item.url}" target="_blank" rel="noopener" class="flex items-center space-x-3 flex-1 min-w-0 pr-1">
+                            <div class="w-11 h-11 rounded-xl bg-surface border border-borderGray flex items-center justify-center text-xl shrink-0">${item.icon}</div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center space-x-1.5">
+                                    <h3 class="font-bold text-sm text-textMain truncate">${item.title}</h3>
+                                    <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-gray-100 text-textSub rounded shrink-0">${item.badge}</span>
+                                </div>
+                                <p class="text-xs text-textSub truncate mt-0.5">${item.desc}</p>
+                            </div>
+                        </a>
+                        <button onclick="copyUrl('${item.id}')" class="p-2 text-xs font-medium text-textSub hover:text-primary transition shrink-0" aria-label="주소 복사">복사</button>
+                        <button onclick="toggleStar('${item.id}')" class="p-2 text-lg text-gray-300 hover:text-amber-500 transition shrink-0" aria-label="즐겨찾기">${isStarred ? '⭐' : '☆'}</button>
+                    </div>`;
+            }).join('');
+        }
 
-<footer>
-  <span>HEATTILE OPS DASHBOARD</span>
-  <span id="today"></span>
-</footer>
+        function setCategory(cat) {
+            currentCategory = cat;
+            renderCategories();
+            renderMenus();
+        }
 
-<script>
-  const d = new Date();
-  const el = document.getElementById('today');
-  if (el) {
-    el.textContent = d.toLocaleDateString('ko-KR', { year:'numeric', month:'2-digit', day:'2-digit' }) + ' 기준';
-  }
+        function switchTab(tab) {
+            currentTab = tab;
+            ['home', 'starred', 'updates'].forEach(t => {
+                document.getElementById(`nav-${t}`).className = 'flex flex-col items-center justify-center w-1/3 ' + (t === tab ? 'text-primary' : 'text-gray-400');
+            });
+            renderMenus();
+        }
 
-  document.querySelectorAll('.copy-btn').forEach(function (btn) {
-    btn.addEventListener('click', function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      const url = btn.getAttribute('data-url');
-      const done = function () {
-        btn.classList.add('copied');
-        setTimeout(function () { btn.classList.remove('copied'); }, 1200);
-      };
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(url).then(done).catch(done);
-      } else {
-        const ta = document.createElement('textarea');
-        ta.value = url;
-        ta.style.position = 'fixed';
-        ta.style.opacity = '0';
-        document.body.appendChild(ta);
-        ta.select();
-        try { document.execCommand('copy'); } catch (err) {}
-        document.body.removeChild(ta);
-        done();
-      }
-    });
-  });
+        function toggleStar(id) {
+            starredIds = starredIds.includes(id) ? starredIds.filter(i => i !== id) : starredIds.concat(id);
+            saveStarred();
+            renderMenus();
+        }
 
-  // ---------- edit mode: reorder categories & tiles ----------
-  (function () {
-    const STORAGE_KEY = 'heattileHubOrder';
-    const main = document.querySelector('main');
-    const toggleBtn = document.getElementById('editToggle');
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.style.opacity = '1';
+            clearTimeout(showToast.timer);
+            showToast.timer = setTimeout(() => { t.style.opacity = '0'; }, 1600);
+        }
 
-    function sectionKey(section) {
-      const h2 = section.querySelector('.section-head h2');
-      return h2 ? h2.textContent.trim() : '';
-    }
-    function tileKey(tile) {
-      return tile.getAttribute('href') || '';
-    }
-    function sections() {
-      return Array.prototype.slice.call(main.querySelectorAll(':scope > section'));
-    }
+        // 카톡으로 보낼 주소 복사. 클립보드가 막힌 환경(인앱브라우저 등)은 예전 방식으로 대신 복사한다
+        function copyUrl(id) {
+            const item = menuData.find(m => m.id === id);
+            if (!item) return;
+            const fallback = () => {
+                const ta = document.createElement('textarea');
+                ta.value = item.url;
+                ta.setAttribute('readonly', '');
+                ta.style.position = 'fixed'; ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                let ok = false;
+                try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+                ta.remove();
+                if (ok) showToast(`${item.title} 주소를 복사했어요`);
+                else prompt('아래 주소를 길게 눌러 복사하세요', item.url);
+            };
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(item.url).then(() => showToast(`${item.title} 주소를 복사했어요`), fallback);
+            } else {
+                fallback();
+            }
+        }
 
-    function loadOrder() {
-      try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
-      catch (e) { return {}; }
-    }
+        const latest = updates[0];
+        document.getElementById('bannerText').innerHTML = `<strong class="text-textMain font-semibold">최신 업데이트:</strong> ${latest.title}`;
+        document.getElementById('bannerLink').href = latest.link;
 
-    function saveOrder() {
-      const data = { sections: [], tiles: {} };
-      sections().forEach(function (section) {
-        const key = sectionKey(section);
-        data.sections.push(key);
-        const grid = section.querySelector('.grid');
-        data.tiles[key] = Array.prototype.map.call(grid.querySelectorAll('a.tile'), tileKey);
-      });
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    }
-
-    function applySavedOrder() {
-      const saved = loadOrder();
-      if (saved.sections && saved.sections.length) {
-        const byKey = {};
-        sections().forEach(function (s) { byKey[sectionKey(s)] = s; });
-        saved.sections.forEach(function (key) {
-          if (byKey[key]) main.appendChild(byKey[key]);
-        });
-      }
-      sections().forEach(function (section) {
-        const key = sectionKey(section);
-        const order = saved.tiles && saved.tiles[key];
-        if (!order || !order.length) return;
-        const grid = section.querySelector('.grid');
-        const byHref = {};
-        Array.prototype.forEach.call(grid.querySelectorAll('a.tile'), function (t) { byHref[tileKey(t)] = t; });
-        order.forEach(function (href) {
-          if (byHref[href]) grid.appendChild(byHref[href]);
-        });
-      });
-    }
-
-    function refreshMoveStates() {
-      const secs = sections();
-      secs.forEach(function (section, i) {
-        const wrap = section.querySelector('.section-move');
-        if (!wrap) return;
-        wrap.children[0].disabled = (i === 0);
-        wrap.children[1].disabled = (i === secs.length - 1);
-      });
-      main.querySelectorAll('.grid').forEach(function (grid) {
-        const tiles = Array.prototype.slice.call(grid.querySelectorAll('a.tile'));
-        tiles.forEach(function (tile, i) {
-          const wrap = tile.querySelector('.tile-move');
-          if (!wrap) return;
-          wrap.children[0].disabled = (i === 0);
-          wrap.children[1].disabled = (i === tiles.length - 1);
-        });
-      });
-    }
-
-    function makeMoveBtn(label, symbol) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'move-btn';
-      b.setAttribute('aria-label', label);
-      b.textContent = symbol;
-      return b;
-    }
-
-    // inject section move controls
-    sections().forEach(function (section) {
-      const head = section.querySelector('.section-head');
-      const wrap = document.createElement('div');
-      wrap.className = 'section-move';
-      const up = makeMoveBtn('카테고리 위로 이동', '▲');
-      const down = makeMoveBtn('카테고리 아래로 이동', '▼');
-      wrap.appendChild(up);
-      wrap.appendChild(down);
-      head.appendChild(wrap);
-
-      up.addEventListener('click', function () {
-        const prev = section.previousElementSibling;
-        if (prev) { main.insertBefore(section, prev); saveOrder(); refreshMoveStates(); }
-      });
-      down.addEventListener('click', function () {
-        const next = section.nextElementSibling;
-        if (next) { main.insertBefore(next, section); saveOrder(); refreshMoveStates(); }
-      });
-    });
-
-    // inject tile move controls
-    main.querySelectorAll('a.tile').forEach(function (tile) {
-      const wrap = document.createElement('div');
-      wrap.className = 'tile-move';
-      const left = makeMoveBtn('왼쪽으로 이동', '◀');
-      const right = makeMoveBtn('오른쪽으로 이동', '▶');
-      wrap.appendChild(left);
-      wrap.appendChild(right);
-      tile.appendChild(wrap);
-
-      left.addEventListener('click', function (e) {
-        e.preventDefault(); e.stopPropagation();
-        const prev = tile.previousElementSibling;
-        if (prev) { tile.parentNode.insertBefore(tile, prev); saveOrder(); refreshMoveStates(); }
-      });
-      right.addEventListener('click', function (e) {
-        e.preventDefault(); e.stopPropagation();
-        const next = tile.nextElementSibling;
-        if (next) { tile.parentNode.insertBefore(next, tile); saveOrder(); refreshMoveStates(); }
-      });
-    });
-
-    toggleBtn.addEventListener('click', function () {
-      const on = !document.body.classList.contains('edit-mode');
-      document.body.classList.toggle('edit-mode', on);
-      toggleBtn.classList.toggle('active', on);
-      toggleBtn.setAttribute('aria-label', on ? '편집 완료' : '편집 모드');
-    });
-
-    applySavedOrder();
-    refreshMoveStates();
-  })();
-</script>
-
+        renderCategories();
+        renderMenus();
+    </script>
 </body>
 </html>
