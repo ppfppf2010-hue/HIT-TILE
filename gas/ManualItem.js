@@ -78,7 +78,8 @@ function handleItemManualAdd(body) {
       if (!prefixInput) {
         return jsonOut({ ok: true, needsPrefix: true, vendorName: vendorName, suggestedPrefix: matchPrefix(vendorName) || '' });
       }
-      if (!/^[A-Z]{2,4}$/.test(prefixInput)) throw new Error('코드 접두어는 영문 2~4자로 입력해주세요.');
+      // 영문(VG) 또는 한글(새손, 블루밍) 접두어 — 이카운트·ItemSync가 이미 한글 접두어 코드를 쓰고 있다
+      if (!/^([A-Z]{2,4}|[가-힣]{1,4})$/.test(prefixInput)) throw new Error('코드 접두어는 영문 2~4자 또는 한글 1~4자로 입력해주세요.');
       prefix = prefixInput;
     }
     const storedVendorName = vendorInfo ? vendorInfo.storedName : vendorName;

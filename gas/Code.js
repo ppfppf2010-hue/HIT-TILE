@@ -277,7 +277,7 @@
  // 거래처 코드 마지막번호 갱신 (코드 문자열에서 접두어/숫자 파싱)
  let maxNumber = 0, prefix = '';
  items.forEach(function (it) {
- const m = String(it.code).match(/^([A-Za-z]+)(\d+)$/);
+ const m = String(it.code).match(/^(\D+)(\d+)$/); // 영문/한글 접두어 모두
  if (m) {
  prefix = m[1];
  const n = parseInt(m[2], 10);
@@ -632,7 +632,7 @@
  const vendorData = vendorSheet.getDataRange().getValues();
  const maxByPrefix = {};
  dedupedRows.forEach(function (r) {
- const m = String(r[0]).trim().match(/^([A-Za-z]+)(\d+)$/);
+ const m = String(r[0]).trim().match(/^(\D+)(\d+)$/);
  if (m) {
  const p = m[1];
  const n = parseInt(m[2], 10);
