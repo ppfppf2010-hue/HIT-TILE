@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HIT TILE 상담 정리</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  :root{
+    --paper:#F5F6F8;
+    --line:#E5E7EB;
+    --ink:#1A1A1A;
+    --muted:#6B7280;
+    --brand:#D92D20;
+    --accent:#2563EB;
+    --card:#FFFFFF;
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0;
+    background:var(--paper);
+    font-family:'Noto Sans KR', sans-serif;
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+  main{ max-width:560px; margin:0 auto; padding:0 16px 40px; }
+  #report{ background:var(--paper); padding:20px 0 8px; }
+
+  .hero{
+    background:var(--ink);
+    color:#fff;
+    border-radius:16px;
+    padding:22px 20px 20px;
+  }
+  .logo{ font-family:'Black Han Sans', sans-serif; font-size:22px; letter-spacing:1px; }
+  .logo span{ color:var(--brand); }
+  .hero h1{ margin:14px 0 6px; font-size:20px; font-weight:900; line-height:1.4; }
+  .hero p{ margin:0; font-size:13px; color:#C9CDD3; line-height:1.6; }
+
+  h2{ font-size:15px; margin:24px 4px 10px; }
+
+  .space{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:14px 16px;
+    margin-bottom:10px;
+  }
+  .space-name{ font-size:13px; font-weight:700; color:var(--accent); margin-bottom:8px; }
+  .tile{ display:flex; gap:12px; align-items:center; }
+  .tile + .tile{ margin-top:12px; padding-top:12px; border-top:1px dashed var(--line); }
+  .swatch{
+    flex:0 0 56px; height:56px; border-radius:10px;
+    background:var(--paper) center/cover no-repeat;
+    border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+    font-size:11px; color:var(--muted);
+  }
+  .tile-body{ min-width:0; }
+  .part{ font-size:11.5px; color:var(--muted); }
+  .tile-name{ font-size:15.5px; font-weight:700; line-height:1.4; word-break:keep-all; overflow-wrap:anywhere; }
+  .tile-spec{ font-size:13px; color:var(--muted); margin-top:2px; }
+
+  .fixtures{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:6px 16px; margin-bottom:10px; }
+  .fixtures .zone{ font-size:13px; font-weight:700; color:var(--accent); padding:10px 0 4px; }
+  .fx-row{ display:flex; justify-content:space-between; gap:12px; padding:7px 0; border-bottom:1px solid var(--line); font-size:14px; }
+  .fx-row:last-child{ border-bottom:none; }
+  .fx-row .k{ color:var(--muted); flex:0 0 auto; }
+  .fx-row .v{ text-align:right; font-weight:500; word-break:keep-all; overflow-wrap:anywhere; }
+
+  .notice{
+    background:#FFF7ED; border:1px solid #FED7AA; color:#9A3412;
+    border-radius:12px; padding:12px 14px; font-size:12.5px; line-height:1.7; margin-top:16px;
+  }
+  .contact{ text-align:center; color:var(--muted); font-size:12.5px; line-height:1.8; margin-top:18px; }
+  .contact b{ color:var(--ink); }
+  .contact a{ color:var(--ink); }
+
+  .actions{ display:flex; gap:8px; margin-top:16px; }
+  .actions button, .actions a{
+    flex:1; font-family:inherit; font-size:15px; font-weight:700; text-align:center; text-decoration:none;
+    padding:13px; border-radius:12px; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer;
+  }
+  .actions .primary{ background:var(--ink); border-color:var(--ink); color:#fff; }
+
+  .empty{ background:var(--card); border-radius:14px; padding:40px 20px; text-align:center; color:var(--muted); margin-top:20px; line-height:1.7; }
+</style>
+</head>
+<body>
+<main>
+  <div id="report"></div>
+  <div class="actions" id="actions" style="display:none;">
+    <button class="primary" type="button" id="saveImg">이미지로 저장</button>
+    <a href="tel:053-767-1663">전화 문의</a>
+  </div>
+</main>
+
+<script>
+// 상담체크리스트의 [고객 리포트 보내기]가 만든 링크로 열린다. 내용은 주소 뒤(#) 데이터에만 들어 있고
+// 서버에서 다른 상담을 불러오지 않으므로, 링크를 받은 사람은 자기 상담 내용만 볼 수 있다.
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+
+function decodeData(){
+  const raw = location.hash.replace(/^#d=/, '');
+  if(!raw) return null;
+  try {
+    const b64 = raw.replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(b64 + '==='.slice((b64.length + 3) % 4));
+    const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch(e){
+    return null;
+  }
+}
+
+function formatDate(s){
+  const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(!m) return s || '';
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return `${+m[2]}월 ${+m[3]}일 (${'일월화수목금토'[d.getDay()]})`;
+}
+
+function render(data){
+  const root = document.getElementById('report');
+  if(!data){
+    root.innerHTML = '<div class="empty">상담 정리 내용을 찾을 수 없어요.<br>받으신 링크를 다시 눌러 주세요.</div>';
+    return;
+  }
+  document.title = `HIT TILE 상담 정리 - ${data.co || ''}`;
+
+  // 같은 공간(예: 공용욕실 벽체 · 바닥)은 한 카드로 묶는다
+  const groups = [];
+  (data.t || []).forEach(t => {
+    let g = groups.find(x => x.name === t.g);
+    if(!g){ g = { name: t.g, tiles: [] }; groups.push(g); }
+    g.tiles.push(t);
+  });
+
+  const tilesHtml = groups.length ? groups.map(g => `
+    <div class="space">
+      <div class="space-name">${esc(g.name)}</div>
+      ${g.tiles.map(t => `
+        <div class="tile">
+          <div class="swatch"${t.img ? ` style="background-image:url('${esc(t.img)}')"` : ''}>${t.img ? '' : '샘플'}</div>
+          <div class="tile-body">
+            ${t.p ? `<div class="part">${esc(t.p)}</div>` : ''}
+            <div class="tile-name">${esc(t.n)}</div>
+            ${t.s ? `<div class="tile-spec">${esc(t.s)}</div>` : ''}
+          </div>
+        </div>`).join('')}
+    </div>`).join('') : '<div class="space">고르신 타일이 없습니다.</div>';
+
+  const zones = [];
+  (data.f || []).forEach(f => {
+    let z = zones.find(x => x.name === f.z);
+    if(!z){ z = { name: f.z, rows: [] }; zones.push(z); }
+    z.rows.push(f);
+  });
+  const fixturesHtml = zones.length ? `
+    <h2>욕실 제품</h2>
+    <div class="fixtures">
+      ${zones.map(z => `
+        <div class="zone">${esc(z.name)}</div>
+        ${z.rows.map(r => `<div class="fx-row"><span class="k">${esc(r.i)}</span><span class="v">${esc(r.n)}</span></div>`).join('')}
+      `).join('')}
+    </div>` : '';
+
+  root.innerHTML = `
+    <div class="hero">
+      <div class="logo">HIT <span>TILE</span></div>
+      <h1>${esc(data.co || '고객')}님,<br>오늘 고르신 타일을 정리해 드려요</h1>
+      <p>${data.date ? `상담일 ${esc(formatDate(data.date))}` : ''}${data.site ? `<br>현장 ${esc(data.site)}` : ''}${data.dl ? `<br>배송 예정 ${esc(formatDate(data.dl))}` : ''}</p>
+    </div>
+    <h2>공간별 타일</h2>
+    ${tilesHtml}
+    ${fixturesHtml}
+    <div class="notice">
+      타일은 생산 시기(로트)와 조명에 따라 색감이 조금 다르게 보일 수 있어요.<br>
+      변경하실 부분이 있으면 편하게 연락 주세요.
+    </div>
+    <div class="contact">
+      <b>히트타일</b> · <a href="tel:053-767-1663">053-767-1663</a><br>
+      대구 수성구 수성로 58
+    </div>`;
+  document.getElementById('actions').style.display = '';
+}
+
+async function saveImage(){
+  const btn = document.getElementById('saveImg');
+  const text = btn.textContent;
+  btn.disabled = true; btn.textContent = '이미지 만드는 중...';
+  try {
+    const canvas = await html2canvas(document.getElementById('report'), { backgroundColor: '#F5F6F8', scale: 2 });
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+    const file = new File([blob], '히트타일_상담정리.png', { type: 'image/png' });
+    if(navigator.canShare && navigator.canShare({ files: [file] })){
+      try { await navigator.share({ files: [file], title: 'HIT TILE 상담 정리' }); return; } catch(e){ /* 취소 시 다운로드 */ }
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = file.name;
+    document.body.appendChild(a); a.click(); a.remove();
+  } catch(err){
+    alert('이미지를 만들지 못했어요: ' + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = text;
+  }
+}
+
+document.getElementById('saveImg').addEventListener('click', saveImage);
+render(decodeData());
+</script>
+</body>
+</html>
