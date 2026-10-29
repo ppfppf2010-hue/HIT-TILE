@@ -1,0 +1,87 @@
+/*
+  히트타일 업무 화면 공통 디자인 (첫 화면 업무용 허브와 같은 색 · 머리글)
+  각 화면의 <style> 뒤에 연결해서, 화면마다 쓰던 색 이름을 같은 값으로 덮어쓴다.
+  색을 바꾸려면 이 파일만 고치면 모든 업무 화면이 같이 바뀐다. (고객 리포트 report/ 는 인쇄용이라 제외)
+*/
+:root{
+  /* 허브 팔레트 */
+  --hit-primary:#B91C1C;
+  --hit-primary-dark:#7F1D1D;
+  --hit-primary-soft:#FEF2F2;
+  --hit-surface:#F3F4F6;
+  --hit-card:#FFFFFF;
+  --hit-text:#1E293B;
+  --hit-text-sub:#475569;
+  --hit-border:#E2E8F0;
+
+  /* 판매 · 구매 · 품목 · 배송 · 기사 · 잔액 · 계산기 · 출고단가 화면이 쓰는 이름 */
+  --bg:var(--hit-surface);
+  --ink:var(--hit-text);
+  --muted:var(--hit-text-sub);
+  --line:var(--hit-border);
+  --brass:var(--hit-primary);
+  --brass-deep:var(--hit-primary-dark);
+  --brass-soft:var(--hit-primary-soft);
+  --card:var(--hit-card);
+
+  /* 상담 체크리스트 */
+  --paper:var(--hit-surface);
+  --paper-line:var(--hit-border);
+  --red:var(--hit-primary);
+  --red-dark:var(--hit-primary-dark);
+
+  /* 시공사진 카탈로그 · 사진 업로드 */
+  --surface:var(--hit-card);
+  --border:var(--hit-border);
+  --text:var(--hit-text);
+  --text-secondary:var(--hit-text-sub);
+  --accent-bg:var(--hit-primary-soft);
+  --accent-border:var(--hit-primary);
+  --accent-text:var(--hit-primary-dark);
+}
+
+body{
+  background:var(--hit-surface);
+  color:var(--hit-text);
+  font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  -webkit-tap-highlight-color:transparent;
+}
+
+/* 머리글: 흰 바탕 + 아래 선, 제목 앞에 허브와 같은 빨간 벽돌 아이콘 */
+header{
+  background:var(--hit-card);
+  border-bottom:1px solid var(--hit-border);
+  box-shadow:0 1px 2px rgba(15, 23, 42, .04);
+}
+header h1{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  color:var(--hit-text);
+}
+header h1::before{
+  content:"🧱";
+  flex:0 0 auto;
+  width:32px; height:32px;
+  border-radius:9px;
+  background:var(--hit-primary);
+  display:inline-flex; align-items:center; justify-content:center;
+  font-size:16px;
+  box-shadow:0 1px 2px rgba(15, 23, 42, .12);
+}
+header p{ color:var(--hit-text-sub); }
+
+/* 상담 체크리스트 머리글(검은 클립보드 모양)도 흰 머리글로 */
+header.top{ background:var(--hit-card); border-bottom:1px solid var(--hit-border); }
+header.top .clip{ display:none; }
+header.top .brand{ color:var(--hit-text); }
+header.top .brand .sub{ color:var(--hit-text-sub); }
+
+/* 입력칸을 눌렀을 때 테두리 색 */
+input:focus, select:focus, textarea:focus{ border-color:var(--hit-primary); }
+
+/* 인쇄할 때는 머리글 장식 없이 */
+@media print{
+  header{ box-shadow:none; }
+  header h1::before{ display:none; }
+}
