@@ -440,7 +440,7 @@
     <div id="detailContainer"></div>
     <button class="secondary" id="tileCalcBtn" onclick="goToTileCalcFromCurrent()">📐 타일 수량 계산 (사이즈 입력)</button>
     <button class="secondary" id="saleLinkBtn" onclick="goToSaleRegistrationFromCurrent()">🧾 판매등록으로 연결</button>
-    <button class="secondary" id="reportBtn" onclick="shareCustomerReport()">📤 고객 리포트 보내기 (고르신 타일 정리)</button>
+    <button class="secondary" id="reportBtn" onclick="openCustomerReport()">🖨 고객 리포트 (A4 출력 · 고르신 타일 정리)</button>
     <button class="secondary" id="imageBtn" onclick="saveAsImage()">🖼 이미지로 저장</button>
     <button class="primary" style="margin-top:10px;" onclick="startNewEntry()">+ 새 상담 입력하기</button>
   </section>
@@ -1218,6 +1218,15 @@ async function buildCustomerReportUrl(rec){
     f: fixtures,
   };
   return new URL('../report/', location.href).href + '#d=' + encodeReportData(data);
+}
+
+// A4 출력용: 리포트를 새 탭으로 열고, 그 화면의 [인쇄 (A4)] 버튼으로 출력한다
+async function openCustomerReport(){
+  if(!currentRecord) return;
+  // 팝업 차단을 피하려고 클릭 순간에 탭부터 연다
+  const win = window.open('', '_blank');
+  const url = await buildCustomerReportUrl(currentRecord);
+  if(win) win.location.href = url; else location.href = url;
 }
 
 async function shareCustomerReport(){

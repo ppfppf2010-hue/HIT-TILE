@@ -85,6 +85,37 @@
   }
   .actions .primary{ background:var(--ink); border-color:var(--ink); color:#fff; }
 
+  /* ---- A4 출력: 흰 바탕 · 잉크 절약, 공간 카드는 두 줄로 놓아 한 장에 들어가게 ---- */
+  @page{ size:A4; margin:14mm 13mm; }
+  @media print{
+    body{ background:#fff; }
+    main{ max-width:none; padding:0; }
+    #report{ background:#fff; padding:0; }
+    .actions{ display:none !important; }
+    .hero{ background:#fff; color:var(--ink); border:none; border-bottom:3px solid var(--ink); border-radius:0; padding:0 0 12px; }
+    .hero p{ color:var(--muted); }
+    h2{ margin:16px 0 8px; break-after:avoid; }
+    .spaces{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .space{ margin:0; padding:10px 12px; break-inside:avoid; border-color:#D1D5DB; }
+    .hero h1{ font-size:22px; }
+    .hero p{ font-size:13.5px; }
+    .space{ padding:12px 14px; }
+    .swatch{ flex-basis:56px; height:56px; }
+    .tile-name{ font-size:15px; }
+    .tile-spec{ font-size:13px; }
+    .fx-row{ font-size:13.5px; }
+    .memo{ display:block !important; }
+    .fixtures{ break-inside:avoid; border-color:#D1D5DB; }
+    .fixtures .zones{ display:grid; grid-template-columns:1fr 1fr; column-gap:24px; }
+    .notice{ background:#fff; border-color:#D1D5DB; color:var(--ink); break-inside:avoid; }
+    .contact{ margin-top:12px; }
+  }
+
+  .memo{ display:none; margin-top:14px; break-inside:avoid; }
+  .memo .label{ font-size:13px; font-weight:700; margin-bottom:6px; }
+  .memo .lines{ border:1px solid #D1D5DB; border-radius:12px; height:112px;
+    background:repeating-linear-gradient(#fff 0 36px, #E5E7EB 36px 37px); }
+
   .empty{ background:var(--card); border-radius:14px; padding:40px 20px; text-align:center; color:var(--muted); margin-top:20px; line-height:1.7; }
 </style>
 </head>
@@ -92,8 +123,8 @@
 <main>
   <div id="report"></div>
   <div class="actions" id="actions" style="display:none;">
-    <button class="primary" type="button" id="saveImg">이미지로 저장</button>
-    <a href="tel:053-767-1663">전화 문의</a>
+    <button class="primary" type="button" id="printBtn">인쇄 (A4)</button>
+    <button type="button" id="saveImg">이미지로 저장</button>
   </div>
 </main>
 
@@ -160,12 +191,12 @@ function render(data){
   });
   const fixturesHtml = zones.length ? `
     <h2>욕실 제품</h2>
-    <div class="fixtures">
-      ${zones.map(z => `
+    <div class="fixtures"><div class="zones">
+      ${zones.map(z => `<div>
         <div class="zone">${esc(z.name)}</div>
         ${z.rows.map(r => `<div class="fx-row"><span class="k">${esc(r.i)}</span><span class="v">${esc(r.n)}</span></div>`).join('')}
-      `).join('')}
-    </div>` : '';
+      </div>`).join('')}
+    </div></div>` : '';
 
   root.innerHTML = `
     <div class="hero">
@@ -174,12 +205,13 @@ function render(data){
       <p>${data.date ? `상담일 ${esc(formatDate(data.date))}` : ''}${data.site ? `<br>현장 ${esc(data.site)}` : ''}${data.dl ? `<br>배송 예정 ${esc(formatDate(data.dl))}` : ''}</p>
     </div>
     <h2>공간별 타일</h2>
-    ${tilesHtml}
+    <div class="spaces">${tilesHtml}</div>
     ${fixturesHtml}
     <div class="notice">
       타일은 생산 시기(로트)와 조명에 따라 색감이 조금 다르게 보일 수 있어요.<br>
       변경하실 부분이 있으면 편하게 연락 주세요.
     </div>
+    <div class="memo"><div class="label">메모</div><div class="lines"></div></div>
     <div class="contact">
       <b>히트타일</b> · <a href="tel:053-767-1663">053-767-1663</a><br>
       대구 수성구 수성로 58
@@ -209,6 +241,7 @@ async function saveImage(){
 }
 
 document.getElementById('saveImg').addEventListener('click', saveImage);
+document.getElementById('printBtn').addEventListener('click', () => window.print());
 render(decodeData());
 </script>
 </body>
