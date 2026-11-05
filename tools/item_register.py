@@ -80,6 +80,8 @@ def cmd_add(args):
         body['prefix'] = args.prefix
     if args.business_no:
         body['businessNo'] = args.business_no
+    if args.code:
+        body['code'] = args.code
     if args.force:
         body['force'] = True
 
@@ -93,6 +95,8 @@ def cmd_add(args):
 
     code = preview.get('code')
     ecodes = {x['prodCd'] for x in ecount_items()}
+    if code in ecodes and args.code:
+        sys.exit(f"중단: 지정한 코드 {code}가 이카운트에 이미 있습니다(그대로 등록하면 기존 품목을 덮어씀).")
     if code in ecodes:
         m = re.match(r'^(\D+)(\d+)$', code)
         top = max((int(c[len(m.group(1)):]) for c in ecodes if c.startswith(m.group(1)) and c[len(m.group(1)):].isdigit()), default=0) if m else 0
@@ -134,6 +138,7 @@ def main():
     a.add_argument('--margin', type=float, choices=[1.2, 1.4, 1.5])
     a.add_argument('--prefix', help='신규 거래처일 때 코드 접두어 (영문 2~4자)')
     a.add_argument('--business-no')
+    a.add_argument('--code', help='품목코드 직접 지정 (예: 세트는 기존 코드 + -1). 비우면 자동 채번')
     a.add_argument('--force', action='store_true')
     a.add_argument('--yes', action='store_true')
     a.set_defaults(fn=cmd_add)

@@ -53,6 +53,8 @@ function handleItemManualAdd(body) {
   const unit = String(body.unit || '').trim().toUpperCase() || 'EA';
   const prefixInput = String(body.prefix || '').trim().toUpperCase();
   const businessNo = String(body.businessNo || '').trim();
+  // 코드 직접 지정(선택): 세트 품목처럼 기존 코드에 -1을 붙이는 경우 등. 비우면 거래처 접두어로 자동 채번한다.
+  const customCode = String(body.code || '').trim();
   const price = Number(body.price);
   const hasOutPrice = body.outPrice !== '' && body.outPrice != null && !isNaN(Number(body.outPrice));
   const outPriceInput = hasOutPrice ? Number(body.outPrice) : null;
@@ -65,6 +67,7 @@ function handleItemManualAdd(body) {
   if (!name) throw new Error('품목명을 입력해주세요.');
   if (body.price === '' || body.price == null || isNaN(price) || price < 0) throw new Error('입고단가(VAT포함)를 숫자로 입력해주세요.');
   if (hasOutPrice && outPriceInput < 0) throw new Error('출고단가는 0 이상으로 입력해주세요.');
+  if (customCode && !/^[^\s|]{1,30}$/.test(customCode)) throw new Error('품목코드는 공백 없이 30자 이내로 입력해주세요.');
 
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(30000)) throw new Error('다른 품목 등록이 진행 중이에요. 잠시 후 다시 시도해주세요.');
@@ -98,6 +101,11 @@ function handleItemManualAdd(body) {
     const sharedMax = getMaxLastUsedForPrefix(prefix);
     const startNumber = Math.max(vendorInfo ? vendorInfo.lastUsed : 0, sharedMax) + 1;
     const row = assignCodesAndPrices([{ name: name, spec: spec, unit: unit, price: price }], prefix, startNumber, storedVendorName)[0];
+    if (customCode) {
+      // 지정한 코드가 이미 품목등록마스터에 있으면 그 품목을 덮어쓰게 되므로 막는다(이카운트 쪽 대조는 호출하는 쪽에서 한다)
+      if (masterHasCode_(customCode)) throw new Error('이미 있는 품목코드입니다: ' + customCode);
+      row.code = customCode;
+    }
     // 직접 입력한 단가는 100원 단위로 반올림하지 않고 그대로 쓴다(서류 인식값만 반올림하는 기존 규칙).
     row.inPrice = Math.round(price);
     row.outPrice = hasOutPrice ? Math.round(outPriceInput) : Math.round((row.inPrice * margin) / 100) * 100;
@@ -115,7 +123,7 @@ function handleItemManualAdd(body) {
     }
 
     appendToMasterSheet(storedVendorName, [row]);
-    saveLastUsedByPrefix(prefix, startNumber);
+    if (!customCode) saveLastUsedByPrefix(prefix, startNumber); // 직접 지정한 코드는 자동 채번 번호를 쓰지 않았다
     const ecountItemResult = ecountSyncItem(row, storedVendorName);
 
     return jsonOut({
@@ -130,6 +138,14 @@ function handleItemManualAdd(body) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function masterHasCode_(code) {
+  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(MASTER_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return false;
+  const target = String(code).trim().toUpperCase();
+  return sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues()
+    .some(function (r) { return String(r[0]).trim().toUpperCase() === target; });
 }
 
 // 중계서버 응답({ok, ecount:{Status, Data:{SuccessCnt, FailCnt, ...}}})을 화면에 보여줄 {ok, message}로 줄인다.
