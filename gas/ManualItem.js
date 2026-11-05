@@ -116,7 +116,8 @@ function handleItemManualAdd(body) {
     }
 
     appendToMasterSheet(storedVendorName, [row]);
-    saveLastUsedByPrefix(prefix, startNumber);
+    // 사용중단 코드와 겹치는 번호는 건너뛰므로 startNumber가 아니라 실제로 받은 번호를 기록한다.
+    saveLastUsedByPrefix(prefix, Number(row.code.slice(prefix.length)));
     const ecountItemResult = ecountSyncItem(row, storedVendorName);
 
     return jsonOut({

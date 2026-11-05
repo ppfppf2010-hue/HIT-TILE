@@ -310,7 +310,8 @@
  const newRows = assignCodesAndPrices(toRegister, vendorInfo.prefix, startNumber, vendorName);
  appendToMasterSheet(vendorName, newRows);
  newRows.forEach(function (r) { ecountSyncItem(r, vendorName); }); // 실패해도 로컬 등록은 이미 끝났으니 무시하고 진행
- saveLastUsedByPrefix(vendorInfo.prefix, Math.max(startNumber + newRows.length - 1, sharedMax));
+ const lastAssigned = Number(newRows[newRows.length - 1].code.slice(vendorInfo.prefix.length)); // 사용중단 코드와 겹치는 번호는 건너뛰므로 실제 마지막 번호
+ saveLastUsedByPrefix(vendorInfo.prefix, Math.max(lastAssigned, sharedMax));
 
  const codeByKey = {};
  newItemKeys.forEach(function (key, i) { codeByKey[key] = newRows[i]; });

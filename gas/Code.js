@@ -56,6 +56,7 @@
  if (action === 'previewNew') return handlePreviewNew(body);
  if (action === 'confirm') return handleConfirm(body);
  if (action === 'item_manual_add') return handleItemManualAdd(body);
+ if (action === 'item_discontinue') return handleItemDiscontinue(body);
  if (action === 'price_search') return handlePriceSearch(body);
  if (action === 'purchase_extract') return handlePurchaseExtract(body);
  if (action === 'purchase_register_vendor') return handlePurchaseRegisterVendor(body);
@@ -474,6 +475,7 @@
  // 같은 품명·다른 규격 품목이 같은 코드로 잘못 합쳐지는 걸 막는다.
  // ---- 후보 행 집합(rows) 안에서 이름/규격 기준으로 품목을 찾는 공통 매칭 로직 (거래처 범위는 호출자가 결정) ----
  function matchItemInRows(rows, itemName, price, spec) {
+ rows = rows.filter(function (row) { return !isDiscontinuedRow_(row); });
  const targetExact = String(itemName || '').trim();
  const targetCore = tileCoreName(itemName);
  const targetNorm = normalizeItemName(targetCore);
@@ -541,6 +543,7 @@
  if (!targetExact) return null;
  for (let i = 0; i < masterData.length; i++) {
  const row = masterData[i];
+ if (isDiscontinuedRow_(row)) continue;
  if (String(row[1] || '').trim() === targetExact && specsCompatible(spec, row[3])) {
  return normalizeMasterMatch(row);
  }
@@ -563,6 +566,7 @@
  let best = null, bestDist = Infinity;
  for (let i = 0; i < masterData.length; i++) {
  const row = masterData[i];
+ if (isDiscontinuedRow_(row)) continue;
  const rowNorm = normalizeItemName(tileCoreName(row[1]));
  if (!rowNorm) continue;
  const dist = levenshteinDistance(targetNorm, rowNorm);
@@ -1376,7 +1380,7 @@
  const items = [];
  for (let i = 1; i < data.length; i++) {
  const name = String(data[i][1] || '').trim();
- if (!name) continue;
+ if (!name || isDiscontinuedRow_(data[i])) continue;
  const spec = String(data[i][3] || '').trim();
  const vendor = String(data[i][12] || '').trim();
  // 거래처까지 키에 포함시켜서, 같은 품명+규격이라도 거래처가 다르면 별도 항목으로 남긴다
@@ -1432,17 +1436,91 @@
  // 마지막사용번호가 실제 코드보다 뒤처져 있을 수 있다(이카운트에서 직접 만든 품목 등).
  // 품목등록마스터에 이미 있는 같은 접두어 코드의 최대 번호도 함께 봐서, 기존 품목 코드를 다시 발급해
  // 이카운트 품목을 덮어쓰는 일을 막는다 (예: 대경목간00004, 히든00002가 다시 발급될 뻔함).
+ // 사용중단(P열) 품목은 빼고 본다 — 잘못 붙은 큰 번호를 사용중단하면 채번이 그 앞 번호로 돌아온다.
  if (target) {
- const master = ss.getSheetByName(MASTER_SHEET);
- const codes = master && master.getLastRow() > 1 ? master.getRange(2, 1, master.getLastRow() - 1, 1).getValues() : [];
- codes.forEach(function (r) {
+ const active = getMaxActiveCodeNumberForPrefix_(target);
+ if (active > max) max = active;
+ }
+ return max;
+ }
+
+ // ===== 품목 사용중단 (품목등록마스터 P열) =====
+ // 이카운트 품목 목록 API(GetBasicProductsList)에는 사용여부 필드가 없어서, 사용중단은 우리 시트에 따로 표시한다.
+ // 코드를 바꿀 땐 기존 코드를 고치지 않고 새 코드로 추가 등록한 뒤 기존 코드를 사용중단한다(이카운트에서도 사용중단 처리).
+ // 사용중단 코드는 채번 계산과 품목 매칭(구매/판매/배송)에서 빠지지만, 새 코드가 같은 번호를 다시 받지는 않는다.
+ const ITEM_DISCONTINUED_COL = 16; // P열
+ const DISCONTINUED_MARK = '사용중단';
+
+ function isDiscontinuedRow_(row) {
+ return String((row && row[ITEM_DISCONTINUED_COL - 1]) || '').trim().indexOf(DISCONTINUED_MARK) === 0;
+ }
+
+ // 마스터의 모든 코드(사용중단 포함)와 사용중단 코드 집합 — 키는 대문자 코드
+ function getMasterCodeState_() {
+ const master = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(MASTER_SHEET);
+ const all = {}, discontinued = {};
+ if (!master || master.getLastRow() < 2) return { all: all, discontinued: discontinued };
+ master.getRange(2, 1, master.getLastRow() - 1, ITEM_DISCONTINUED_COL).getValues().forEach(function (r) {
  const code = String(r[0] || '').trim().toUpperCase();
- if (code.indexOf(target) !== 0) return;
+ if (!code) return;
+ all[code] = true;
+ if (isDiscontinuedRow_(r)) discontinued[code] = true;
+ });
+ return { all: all, discontinued: discontinued };
+ }
+
+ // 같은 접두어의 사용 중인(사용중단 아닌) 코드 중 최대 번호
+ function getMaxActiveCodeNumberForPrefix_(prefix) {
+ const target = String(prefix).trim().toUpperCase();
+ const state = getMasterCodeState_();
+ let max = 0;
+ Object.keys(state.all).forEach(function (code) {
+ if (state.discontinued[code] || code.indexOf(target) !== 0) return;
  const rest = code.slice(target.length);
  if (/^\d+$/.test(rest) && Number(rest) > max) max = Number(rest);
  });
- }
  return max;
+ }
+
+ // action="item_discontinue" — body.codes: ['HS92212', ...], body.undo: true면 사용중단 해제.
+ // P열에 표시한 뒤, 영향받은 접두어의 마지막사용번호(거래처코드관리 C열)를 사용 중인 코드 기준으로 다시 맞춘다.
+ function handleItemDiscontinue(body) {
+ const codes = (Array.isArray(body.codes) ? body.codes : []).map(function (c) { return String(c || '').trim(); }).filter(String);
+ if (!codes.length) throw new Error('사용중단할 품목코드를 보내주세요.');
+ const undo = !!body.undo;
+
+ const lock = LockService.getScriptLock();
+ if (!lock.tryLock(30000)) throw new Error('다른 품목 등록이 진행 중이에요. 잠시 후 다시 시도해주세요.');
+ try {
+ const master = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(MASTER_SHEET);
+ const data = master.getRange(2, 1, master.getLastRow() - 1, 1).getValues();
+ const rowByCode = {};
+ data.forEach(function (r, i) { rowByCode[String(r[0] || '').trim().toUpperCase()] = i + 2; });
+
+ master.getRange(1, ITEM_DISCONTINUED_COL).setValue('사용중단');
+ const mark = undo ? '' : DISCONTINUED_MARK + ' (' + Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd') + ')';
+ const results = [];
+ const prefixes = {};
+ codes.forEach(function (code) {
+ const row = rowByCode[code.toUpperCase()];
+ if (!row) { results.push({ code: code, ok: false, error: '품목등록마스터에 없는 코드' }); return; }
+ master.getRange(row, ITEM_DISCONTINUED_COL).setValue(mark);
+ const m = code.match(/^(\D+)\d+$/);
+ if (m) prefixes[m[1].toUpperCase()] = true;
+ results.push({ code: code, ok: true });
+ });
+
+ // 마지막사용번호는 사용 중인 코드의 최대 번호로 다시 맞춘다(해제한 경우엔 다시 올라간다).
+ const lastUsed = {};
+ Object.keys(prefixes).forEach(function (prefix) {
+ const n = getMaxActiveCodeNumberForPrefix_(prefix);
+ saveLastUsedByPrefix(prefix, n);
+ lastUsed[prefix] = n;
+ });
+ return jsonOut({ ok: true, undo: undo, results: results, lastUsed: lastUsed });
+ } finally {
+ lock.releaseLock();
+ }
  }
 
  // ---- 같은 접두어를 쓰는 모든 행을 동일한 마지막번호로 동기화 ----
@@ -1460,9 +1538,16 @@
 
  function assignCodesAndPrices(items, prefix, startNumber, vendorName) {
  // 입고단가VAT포함여부/품목구분/세트여부/재고수량관리는 거래처·상품유형과 무관하게 전부 1로 고정한다.
- return items.map(function (it, i) {
- const numberPart = startNumber + i;
- const code = prefix + String(numberPart).padStart(CODE_DIGITS, '0');
+ // 사용중단 코드를 빼고 채번하면 그 번호가 다시 나올 수 있으니, 마스터에 이미 있는 코드(사용중단 포함)는 건너뛴다.
+ const taken = getMasterCodeState_().all;
+ let numberPart = startNumber - 1;
+ return items.map(function (it) {
+ let code;
+ do {
+ numberPart++;
+ code = prefix + String(numberPart).padStart(CODE_DIGITS, '0');
+ } while (taken[code.toUpperCase()]);
+ taken[code.toUpperCase()] = true;
  const inPrice = Math.round(Number(it.price) / 100) * 100;
  // 출고단가 = 입고단가 x 마진 (타일 1.5 / 브랜드 도기·악세사리 1.2 / 비브랜드 1.4, 품목명·거래처명으로 판별 - ManualItem.js classifyMargin)
  const outPrice = Math.round((inPrice * (it.margin || classifyMargin(it.name, vendorName).margin)) / 100) * 100;

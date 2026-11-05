@@ -178,8 +178,11 @@ function runItemSyncAll() {
     }
 
     // 이카운트에서 직접 만든 코드(예: VG00050)가 마지막사용번호를 앞지르면 따라 올려서 자동채번 충돌을 막는다.
+    // 사용중단(P열) 코드는 빼고 본다 — 안 그러면 사용중단한 큰 번호가 매시간 마지막사용번호를 다시 끌어올린다.
+    const discontinued = getMasterCodeState_().discontinued;
     const maxByPrefix = {};
     Object.keys(seenCodes).forEach(function (code) {
+      if (discontinued[code.toUpperCase()]) return;
       // 접두어는 숫자가 아닌 부분 전체 — 'VG' 같은 영문뿐 아니라 '대경목간', '히든' 같은 한글 접두어도 잡는다
       const m = code.match(/^(\D+)(\d+)$/);
       if (!m) return;
