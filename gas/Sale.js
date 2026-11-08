@@ -213,7 +213,7 @@
  const stored = String(data[i][0] || '');
  if (!stored.trim()) continue;
  if (stored.trim() === String(correctedName).trim() || normalizeVendorName(stored) === target) {
- return { rowIndex: i + 1, storedName: stored.trim(), businessNo: String(data[i][1] || '').trim(), ecountCode: String(data[i][4] || '').trim() };
+ return { rowIndex: i + 1, storedName: stored.trim(), businessNo: normalizeEcountCustCode_(data[i][1]), ecountCode: normalizeEcountCustCode_(data[i][4]) };
  }
  }
  return null;

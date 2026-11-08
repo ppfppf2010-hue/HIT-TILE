@@ -57,6 +57,7 @@
  if (action === 'confirm') return handleConfirm(body);
  if (action === 'item_manual_add') return handleItemManualAdd(body);
  if (action === 'item_discontinue') return handleItemDiscontinue(body);
+ if (action === 'set_vendor_ecount_code') return handleSetVendorEcountCode(body);
  if (action === 'price_search') return handlePriceSearch(body);
  if (action === 'purchase_extract') return handlePurchaseExtract(body);
  if (action === 'purchase_register_vendor') return handlePurchaseRegisterVendor(body);
@@ -885,14 +886,36 @@
  if (stored.trim() === String(correctedName).trim() || normalizeVendorName(stored) === target) {
  return {
  rowIndex: i + 1, storedName: stored.trim(), prefix: String(data[i][1]).trim(), lastUsed: Number(data[i][2]) || 0,
- businessNo: String(data[i][3] || '').trim(),
+ businessNo: normalizeEcountCustCode_(data[i][3]),
  // 이카운트 실제 거래처코드(사업자번호가 아닌 내부 코드인 경우가 많음) - E열. 채워져 있으면
  // 이 값이 사업자번호보다 우선하는 진짜 CUST_CD다 (importPurchaseVendorEcountCodes 참고).
- ecountCode: String(data[i][4] || '').trim()
+ ecountCode: normalizeEcountCustCode_(data[i][4])
  };
  }
  }
  return null;
+ }
+
+ // 이카운트 내부 거래처코드는 5자리(00004, 00159)인데, 시트 칸이 숫자 서식이면 앞자리 0이 빠져 4, 159로 저장된다.
+ // 그대로 CUST로 보내면 없는 코드라 이카운트가 직전 품목의 구매처(예: 00004 베리굿)를 채우므로 읽을 때 5자리로 되돌린다.
+ // 사업자등록번호(10자리)나 하이픈이 들어간 값은 건드리지 않는다.
+ function normalizeEcountCustCode_(v) {
+ const s = String(v == null ? '' : v).trim();
+ return /^\d{1,4}$/.test(s) ? s.padStart(5, '0') : s;
+ }
+
+ // action="set_vendor_ecount_code" — body: {vendorName, code, sheet:'purchase'(기본)|'sale'}
+ // 거래처코드관리(또는 판매거래처) E열(이카운트거래처코드)을 텍스트로 채운다(앞자리 0 유지).
+ function handleSetVendorEcountCode(body) {
+ const vendorName = String(body.vendorName || '').trim();
+ const code = normalizeEcountCustCode_(body.code);
+ if (!vendorName || !code) throw new Error('vendorName, code가 필요합니다.');
+ const isSale = body.sheet === 'sale';
+ const info = isSale ? findSaleVendor(vendorName) : findVendor(vendorName);
+ if (!info) throw new Error('거래처를 찾을 수 없습니다: ' + vendorName);
+ const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(isSale ? SALE_VENDOR_SHEET : VENDOR_SHEET);
+ sheet.getRange(info.rowIndex, 5).setNumberFormat('@').setValue(code);
+ return jsonOut({ ok: true, vendorName: info.storedName, sheet: isSale ? SALE_VENDOR_SHEET : VENDOR_SHEET, ecountCode: code });
  }
 
  // ==== 이카운트 거래처 마스터와 시트(거래처코드관리/판매거래처) 주기적 대조 ====
