@@ -57,6 +57,7 @@
  if (action === 'confirm') return handleConfirm(body);
  if (action === 'item_manual_add') return handleItemManualAdd(body);
  if (action === 'item_discontinue') return handleItemDiscontinue(body);
+ if (action === 'item_reissue') return handleItemReissue(body);
  if (action === 'set_vendor_ecount_code') return handleSetVendorEcountCode(body);
  if (action === 'price_search') return handlePriceSearch(body);
  if (action === 'purchase_extract') return handlePurchaseExtract(body);
@@ -134,6 +135,7 @@
  const sharedMax = getMaxLastUsedForPrefix(vendorInfo.prefix);
  const startNumber = Math.max(vendorInfo.lastUsed, sharedMax) + 1;
  // 시트에 저장된 원래 표기(storedName)를 사용해서 이후 저장되는 거래처명 표기를 통일시킨다.
+ addKoreanNames_(dedup.newItems); // 영문 품목명엔 등록할 때 바로 "영문 (한글)"을 붙인다 — 등록 뒤엔 이카운트에서 이름을 못 고친다
  const previewRows = assignCodesAndPrices(dedup.newItems, vendorInfo.prefix, startNumber, vendorInfo.storedName);
  const reviewUrl = stageForReview(vendorInfo.storedName, previewRows, vendorInfo.businessNo || '');
  return jsonOut({ ok: true, isNewVendor: false, vendorName: vendorInfo.storedName, reviewUrl: reviewUrl, count: previewRows.length, skippedCount: dedup.skipped.length, skipped: dedup.skipped });
@@ -200,6 +202,7 @@
  const sharedMax = getMaxLastUsedForPrefix(finalPrefix);
  const startNumber = Math.max(existing ? existing.lastUsed : 0, sharedMax) + 1;
 
+ addKoreanNames_(dedup.newItems);
  const previewRows = assignCodesAndPrices(dedup.newItems, finalPrefix, startNumber, finalVendorName);
  const reviewUrl = stageForReview(finalVendorName, previewRows, finalBusinessNo);
  return jsonOut({ ok: true, count: previewRows.length, reviewUrl: reviewUrl, skippedCount: dedup.skipped.length, skipped: dedup.skipped });
@@ -1505,8 +1508,8 @@
  return max;
  }
 
- // action="item_discontinue" — body.codes: ['HS92212', ...], body.undo: true면 사용중단 해제.
- // P열에 표시한 뒤, 영향받은 접두어의 마지막사용번호(거래처코드관리 C열)를 사용 중인 코드 기준으로 다시 맞춘다.
+ // action="item_discontinue" — body.codes: ['HS92212', ...], body.undo: true면 사용중단 해제, body.reason: 사유(선택).
+ // 사용중단하면 "이카운트사용중단대기" 탭에도 올린다(이카운트 API에는 사용중단 기능이 없어 이카운트에서는 사람이 처리).
  function handleItemDiscontinue(body) {
  const codes = (Array.isArray(body.codes) ? body.codes : []).map(function (c) { return String(c || '').trim(); }).filter(String);
  if (!codes.length) throw new Error('사용중단할 품목코드를 보내주세요.');
@@ -1515,35 +1518,69 @@
  const lock = LockService.getScriptLock();
  if (!lock.tryLock(30000)) throw new Error('다른 품목 등록이 진행 중이에요. 잠시 후 다시 시도해주세요.');
  try {
+ const r = markItemsDiscontinued_(codes, undo);
+ if (!undo) {
+ appendDiscontinueQueue_(r.results.filter(function (x) { return x.ok; }).map(function (x) {
+ return { oldCode: x.code, oldName: x.name, newCode: '', newName: '', reason: String(body.reason || '') };
+ }));
+ }
+ return jsonOut({ ok: true, undo: undo, results: r.results, lastUsed: r.lastUsed });
+ } finally {
+ lock.releaseLock();
+ }
+ }
+
+ // 락은 호출자가 잡는다. P열에 표시한 뒤, 영향받은 접두어의 마지막사용번호(거래처코드관리 C열)를
+ // 사용 중인 코드 기준으로 다시 맞춘다(해제한 경우엔 다시 올라간다).
+ function markItemsDiscontinued_(codes, undo) {
  const master = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(MASTER_SHEET);
- const data = master.getRange(2, 1, master.getLastRow() - 1, 1).getValues();
+ const data = master.getRange(2, 1, master.getLastRow() - 1, 2).getValues();
  const rowByCode = {};
- data.forEach(function (r, i) { rowByCode[String(r[0] || '').trim().toUpperCase()] = i + 2; });
+ data.forEach(function (r, i) { rowByCode[String(r[0] || '').trim().toUpperCase()] = { row: i + 2, name: String(r[1] || '').trim() }; });
 
  master.getRange(1, ITEM_DISCONTINUED_COL).setValue('사용중단');
  const mark = undo ? '' : DISCONTINUED_MARK + ' (' + Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd') + ')';
  const results = [];
  const prefixes = {};
  codes.forEach(function (code) {
- const row = rowByCode[code.toUpperCase()];
- if (!row) { results.push({ code: code, ok: false, error: '품목등록마스터에 없는 코드' }); return; }
- master.getRange(row, ITEM_DISCONTINUED_COL).setValue(mark);
+ const hit = rowByCode[code.toUpperCase()];
+ if (!hit) { results.push({ code: code, ok: false, error: '품목등록마스터에 없는 코드' }); return; }
+ master.getRange(hit.row, ITEM_DISCONTINUED_COL).setValue(mark);
  const m = code.match(/^(\D+)\d+$/);
  if (m) prefixes[m[1].toUpperCase()] = true;
- results.push({ code: code, ok: true });
+ results.push({ code: code, name: hit.name, ok: true });
  });
 
- // 마지막사용번호는 사용 중인 코드의 최대 번호로 다시 맞춘다(해제한 경우엔 다시 올라간다).
  const lastUsed = {};
  Object.keys(prefixes).forEach(function (prefix) {
  const n = getMaxActiveCodeNumberForPrefix_(prefix);
  saveLastUsedByPrefix(prefix, n);
  lastUsed[prefix] = n;
  });
- return jsonOut({ ok: true, undo: undo, results: results, lastUsed: lastUsed });
- } finally {
- lock.releaseLock();
+ return { results: results, lastUsed: lastUsed };
  }
+
+ // ---- "이카운트사용중단대기" 탭: 시트에서 사용중단한 코드를 이카운트에서도 사용중단하도록 사람이 처리할 목록 ----
+ // 이카운트 품목등록 리스트에서 기존코드를 체크 → [사용중단/재사용 → 사용중단] 후 마지막 칸에 ✓.
+ const DISCONTINUE_QUEUE_SHEET = '이카운트사용중단대기';
+ const DISCONTINUE_QUEUE_HEADERS = ['요청일시', '기존코드(사용중단할 것)', '기존 품목명', '새 코드', '새 품목명', '사유', '이카운트 처리(완료 시 ✓)'];
+
+ function appendDiscontinueQueue_(rows) {
+ if (!rows.length) return;
+ const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+ let sheet = ss.getSheetByName(DISCONTINUE_QUEUE_SHEET);
+ if (!sheet) {
+ sheet = ss.insertSheet(DISCONTINUE_QUEUE_SHEET);
+ sheet.getRange(1, 1, 1, DISCONTINUE_QUEUE_HEADERS.length).setValues([DISCONTINUE_QUEUE_HEADERS]).setFontWeight('bold').setBackground('#fff4e5');
+ sheet.setFrozenRows(1);
+ }
+ const now = new Date();
+ const start = sheet.getLastRow() + 1;
+ sheet.getRange(start, 2, rows.length, 1).setNumberFormat('@');
+ sheet.getRange(start, 4, rows.length, 1).setNumberFormat('@');
+ sheet.getRange(start, 1, rows.length, DISCONTINUE_QUEUE_HEADERS.length).setValues(rows.map(function (r) {
+ return [now, r.oldCode, r.oldName, r.newCode, r.newName, r.reason, ''];
+ }));
  }
 
  // ---- 같은 접두어를 쓰는 모든 행을 동일한 마지막번호로 동기화 ----

@@ -46,9 +46,41 @@ function classifyMargin(name, vendorName) {
   return { margin: MARGIN_TILE, label: '타일' };
 }
 
+// ===== 등록할 때 한글명 병기 =====
+// 이카운트 품목 저장 API(SaveBasicProduct)는 이미 있는 코드를 고치지 못해서(“이미 품목등록에 존재하는 코드”),
+// 등록한 뒤에 한글명을 붙이면 시트에만 붙었다가 매시간 대조 때 되돌아간다. 그래서 처음 등록할 때 붙인다.
+// 대상: 앞의 "타일"을 뺀 나머지가 영문뿐(3글자 이상 영단어)이고 한글 병기가 아직 없는 이름 — 예: "타일HOLY BEIGE 80*80".
+// 이미 한글이 섞인 이름(예: "Mega G2 브라운", "[힘펠] 201M")은 건드리지 않는다.
+function needsKoreanName_(name) {
+  const n = String(name || '').trim();
+  if (!n || KO_SUFFIX_RE.test(n)) return false;
+  const rest = n.replace(/^타일/, '');
+  return /[A-Za-z]{3,}/.test(rest) && !HANGUL_RE.test(rest);
+}
+
+// items: [{name, spec, ...}] — 대상 품목의 name을 "영문 (한글)"로 바꾼다(제자리 수정). Claude 오류 시 그대로 둔다.
+function addKoreanNames_(items) {
+  const todo = (items || []).map(function (it, i) { return { it: it, key: 'K' + i }; })
+    .filter(function (x) { return needsKoreanName_(x.it.name); });
+  if (!todo.length) return items;
+  try {
+    const ko = translateNamesWithClaude_(todo.map(function (x) { return { code: x.key, name: String(x.it.name).trim(), spec: String(x.it.spec || '').trim() }; }));
+    todo.forEach(function (x) {
+      const k = String(ko[x.key] || '').trim();
+      if (k && HANGUL_RE.test(k)) x.it.name = String(x.it.name).trim() + ' (' + k + ')';
+    });
+  } catch (e) {
+    Logger.log('한글명 병기 실패(영문 그대로 등록): ' + e.message);
+  }
+  return items;
+}
+
 function handleItemManualAdd(body) {
   const vendorName = String(body.vendorName || '').trim();
-  const name = String(body.name || '').trim();
+  // koreanName을 주면 그대로 병기, noKorean:true면 병기하지 않는다. 둘 다 없으면 영문 이름에 자동 병기.
+  let name = String(body.name || '').trim();
+  if (body.koreanName) name = name + ' (' + String(body.koreanName).trim() + ')';
+  else if (!body.noKorean) name = addKoreanNames_([{ name: name, spec: body.spec }])[0].name;
   const spec = String(body.spec || '').trim();
   const unit = String(body.unit || '').trim().toUpperCase() || 'EA';
   const prefixInput = String(body.prefix || '').trim().toUpperCase();
@@ -148,4 +180,62 @@ function summarizeEcountResult_(r) {
     detail = d0 ? (d0.TotalError || JSON.stringify(d0.Errors || d0)) : (ec.Error && ec.Error.Message) || '';
   } catch (e) { /* ignore */ }
   return { ok: false, message: String(detail || '이카운트가 등록을 거절했어요').slice(0, 300) };
+}
+
+// ===== 품목 재발급 (action="item_reissue") =====
+// 이미 등록된 품목의 이름·한글명·구매처·규격·단위·단가를 바꿔야 할 때, 이카운트가 기존 코드 수정을 막으므로
+// 기존 코드는 그대로 두고 새 코드로 다시 등록한 뒤 기존 코드를 사용중단한다(시트 P열 + "이카운트사용중단대기" 탭).
+// body: {code, name?, koreanName?, spec?, unit?, inPrice?, outPrice?, vendorName?, reason?, dryRun?}
+//  - 안 보낸 값은 기존 품목 그대로 복사한다. name을 안 보내면 기존 이름에 한글명을 자동 병기한다(영문 이름일 때).
+//  - vendorName을 보내면 그 거래처(거래처코드관리에 있어야 함)의 접두어로 새 코드를 받는다.
+function handleItemReissue(body) {
+  const oldCode = String(body.code || '').trim();
+  if (!oldCode) throw new Error('재발급할 기존 품목코드(code)를 보내주세요.');
+  const has = function (k) { return body[k] !== undefined && body[k] !== null && body[k] !== ''; };
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) throw new Error('다른 품목 등록이 진행 중이에요. 잠시 후 다시 시도해주세요.');
+  try {
+    const master = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(MASTER_SHEET);
+    const data = master.getRange(2, 1, master.getLastRow() - 1, ITEM_DISCONTINUED_COL).getValues();
+    const old = data.find(function (r) { return String(r[0]).trim().toUpperCase() === oldCode.toUpperCase(); });
+    if (!old) throw new Error('품목등록마스터에 없는 코드예요: ' + oldCode);
+
+    const vendorName = has('vendorName') ? String(body.vendorName).trim() : String(old[12] || '').trim();
+    const vendorInfo = vendorName ? findVendor(vendorName) : null;
+    if (!vendorInfo) throw new Error('새 코드를 받을 거래처를 찾을 수 없어요(거래처코드관리에 있어야 함): ' + (vendorName || '(기존 품목에 거래처 없음 — vendorName을 보내주세요)'));
+
+    let name = has('name') ? String(body.name).trim() : String(old[1]).trim();
+    if (has('koreanName')) name = name.replace(KO_SUFFIX_RE, '').trim() + ' (' + String(body.koreanName).trim() + ')';
+    else if (!has('name')) name = addKoreanNames_([{ name: name, spec: old[3] }])[0].name;
+    const spec = has('spec') ? String(body.spec).trim() : String(old[3] || '').trim();
+    const unit = has('unit') ? String(body.unit).trim().toUpperCase() : (String(old[6] || '').trim() || 'EA');
+    const inPrice = Math.round(has('inPrice') ? Number(body.inPrice) : Number(old[4]) || 0);
+    const outPrice = Math.round(has('outPrice') ? Number(body.outPrice) : Number(old[10]) || 0);
+
+    const prefix = vendorInfo.prefix;
+    const sharedMax = getMaxLastUsedForPrefix(prefix);
+    const startNumber = Math.max(vendorInfo.lastUsed, sharedMax) + 1;
+    const row = assignCodesAndPrices([{ name: name, spec: spec, unit: unit, price: inPrice }], prefix, startNumber, vendorInfo.storedName)[0];
+    row.inPrice = inPrice;
+    row.outPrice = outPrice;
+    row.inVat = old[5] === '' ? 1 : Number(old[5]);
+    row.outVat = old[11] === '' ? 1 : Number(old[11]);
+
+    if (body.dryRun) return jsonOut({ ok: true, dryRun: true, oldCode: oldCode, row: row, vendorName: vendorInfo.storedName });
+
+    appendToMasterSheet(vendorInfo.storedName, [row]);
+    saveLastUsedByPrefix(prefix, Number(row.code.slice(prefix.length)));
+    const ecountItemResult = ecountSyncItem(row, vendorInfo.storedName);
+    markItemsDiscontinued_([oldCode], false);
+    appendDiscontinueQueue_([{ oldCode: oldCode, oldName: String(old[1]).trim(), newCode: row.code, newName: row.name, reason: String(body.reason || '') }]);
+
+    return jsonOut({
+      ok: true, oldCode: oldCode, code: row.code, name: row.name, spec: row.spec, unit: row.unit,
+      inPrice: row.inPrice, outPrice: row.outPrice, vendorName: vendorInfo.storedName,
+      ecount: { item: summarizeEcountResult_(ecountItemResult) }
+    });
+  } finally {
+    lock.releaseLock();
+  }
 }

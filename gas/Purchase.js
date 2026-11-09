@@ -304,7 +304,7 @@
 
  if (newItemKeys.length) {
  if (!vendorInfo) throw new Error('거래처(' + vendorName + ')가 등록되어 있지 않아 신규 품목에 코드를 발급할 수 없습니다.');
- const toRegister = newItemKeys.map(function (key) { return newItemMap[key]; });
+ const toRegister = addKoreanNames_(newItemKeys.map(function (key) { return newItemMap[key]; })); // 영문 품목명엔 등록할 때 한글명 병기
  const sharedMax = getMaxLastUsedForPrefix(vendorInfo.prefix);
  const startNumber = Math.max(vendorInfo.lastUsed, sharedMax) + 1;
  const newRows = assignCodesAndPrices(toRegister, vendorInfo.prefix, startNumber, vendorName);
