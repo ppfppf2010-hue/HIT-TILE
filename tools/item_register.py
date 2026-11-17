@@ -104,6 +104,10 @@ def cmd_add(args):
                  f"거래처코드관리 탭에서 이 거래처 줄 C열을 {top}(으)로 고쳐 달라고 요청하세요: {SHEET_URL}")
 
     row = preview.get('row', {})
+    # 출고단가는 천원 단위(백원 단위 버림). 웹앱이 아직 100원 단위로 계산해도 여기서 맞춰서 보낸다.
+    if args.out_price is None and row.get('outPrice') is not None:
+        row['outPrice'] = int(row['outPrice']) // 1000 * 1000
+        body['outPrice'] = row['outPrice']
     print(f"코드 {code} | {row.get('name')} [{row.get('spec')}] | 거래처 {preview.get('vendorName')}"
           f"{' (신규 거래처)' if preview.get('willCreateVendor') else ''} | 단위 {row.get('unit')}"
           f" | 입고 {row.get('inPrice'):,} | 출고 {row.get('outPrice'):,} ({preview.get('marginLabel')} {preview.get('margin')})")

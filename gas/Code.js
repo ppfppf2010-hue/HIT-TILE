@@ -1465,7 +1465,7 @@
  const code = prefix + String(numberPart).padStart(CODE_DIGITS, '0');
  const inPrice = Math.round(Number(it.price) / 100) * 100;
  // 출고단가 = 입고단가 x 마진 (타일 1.5 / 브랜드 도기·악세사리 1.2 / 비브랜드 1.4, 품목명·거래처명으로 판별 - ManualItem.js classifyMargin)
- const outPrice = Math.round((inPrice * (it.margin || classifyMargin(it.name, vendorName).margin)) / 100) * 100;
+ const outPrice = Math.floor((inPrice * (it.margin || classifyMargin(it.name, vendorName).margin)) / 1000) * 1000; // 출고단가는 천원 단위(백원 단위 버림)
  return {
  code: code, name: it.name, specType: it.spec ? '사이즈' : '', spec: it.spec || '',
  inPrice: inPrice, inVat: 1, unit: it.unit,
