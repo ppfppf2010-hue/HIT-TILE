@@ -1,4 +1,4 @@
-# 히트타일 PC 자동 배포
+﻿# 히트타일 PC 자동 배포
 # 클라우드 Claude가 main에 합친 Apps Script(gas/, checklist-gas/) 변경을 대표님 PC가 10분마다 받아서
 # clasp push + 기존 웹앱 배포를 새 버전으로 업데이트한다(웹앱 주소 그대로). 설치는 pc-auto-deploy-install.ps1.
 # 기록: %LOCALAPPDATA%\hittile-auto-deploy.log

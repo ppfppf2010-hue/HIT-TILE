@@ -1,4 +1,4 @@
-# 히트타일 PC 자동 배포 설치: 윈도우 작업 스케줄러에 "10분마다 pc-auto-deploy.ps1 실행"을 등록한다.
+﻿# 히트타일 PC 자동 배포 설치: 윈도우 작업 스케줄러에 "10분마다 pc-auto-deploy.ps1 실행"을 등록한다.
 # 대표님 PC에서 한 번만 실행. 다시 실행해도 같은 작업을 덮어쓸 뿐이다.
 # 끄기: schtasks /Delete /TN "HitTile AutoDeploy" /F
 $Script = Join-Path $PSScriptRoot 'pc-auto-deploy.ps1'
