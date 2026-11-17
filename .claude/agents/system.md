@@ -11,6 +11,11 @@ tools: Bash, Read, Grep, Glob, Edit, Write
 |---|---|---|
 | 화면 (sale/, purchase/, tile-calc/ 등) | 클라우드 가능 | main에 합치면 GitHub Pages 자동 배포 |
 | 메인 Apps Script (gas/) | **PC에서만** | `gas` 폴더 `clasp push` 후 기존 웹앱 배포를 새 버전으로 업데이트(URL 유지) |
+
+**PC 자동 배포** (`tools/pc-auto-deploy.ps1`, 설치 `tools/pc-auto-deploy-install.ps1`): 대표님 PC가 10분마다 main을 받아서
+`gas/` · `checklist-gas/`가 바뀌었으면 clasp push + 기존 웹앱 배포 업데이트를 자동으로 한다. 켜져 있으면 클라우드 세션은 **main에 합치기만** 하면 되고,
+10~15분 뒤 웹앱을 직접 호출해서 반영됐는지 확인한다. PC에 커밋 안 한 수정이 있거나 main이 아니면 건너뛴다(기록: `%LOCALAPPDATA%\hittile-auto-deploy.log`).
+
 | 상담체크리스트 Apps Script (checklist-gas/) | **PC에서만** | 같은 방식, 별도 프로젝트 |
 | 중계서버 (ecount-relay/) | **PC에서만** | 175.106.98.59 접속 → `~/hittile-ecount-relay` git pull → `pm2 restart ecount-relay` |
 

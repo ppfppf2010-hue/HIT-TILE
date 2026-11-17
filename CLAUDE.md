@@ -40,6 +40,7 @@
 ## 시스템 구조 (꼭 알아둘 것)
 - 화면: GitHub Pages(이 저장소 main) — main에 합치면 1분 안에 자동 배포.
 - 서버 기능: Google Apps Script `gas/`(메인 웹앱), `checklist-gas/`(상담체크리스트). **clasp로 대표님 PC에서만 배포 가능**(클라우드 세션 불가).
+  대표님 PC에 **자동 배포**(`tools/pc-auto-deploy.ps1`)가 켜져 있으면 main에 합친 뒤 10분 안에 PC가 알아서 배포한다.
 - 이카운트: Apps Script → 중계서버(네이버클라우드 175.106.98.59, `ecount-relay/`) → 이카운트. 중계서버 반영도 **PC에서만** 가능(git pull + `pm2 restart ecount-relay`).
 - 메인 웹앱 주소(조회 · 등록 호출용):
   `https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec` (POST, 본문 JSON `{"action": ...}`)
