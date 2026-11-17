@@ -185,6 +185,8 @@
     background:transparent;
   }
   table.tile-table input:focus{ box-shadow:none; background:#FEF2F2; }
+  table.tile-table input.need{ background:#FEF2F2; box-shadow:inset 0 0 0 1.5px #EF4444; border-radius:4px; }
+  table.tile-table input.need::placeholder{ color:#DC2626; font-weight:700; }
 
   .ac-wrap{ position:relative; }
   .ac-list{
@@ -414,7 +416,7 @@
       <h3>타일 종류 / 컬러</h3>
       <table class="tile-table" id="tileTable">
         <thead>
-          <tr><th style="width:18%">공간</th><th>타일 종류 / 컬러</th><th style="width:28%">비고</th></tr>
+          <tr><th style="width:15%">공간</th><th>타일 종류 / 컬러</th><th style="width:15%">메지</th><th style="width:15%">유가</th><th style="width:18%">비고</th></tr>
         </thead>
         <tbody><!-- JS로 렌더링 --></tbody>
       </table>
@@ -854,6 +856,10 @@ function restoreTileData(savedTile){
     const memoInput = document.querySelector(`input[data-tile="${key}"][data-field="memo"]`);
 
     if(memoInput) memoInput.value = entry.memo || '';
+    ['grout','yuga'].forEach(f => {
+      const el = document.querySelector(`input[data-tile="${key}"][data-field="${f}"]`);
+      if(el) el.value = entry[f] || '';
+    });
     if(nameInput) nameInput.value = entry.name || '';
   });
 }
@@ -876,12 +882,46 @@ function renderTileTable(){
         <input type="text" data-tile="${row.key}" data-field="name" placeholder="타일명/컬러" autocomplete="off">
         <div class="ac-list"></div>
       </td>
+      <td><input type="text" data-tile="${row.key}" data-field="grout" placeholder="메지" autocomplete="off"></td>
+      <td><input type="text" data-tile="${row.key}" data-field="yuga" placeholder="유가" autocomplete="off"></td>
       <td><input type="text" data-tile="${row.key}" data-field="memo" placeholder="비고"></td>
     </tr>
   `;
   }).join('');
 
   attachTileNameAutocomplete();
+  attachTileRequiredWatch();
+}
+
+// ---- 타일명이 들어간 줄은 메지·유가가 필수 ----
+function getMissingTileFields(){
+  const missing = [];
+  tileRows.forEach(row => {
+    const get = f => document.querySelector(`input[data-tile="${row.key}"][data-field="${f}"]`);
+    const name = get('name'), grout = get('grout'), yuga = get('yuga');
+    const hasName = name && name.value.trim() !== '';
+    [grout, yuga].forEach(inp => {
+      if(!inp) return;
+      const need = hasName && inp.value.trim() === '';
+      inp.classList.toggle('need', need);
+      inp.placeholder = hasName ? (inp.dataset.field === 'grout' ? '메지 (필수)' : '유가 (필수)') : (inp.dataset.field === 'grout' ? '메지' : '유가');
+    });
+    if(hasName){
+      const lacks = [];
+      if(grout && !grout.value.trim()) lacks.push('메지');
+      if(yuga && !yuga.value.trim()) lacks.push('유가');
+      if(lacks.length) missing.push({ label: row.label.replace('\n',' '), lacks, el: (grout && !grout.value.trim()) ? grout : yuga });
+    }
+  });
+  return missing;
+}
+
+function attachTileRequiredWatch(){
+  document.querySelectorAll('#tileTable input').forEach(inp => {
+    inp.addEventListener('input', getMissingTileFields);
+    inp.addEventListener('change', getMissingTileFields);
+    inp.addEventListener('blur', () => setTimeout(getMissingTileFields, 150));
+  });
 }
 
 // ---- 품목 자동완성 드롭다운에 규격/품목코드/거래처명을 같이 보여준다 (어디 거래처 물건인지 구분하기 위함) ----
@@ -981,6 +1021,15 @@ async function saveConsultation(){
     return;
   }
 
+  const missingTile = getMissingTileFields();
+  if(missingTile.length){
+    statusEl.textContent = '메지·유가를 입력해주세요: ' + missingTile.map(m => m.label + '(' + m.lacks.join('·') + ')').join(', ');
+    statusEl.className = 'status-msg err';
+    missingTile[0].el.scrollIntoView({ behavior:'smooth', block:'center' });
+    missingTile[0].el.focus();
+    return;
+  }
+
   const deliveryDate = document.getElementById('f-deliverydate').value;
 
   const payload = {
@@ -1072,7 +1121,7 @@ function renderDetail(rec){
     <div class="card">
       <h3>타일 종류 / 컬러</h3>
       <table class="tile-table">
-        <thead><tr><th>공간</th><th>타일 종류 / 컬러</th><th>비고</th></tr></thead>
+        <thead><tr><th>공간</th><th>타일 종류 / 컬러</th><th>메지</th><th>유가</th><th>비고</th></tr></thead>
         <tbody>
           ${Object.keys(tile).map(key => {
             const d = tile[key] || {};
@@ -1081,6 +1130,8 @@ function renderDetail(rec){
             return `<tr>
               <td class="rowlabel">${(label||'').replace('\n','<br>')}</td>
               <td>${escapeHtml(d.name||'-')}</td>
+              <td>${escapeHtml(d.grout||'-')}</td>
+              <td>${escapeHtml(d.yuga||'-')}</td>
               <td>${escapeHtml(d.memo||'-')}</td>
             </tr>`;
           }).join('')}
