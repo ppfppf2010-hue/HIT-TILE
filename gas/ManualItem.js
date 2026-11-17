@@ -108,7 +108,8 @@ function handleItemManualAdd(body) {
     }
     // 직접 입력한 단가는 100원 단위로 반올림하지 않고 그대로 쓴다(서류 인식값만 반올림하는 기존 규칙).
     row.inPrice = Math.round(price);
-    row.outPrice = hasOutPrice ? Math.round(outPriceInput) : Math.round((row.inPrice * margin) / 100) * 100;
+    // 마진으로 계산한 출고단가는 천원 단위로 맞춘다(백원 단위 버림) — 대표님 방침
+    row.outPrice = hasOutPrice ? Math.round(outPriceInput) : Math.floor((row.inPrice * margin) / 1000) * 1000;
 
     if (dryRun) {
       return jsonOut({ ok: true, dryRun: true, margin: margin, marginLabel: marginLabel, code: row.code, willCreateVendor: !vendorInfo, vendorName: storedVendorName, row: row });
