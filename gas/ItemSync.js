@@ -117,7 +117,10 @@ function runItemSyncAll() {
       if (seenCodes[code]) { row[ITEM_STATUS_COL - 1] = dupLabel(); duplicates++; return; }
       seenCodes[code] = true;
       if (!p) {
-        row[ITEM_STATUS_COL - 1] = '⚠ 이카운트에 없음 - 직접 확인 필요 (' + label + ')';
+        // 이카운트가 기준이다(대표님 방침). 지난 대조에서도 이미 "이카운트에 없음"이었던 행(=두 번 연속)만 지울 대상으로 올린다.
+        // 한 번만 없는 행은 이카운트 등록이 잠깐 늦은 경우일 수 있어 표시만 한다.
+        const prevStatus = String(row[ITEM_STATUS_COL - 1] || '');
+        row[ITEM_STATUS_COL - 1] = (prevStatus.indexOf('⚠ 이카운트에 없음') === 0 ? MISSING_DELETE_MARK : '⚠ 이카운트에 없음 - 다음 대조 때도 없으면 자동 삭제') + ' (' + label + ')';
         flagged++;
         return;
       }
@@ -151,6 +154,9 @@ function runItemSyncAll() {
 
     // 기존 행은 한 번에 되써서(셀 단위 setValue 반복 대비) 실행시간을 줄인다.
     if (data.length) sheet.getRange(2, 1, data.length, ITEM_STATUS_COL).setValues(data);
+
+    // 품목등록마스터 정리: 이카운트에 두 번 연속 없던 행 + 같은 코드 중복 행을 시트에서만 지운다(이카운트는 건드리지 않음).
+    const deleted = deleteMasterRowsByStatus_(sheet, [MISSING_DELETE_MARK, '⚠ 중복 행'], ecItems.length);
 
     // 이카운트에만 있는 품목 추가
     const prefixVendor = buildPrefixVendorMap();
@@ -198,13 +204,42 @@ function runItemSyncAll() {
 
     const result = {
       ok: true, ecountItemCount: ecItems.length, updated: updated, unchanged: unchanged,
-      flagged: flagged, added: newRows.length, repaired: repaired, duplicates: duplicates, bumpedPrefixes: bumpedPrefixes
+      flagged: flagged, added: newRows.length, repaired: repaired, duplicates: duplicates, deleted: deleted, bumpedPrefixes: bumpedPrefixes
     };
     Logger.log(JSON.stringify(result));
     return result;
   } finally {
     lock.releaseLock();
   }
+}
+
+// ---- 품목등록마스터에서 O열 상태가 주어진 문구로 시작하는 행을 지운다(시트만, 이카운트 영향 없음) ----
+// 사고 방지: 이카운트 품목이 1000건 미만으로 왔거나(조회 이상) 지울 행이 300개를 넘으면 지우지 않고 로그만 남긴다.
+const MISSING_DELETE_MARK = '⚠ 이카운트에 없음(2회 연속) - 시트에서 삭제';
+const MASTER_DELETE_MAX = 300;
+function deleteMasterRowsByStatus_(sheet, prefixes, ecountCount) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 0;
+  const statuses = sheet.getRange(2, ITEM_STATUS_COL, lastRow - 1, 1).getValues();
+  const targets = [];
+  statuses.forEach(function (r, i) {
+    const st = String(r[0] || '');
+    if (prefixes.some(function (p) { return st.indexOf(p) === 0; })) targets.push(i + 2);
+  });
+  if (!targets.length) return 0;
+  if (ecountCount < 1000 || targets.length > MASTER_DELETE_MAX) {
+    Logger.log('품목등록마스터 자동 삭제 중단: 대상 ' + targets.length + '행, 이카운트 ' + ecountCount + '건');
+    return 0;
+  }
+  let end = targets.length - 1;
+  while (end >= 0) {
+    let start = end;
+    while (start > 0 && targets[start - 1] === targets[start] - 1) start--;
+    sheet.deleteRows(targets[start], end - start + 1);
+    end = start - 1;
+  }
+  Logger.log('품목등록마스터에서 ' + targets.length + '행 삭제 (이카운트 기준 정리)');
+  return targets.length;
 }
 
 // ---- 설치형 onEdit 트리거: 품목등록마스터를 사람이 직접 고치면 그 행을 이카운트로 반영 ----
