@@ -4,6 +4,6 @@ $Script = Join-Path $PSScriptRoot 'inbox-watch.ps1'
 $Action = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$Script`""
 schtasks /Create /TN "HitTile InboxWatch" /SC MINUTE /MO 5 /TR $Action /F
 if ($LASTEXITCODE -eq 0) {
-  Write-Host '설치 완료: 5분마다 연락함을 확인하고, [까망에게] 새 요청이 있을 때만 까망을 실행합니다.'
+  Write-Host '설치 완료: 5분마다 연락함을 확인하고, [까망이에게] 새 요청이 있을 때만 까망이를 실행합니다.'
   Write-Host ('기록 파일: ' + (Join-Path $env:LOCALAPPDATA 'hittile-inbox-watch.log'))
 } else { Write-Host '설치 실패: 작업 스케줄러 등록이 안 됐습니다.' }

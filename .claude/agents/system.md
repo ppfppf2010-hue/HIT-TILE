@@ -13,7 +13,7 @@ tools: Bash, Read, Grep, Glob, Edit, Write
 | 메인 Apps Script (gas/) | **PC에서만** | `gas` 폴더 `clasp push` 후 기존 웹앱 배포를 새 버전으로 업데이트(URL 유지) |
 
 **연락함 지킴이** (`tools/inbox-watch.ps1`, 설치 `tools/inbox-watch-install.ps1`): 대표님 PC 작업 스케줄러 "HitTile InboxWatch"가 5분마다
-비공개 연락함 PR #1을 `gh`로 확인만 하고(토큰 0), `[까망에게]` 새 요청이 있을 때만 `claude -p`로 까망을 실행한다.
+비공개 연락함 PR #1을 `gh`로 확인만 하고(토큰 0), `[까망이에게]` 새 요청이 있을 때만 `claude -p`로 까망이를 실행한다.
 처리한 요청 ID는 `%LOCALAPPDATA%\hittile-inbox-dispatched.txt`에 기록해 두 번 하지 않는다. 기록: `%LOCALAPPDATA%\hittile-inbox-watch.log`.
 무인 로그인: `claude setup-token`으로 만든 토큰을 대표님이 `tools/inbox-watch-set-token.ps1`로 저장 → `%LOCALAPPDATA%\hittile-claude-token.dat`(DPAPI 암호화).
 지킴이가 실행할 때만 `CLAUDE_CODE_OAUTH_TOKEN`으로 넣는다. 토큰 값은 채팅 · 연락함 · 저장소 · 로그 어디에도 쓰지 않는다.
