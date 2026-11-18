@@ -25,6 +25,10 @@
 | 히트타일 구글 시트 | https://docs.google.com/spreadsheets/d/1XBzkR5oVC1kmRkT270FnbIm_IdRzzumpB48TGorKJSM/edit |
 | 이카운트 | https://loginbb.ecount.com |
 
+## 부르는 이름
+- **까망**: 대표님 PC의 까만 창(터미널) Claude Code. 카톡 확인 · 답장, git pull · clasp 배포, 이카운트 화면 조작 같은 **PC에서만 되는 일** 담당.
+  클라우드 세션은 까망과 직접 연결되지 않으므로, 까망에게 시킬 일은 대표님이 붙여넣을 수 있는 문장으로 드린다.
+
 ## 직원 명단 (.claude/agents)
 | 직원 | 파일 | 하는 일 |
 |---|---|---|
