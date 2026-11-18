@@ -506,7 +506,7 @@
  codeMap[key] = match ? { match: match, guessed: guessed } : null;
  });
 
- return parsed.items.map(function (it, i) {
+ const built = parsed.items.map(function (it, i) {
  const key = itemKey(it.name, it.spec);
  const entry = codeMap[key];
  const match = entry ? entry.match : null;
@@ -543,8 +543,46 @@
  foreignAmount: '',
  supply: supply,
  vat: vat,
- note: note
+ note: note,
+ _memo: it.memo || '',
+ _warning: warning
  };
+ });
+ return mergeSameSaleItems_(built);
+ }
+
+ // ---- 같은 품목(품목코드 · 규격 · 단가가 같은 줄)은 한 줄로 합치고, 적요에 위치를 모두 적는다 (대표님 방식) ----
+ // 예: PVC 연그레이 외욕실 3 / 내욕실 3 / 주방 1 -> PVC 연그레이 7, 적요 "외욕실·내욕실·주방".
+ // 품목코드가 없는 줄(매칭 실패)은 품목명+규격이 같을 때만 합친다. 날짜가 다르면 합치지 않는다.
+ function mergeSameSaleItems_(rows) {
+ const out = [];
+ const byKey = {};
+ rows.forEach(function (r) {
+ const key = [r.date, r.itemCode || ('NAME:' + r.itemName), r.spec, r.unitPrice].join('|||');
+ const prev = byKey[key];
+ if (!prev) {
+ const copy = Object.assign({}, r);
+ copy._memos = r._memo ? [r._memo] : [];
+ byKey[key] = copy;
+ out.push(copy);
+ return;
+ }
+ prev.qty += r.qty;
+ if (r._memo) {
+ r._memo.split('·').forEach(function (m) { m = m.trim(); if (m && prev._memos.indexOf(m) === -1) prev._memos.push(m); });
+ }
+ });
+ return out.map(function (r, i) {
+ const memo = r._memos.join('·');
+ const supply = Math.round((r.unitPrice * r.qty) / 1.1);
+ const res = Object.assign({}, r, {
+ seq: i + 1,
+ supply: supply,
+ vat: Math.round(r.unitPrice * r.qty) - supply,
+ note: [memo, r._warning].filter(String).join(NOTE_SEP)
+ });
+ delete res._memo; delete res._memos; delete res._warning;
+ return res;
  });
  }
 
