@@ -302,7 +302,8 @@
  unit: String(it.unit || 'EA').trim(),
  qty: Number(it.qty) || 0,
  price: Number(it.unitPrice) || 0,
- memo: String(it.memo || '').trim() // 적요 — 상담/타일량 계산기에서 넘어온 공간명 (외욕실, 현관 등)
+ memo: String(it.memo || '').trim(), // 적요 — 상담/타일량 계산기에서 넘어온 공간명 (외욕실, 현관 등)
+ code: String(it.itemCode || it.code || '').trim() // 품목코드를 직접 지정하면 이름 매칭 없이 그 품목으로 등록
  };
  })
  .filter(function (it) { return it.name && it.qty; });
@@ -455,8 +456,16 @@
  // 실패해도 구글시트 저장은 이미 끝난 뒤이므로 흐름을 막지 않고 결과만 응답에 담아 돌려준다.
  const ecountVendorResult = ecountSyncVendor(vendorName, vendorInfo ? vendorInfo.businessNo : '');
 
- const codesToSync = finalRows.filter(function (r) { return r.itemCode; }).map(function (r) { return r.itemCode; });
- const ecountItemResults = ecountSyncItemsByCode(codesToSync);
+ // 이미 이카운트에 있는 품목(1시간 대조에서 ✓ 일치 / ✎ 수정으로 확인된 품목)은 다시 등록하지 않는다.
+ // 다시 보내면 "이미 존재하는 코드" 오류가 나서 이카운트 시간당 연속 오류 30건 한도를 깎아 먹는다.
+ const inEcount = {};
+ for (let m = 1; m < masterDataForConfirm.length; m++) {
+ const st = String(masterDataForConfirm[m][ITEM_STATUS_COL - 1] || '');
+ if (st.indexOf('✓') === 0 || st.indexOf('✎') === 0) inEcount[String(masterDataForConfirm[m][0] || '').trim()] = true;
+ }
+ const codesToSync = finalRows.map(function (r) { return r.itemCode; })
+ .filter(function (c, i, arr) { return c && arr.indexOf(c) === i && !inEcount[c]; });
+ const ecountItemResults = codesToSync.length ? ecountSyncItemsByCode(codesToSync) : [];
 
  const whCd = PropertiesService.getScriptProperties().getProperty('ECOUNT_DEFAULT_SHIP_WH_CD') || '';
  // 구매(Purchase.js)와 같은 원칙: 이름(CUST_DES)만 보내면 이카운트가 거래처를 못 찾아 미수금(잔액)이
@@ -494,10 +503,18 @@
  // 품명이 같아도 규격이 다르면 다른 품목이므로, 매칭도 품명+규격을 묶은 키로 구분한다.
  function itemKey(name, spec) { return String(name || '').trim() + '|||' + String(spec || '').trim(); }
 
+ // 품목코드를 직접 지정한 줄은 이름이 같은 다른 코드(예: 히트타일 번호 vs 구매처 코드)로 잘못 잡히지 않게 코드로 바로 찾는다.
+ function lineKey(it) { return it.code ? 'CODE:' + it.code : itemKey(it.name, it.spec); }
  const codeMap = {};
  parsed.items.forEach(function (it) {
- const key = itemKey(it.name, it.spec);
+ const key = lineKey(it);
  if (codeMap[key] !== undefined) return;
+ if (it.code) {
+ let row = null;
+ for (let r = 1; r < masterData.length; r++) { if (String(masterData[r][0] || '').trim() === it.code) { row = masterData[r]; break; } }
+ codeMap[key] = row ? { match: normalizeMasterMatch(row), guessed: false } : { match: null, guessed: false, badCode: it.code };
+ return;
+ }
  // 고객사(거래처)는 우리가 어디서 사왔는지와 무관하므로, 거래처로 좁히지 않고 전체 마스터에서 찾는다
  // (배송 매칭과 같은 이유: 배송받는/구매하는 고객사는 품목등록마스터의 매입 거래처와 무관함).
  let match = findMasterItemAnyVendor(masterData, it.name, it.price, it.spec);
@@ -507,7 +524,7 @@
  });
 
  const built = parsed.items.map(function (it, i) {
- const key = itemKey(it.name, it.spec);
+ const key = lineKey(it);
  const entry = codeMap[key];
  const match = entry ? entry.match : null;
  const code = match ? match.code : '';
@@ -520,7 +537,8 @@
  const vat = Math.round(unitPrice * qty) - supply;
 
  let warning = '';
- if (!match) warning = '⚠ 품목마스터에 등록된 품목이 없어 매칭하지 못했어요 - 품목코드 칸에서 직접 선택해주세요';
+ if (!match && entry && entry.badCode) warning = '⚠ 지정한 품목코드 ' + entry.badCode + '가 품목등록마스터에 없어요 - 품목코드 칸에서 직접 선택해주세요';
+ else if (!match) warning = '⚠ 품목마스터에 등록된 품목이 없어 매칭하지 못했어요 - 품목코드 칸에서 직접 선택해주세요';
  else if (entry.guessed) warning = '⚠ 가장 비슷한 기존 품목으로 자동 매칭됨 - 맞는지 확인해주세요';
  // 적요 = 공간명. 확인용 경고는 뒤에 붙였다가 확정할 때 stripSaleWarning으로 떼어낸다
  const note = [it.memo || '', warning].filter(String).join(NOTE_SEP);
