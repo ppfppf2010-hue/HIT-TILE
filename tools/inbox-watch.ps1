@@ -54,6 +54,15 @@ try {
 3. 입금 · 전표 확정 · 거래처에 단가/발주 답장 · 삭제가 걸린 일은 하지 말고 "[대표님 확인 필요 #댓글ID] 이유" 로 답한다.
 4. 할 수 없거나 실패하면 "[까망 오류 #댓글ID] 이유" 로 답한다. 어떤 경우에도 답은 꼭 남긴다.
 "@
+  # 무인 작업용 로그인(claude setup-token). 값은 이 PC 사용자만 풀 수 있게 암호화(DPAPI)된 파일에만 있다.
+  # 저장: tools/inbox-watch-set-token.ps1. 파일이 없으면 평소 로그인으로 실행한다. 토큰 값은 기록에 남기지 않는다.
+  $TokenFile = Join-Path $env:LOCALAPPDATA 'hittile-claude-token.dat'
+  if (Test-Path $TokenFile) {
+    try {
+      $sec = (Get-Content $TokenFile -Raw).Trim() | ConvertTo-SecureString
+      $env:CLAUDE_CODE_OAUTH_TOKEN = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
+    } catch { Write-Log '무인 로그인 파일을 풀지 못함 → 평소 로그인으로 실행' }
+  }
   Push-Location $Work
   try {
     & claude -p $prompt --permission-mode auto 2>&1 | ForEach-Object { Write-Log "[까망] $_" }
