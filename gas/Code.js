@@ -883,7 +883,8 @@
  const stored = String(data[i][0]);
  if (stored.trim() === String(correctedName).trim() || normalizeVendorName(stored) === target) {
  return {
- rowIndex: i + 1, storedName: stored.trim(), prefix: String(data[i][1]).trim(), lastUsed: Number(data[i][2]) || 0,
+ rowIndex: i + 1, storedName: stored.trim(), prefix: String(data[i][1]).trim(),
+ lastUsed: (Number(data[i][2]) || 0) < OLD_HITTILE_NUMBER_MIN ? (Number(data[i][2]) || 0) : 0, // 옛 번호(9xxxx)는 채번에 안 씀
  businessNo: String(data[i][3] || '').trim(),
  // 이카운트 실제 거래처코드(사업자번호가 아닌 내부 코드인 경우가 많음) - E열. 채워져 있으면
  // 이 값이 사업자번호보다 우선하는 진짜 CUST_CD다 (importPurchaseVendorEcountCodes 참고).
@@ -1420,6 +1421,10 @@
 
  // ---- 같은 코드 접두어(예: HIK)를 쓰는 모든 거래처명 행 중 최대번호 조회 ----
  // (한 회사가 사업자 2개로 나뉘어 전표가 오는 경우, 접두어만 같으면 번호를 공유하기 위함)
+ // 히트타일 옛 번호(9xxxx)를 접두어 뒤에 붙인 코드(예: HS92212 = HS + 옛 번호 92212)는 자동 채번 번호가 아니다.
+ // 이걸 마지막사용번호로 치면 다음 코드가 HS92222처럼 튀어 버린다(2026-11-19 화신 HS 92221 사건) → 채번에서 뺀다.
+ const OLD_HITTILE_NUMBER_MIN = 90000;
+
  function getMaxLastUsedForPrefix(prefix) {
  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
  const sheet = ss.getSheetByName(VENDOR_SHEET);
@@ -1429,7 +1434,7 @@
  for (let i = 1; i < data.length; i++) {
  if (String(data[i][1]).trim().toUpperCase() === target) {
  const n = Number(data[i][2]) || 0;
- if (n > max) max = n;
+ if (n > max && n < OLD_HITTILE_NUMBER_MIN) max = n;
  }
  }
  // 마지막사용번호가 실제 코드보다 뒤처져 있을 수 있다(이카운트에서 직접 만든 품목 등).
@@ -1442,7 +1447,7 @@
  const code = String(r[0] || '').trim().toUpperCase();
  if (code.indexOf(target) !== 0) return;
  const rest = code.slice(target.length);
- if (/^\d+$/.test(rest) && Number(rest) > max) max = Number(rest);
+ if (/^\d+$/.test(rest) && Number(rest) > max && Number(rest) < OLD_HITTILE_NUMBER_MIN) max = Number(rest);
  });
  }
  return max;
