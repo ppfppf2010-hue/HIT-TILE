@@ -28,7 +28,9 @@
 
  const SALE_REVIEW_HEADERS = ['일자', '순번', '거래처코드', '거래처명', '담당자', '출하창고', '거래유형', '통화', '환율',
  '품목코드', '품목명', '규격명', '수량', '단가(vat포함)', '외화금액', '공급가액', '부가세', '적요',
- '원본품목명(자동,수정금지)', '원본규격(자동,수정금지)'];
+ '원본품목명(자동,수정금지)', '원본규격(자동,수정금지)', '현장명(배송주소)'];
+ // 현장명(배송주소)은 이카운트 판매입력 「현장명」 = 문자형식1(판매) = SaveSale U_MEMO1 (대표님 화면 확인 2026-11-19).
+ // 대표님 방침: 현장명은 절대 빠지면 안 된다 - 비어 있으면 저장은 하되 응답에 siteMissing으로 반드시 알린다.
 
  // 적요 칸에서 공간명과 확인용 경고(⚠ ...)를 구분하는 구분자
  const NOTE_SEP = ' / ';
@@ -273,6 +275,7 @@
  const targetMonth = String(body.targetMonth || '').trim();
  if (!vendorName) throw new Error('거래처명이 없습니다.');
  if (!parsed || !parsed.items || !parsed.items.length) throw new Error('품목 데이터가 없습니다.');
+ if (body.site) parsed.site = String(body.site).trim();
 
  // 등록 확정 사이에 다른 입력으로 같은 거래처가 이미 등록됐을 수 있으니 한 번 더 확인한다.
  // (확인 버튼으로 이미 기존 거래처와 일치하는 걸 확인했다면 그대로 기존 거래처로 등록된다.)
@@ -309,7 +312,7 @@
  .filter(function (it) { return it.name && it.qty; });
  if (!items.length) throw new Error('품목명과 수량을 입력해주세요.');
 
- const parsed = { vendorName: vendorName, docDate: String(body.docDate || '').trim(), items: items };
+ const parsed = { vendorName: vendorName, docDate: String(body.docDate || '').trim(), site: String(body.site || '').trim(), items: items };
 
  const vendorInfo = findSaleVendor(vendorName);
  if (!vendorInfo) {
@@ -358,7 +361,8 @@
  r.date, r.seq, r.vendorCode, r.vendorName, r.manager, r.warehouse,
  r.dealType, r.currency, r.rate, r.itemCode, r.itemName, r.spec,
  r.qty, r.unitPrice, r.foreignAmount, r.supply, r.vat, r.note,
- r.itemName, r.spec // 원본값 (수정 여부 비교용, 숨김열)
+ r.itemName, r.spec, // 원본값 (수정 여부 비교용, 숨김열)
+ r.site || '' // 현장명(배송주소) - 21열, 보이는 열(시트에서 고칠 수 있음)
  ]);
  });
 
@@ -430,7 +434,8 @@
  itemCode: code,
  itemName: masterMatch ? masterMatch.name : r[10],
  spec: masterMatch ? masterMatch.spec : r[11],
- qty: qty, unitPrice: unitPrice, foreignAmount: r[14], supply: supply, vat: vat, note: stripSaleWarning(r[17])
+ qty: qty, unitPrice: unitPrice, foreignAmount: r[14], supply: supply, vat: vat, note: stripSaleWarning(r[17]),
+ site: String(r[20] || '').trim()
  };
  });
 
@@ -472,8 +477,10 @@
  // 그 업체에 잡히지 않는다. 판매거래처 시트 E열(이카운트거래처코드)을 최우선, 없으면 사업자등록번호를 CUST_CD로 보낸다.
  const custCd = vendorInfo && vendorInfo.ecountCode ? vendorInfo.ecountCode
  : (vendorInfo && vendorInfo.businessNo ? String(vendorInfo.businessNo).replace(/\D/g, '') : '');
+ // 한 전표 = 한 현장. 줄마다 다르게 적혀 있으면 첫 번째 값으로 통일한다.
+ const site = (finalRows.filter(function (r) { return r.site; })[0] || {}).site || '';
  const pushRows = finalRows.filter(function (r) { return r.itemCode; }).map(function (r) {
- return { date: r.date, custCd: custCd, custDes: vendorName, whCd: whCd, prodCd: r.itemCode, prodDes: r.itemName, qty: r.qty, unitPriceVat: r.unitPrice, supply: r.supply, vat: r.vat, remarks: r.note || '' };
+ return { date: r.date, custCd: custCd, custDes: vendorName, whCd: whCd, prodCd: r.itemCode, prodDes: r.itemName, qty: r.qty, unitPriceVat: r.unitPrice, supply: r.supply, vat: r.vat, remarks: r.note || '', site: site };
  });
  let ecountSaleResult;
  if (!pushRows.length) {
@@ -485,6 +492,7 @@
  }
 
  return jsonOut({ ok: true, vendorName: vendorName, savedCount: finalRows.length, rows: finalRows, sheetGid: sheetGid,
+ site: site, siteMissing: !site,
  ecount: { vendor: ecountVendorResult, items: ecountItemResults, sale: ecountSaleResult } });
  }
 
@@ -562,6 +570,7 @@
  supply: supply,
  vat: vat,
  note: note,
+ site: String(parsed.site || '').trim(),
  _memo: it.memo || '',
  _warning: warning
  };
