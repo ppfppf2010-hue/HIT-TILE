@@ -4,7 +4,8 @@
 # 설치: tools/inbox-watch-install.ps1   기록: %LOCALAPPDATA%\hittile-inbox-watch.log
 #
 # 안전장치
-# - 이미 [완료 #ID] / [대표님 확인 필요 #ID] / [까망이 오류 #ID] / [클라우드에게] 질문 #ID 답이 있는 요청은 다시 하지 않는다.
+# - 이미 [완료 #ID] / [대표님 확인 필요 #ID] / [까망이 오류 #ID] / [까망이 진행중 #ID] / [클라우드에게] 질문 #ID 답이 있는 요청은 다시 하지 않는다.
+#   (진행중 = PC 사용 중 등으로 대기. 5분마다 다시 실행하면 토큰만 드니 다시 하지 않고, 필요하면 새 요청으로 다시 시킨다.)
 # - 처리를 맡긴 요청 ID는 기록해 두고 다시 맡기지 않는다(같은 일 두 번 방지).
 # - 앞 실행이 아직 돌고 있으면(잠금 파일) 이번 회차는 건너뛴다.
 
@@ -30,7 +31,7 @@ if ($comments -isnot [array]) { $comments = @($comments) }
 
 $answered = @{}
 foreach ($c in $comments) {
-  foreach ($m in [regex]::Matches([string]$c.body, '\[(완료|대표님 확인 필요|까망이? 오류)\s*#(\d+)\]|\[클라우드에게\]\s*질문\s*#(\d+)')) { $answered[($m.Groups[2].Value + $m.Groups[3].Value)] = $true }
+  foreach ($m in [regex]::Matches([string]$c.body, '\[(완료|대표님 확인 필요|까망이? 오류|(?:까망이?\s*)?진행\s?중)\s*#(\d+)\]|\[클라우드에게\]\s*질문\s*#(\d+)')) { $answered[($m.Groups[2].Value + $m.Groups[3].Value)] = $true }
 }
 $done = @{}
 if (Test-Path $State) { Get-Content $State | ForEach-Object { if ($_) { $done[$_.Trim()] = $true } } }
@@ -73,7 +74,7 @@ try {
   # 답을 못 남기고 끝난 요청은 오류 답을 대신 남겨서 클라우드가 알게 한다.
   $after = ((gh api "repos/$Repo/issues/$Pr/comments" --paginate 2>$null) -join "`n") | ConvertFrom-Json
   $ans2 = @{}
-  foreach ($c in @($after)) { foreach ($m in [regex]::Matches([string]$c.body, '\[(완료|대표님 확인 필요|까망이? 오류)\s*#(\d+)\]|\[클라우드에게\]\s*질문\s*#(\d+)')) { $ans2[($m.Groups[2].Value + $m.Groups[3].Value)] = $true } }
+  foreach ($c in @($after)) { foreach ($m in [regex]::Matches([string]$c.body, '\[(완료|대표님 확인 필요|까망이? 오류|(?:까망이?\s*)?진행\s?중)\s*#(\d+)\]|\[클라우드에게\]\s*질문\s*#(\d+)')) { $ans2[($m.Groups[2].Value + $m.Groups[3].Value)] = $true } }
   foreach ($t in $todo) {
     if (-not $ans2["$($t.id)"]) {
       gh pr comment $Pr -R $Repo --body "[까망이 오류 #$($t.id)] 까망이가 답을 남기지 못하고 끝났습니다 (종료 코드 $code). 까망이 PC의 기록: %LOCALAPPDATA%\hittile-inbox-watch.log" | Out-Null
