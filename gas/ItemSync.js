@@ -191,6 +191,7 @@ function runItemSyncAll() {
       if (!m) return;
       const prefix = m[1].toUpperCase();
       const n = parseInt(m[2], 10);
+      if (n >= OLD_HITTILE_NUMBER_MIN) return; // HS92212처럼 옛 번호를 붙인 코드는 채번에 안 씀(Code.js 참고)
       if (!(prefix in maxByPrefix) || n > maxByPrefix[prefix]) maxByPrefix[prefix] = n;
     });
     const bumpedPrefixes = [];
