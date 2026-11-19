@@ -645,22 +645,76 @@ function handleSaleList(body) {
  const from = toNum(body.from) || 0;
  const to = toNum(body.to) || 99991231;
  const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SALE_SHEET);
- if (!sheet || sheet.getLastRow() < 2) return jsonOut({ ok: true, slips: [] });
- const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 18).getValues();
+ const values = (sheet && sheet.getLastRow() >= 2) ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 18).getValues() : [];
  const slips = {};
  values.forEach(function (r) {
  const d = toNum(r[0]);
  if (!d || d < from || d > to) return;
  if (vendorQ && normalizeVendorName(String(r[3])).indexOf(vendorQ) < 0) return;
  const key = d + '-' + r[1] + '-' + r[3];
- if (!slips[key]) slips[key] = { date: String(d), seq: r[1], vendorName: r[3], items: [], supply: 0, vat: 0, total: 0, note: '' };
+ if (!slips[key]) slips[key] = { source: '판매등록', date: String(d), seq: r[1], vendorName: r[3], items: [], supply: 0, vat: 0, total: 0, note: '' };
  const s = slips[key];
  const supply = Number(r[15]) || 0, vat = Number(r[16]) || 0;
  s.items.push({ itemCode: r[9], itemName: r[10], spec: r[11], qty: r[12], unitPrice: r[13], supply: supply, vat: vat, note: r[17] });
  s.supply += supply; s.vat += vat; s.total += supply + vat;
  if (!s.note && r[17]) s.note = String(r[17]);
  });
+ // 이카운트판매 시트(까망이 PC가 매일 이카운트 판매조회 엑셀을 올림) — 이카운트에서 직접 입력한 전표까지 포함
+ const ecSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(ECOUNT_SALE_SHEET);
+ if (ecSheet && ecSheet.getLastRow() >= 2) {
+ ecSheet.getRange(2, 1, ecSheet.getLastRow() - 1, ECOUNT_SALE_HEADER.length).getValues().forEach(function (r) {
+ const d = toNum(r[0]);
+ if (!d || d < from || d > to) return;
+ if (vendorQ && normalizeVendorName(String(r[2])).indexOf(vendorQ) < 0) return;
+ const key = 'EC-' + r[1];
+ if (!slips[key]) slips[key] = { source: '이카운트', date: String(d), seq: r[1], vendorName: r[2], site: r[3], items: [], supply: 0, vat: 0, total: 0, note: '' };
+ const s = slips[key];
+ const supply = Number(r[9]) || 0, vat = Number(r[10]) || 0, total = Number(r[11]) || (supply + vat);
+ s.items.push({ itemCode: r[4], itemName: r[5], spec: r[6], qty: r[7], unitPrice: r[8], supply: supply, vat: vat, total: total });
+ s.supply += supply; s.vat += vat; s.total += total;
+ });
+ }
  const list = Object.keys(slips).map(function (k) { return slips[k]; })
  .sort(function (a, b) { return (a.date + a.seq) < (b.date + b.seq) ? -1 : 1; });
- return jsonOut({ ok: true, count: list.length, slips: list, warning: '이카운트 화면에서 직접 입력한 전표는 포함되지 않습니다.' });
+ const ecLast = ecSheet && ecSheet.getLastRow() >= 2 ? String(ecSheet.getRange(1, ECOUNT_SALE_HEADER.length + 1).getValue() || '') : '';
+ return jsonOut({ ok: true, count: list.length, slips: list, ecountImportedAt: ecLast, warning: '이카운트 전표는 까망이 PC가 올린 시점(ecountImportedAt)까지만 들어 있습니다. 판매등록 전표와 같은 건이 두 번(source 다름) 나올 수 있습니다.' });
+}
+
+// ---- 이카운트 판매조회 엑셀 → 「이카운트판매」 시트 (까망이 PC 프로그램이 하루 1번 올림) ----
+// 이카운트 OAPI에 판매 조회가 없어서, PC가 판매조회 화면의 엑셀을 내려받아 줄 단위로 보낸다.
+// body: { from: '2026-11-01', to: '2026-11-19', rows: [{ date, slipNo('2026/11/17-9'), vendorName, site, itemCode, itemName, spec, qty, unitPrice, supply, vat, total }] }
+// from~to 기간의 기존 줄을 지우고 새 줄로 바꾼다(같은 기간을 다시 올려도 중복 없음). 이카운트는 건드리지 않는다.
+const ECOUNT_SALE_SHEET = '이카운트판매';
+const ECOUNT_SALE_HEADER = ['일자', '전표번호', '거래처명', '현장명', '품목코드', '품목명', '규격', '수량', '단가', '공급가액', '부가세', '합계'];
+function handleImportEcountSales(body) {
+ const toNum = function (v) { const d = String(v || '').replace(/\D/g, ''); return d.length >= 8 ? Number(d.slice(0, 8)) : 0; };
+ const from = toNum(body.from), to = toNum(body.to);
+ if (!from || !to || from > to) throw new Error('from · to(기간)가 필요합니다.');
+ const rows = Array.isArray(body.rows) ? body.rows : [];
+ const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+ let sheet = ss.getSheetByName(ECOUNT_SALE_SHEET);
+ if (!sheet) {
+ sheet = ss.insertSheet(ECOUNT_SALE_SHEET);
+ sheet.getRange(1, 1, 1, ECOUNT_SALE_HEADER.length).setValues([ECOUNT_SALE_HEADER]);
+ sheet.setFrozenRows(1);
+ }
+ const lock = LockService.getScriptLock(); lock.waitLock(30000);
+ try {
+ const keep = sheet.getLastRow() >= 2
+ ? sheet.getRange(2, 1, sheet.getLastRow() - 1, ECOUNT_SALE_HEADER.length).getValues().filter(function (r) { const d = toNum(r[0]); return d && (d < from || d > to); })
+ : [];
+ const add = [];
+ rows.forEach(function (r) {
+ const d = toNum(r.date);
+ if (!d || d < from || d > to) return;
+ add.push([String(d), String(r.slipNo || ''), String(r.vendorName || ''), String(r.site || ''), String(r.itemCode || ''), String(r.itemName || ''), String(r.spec || ''),
+ Number(r.qty) || 0, Number(r.unitPrice) || 0, Number(r.supply) || 0, Number(r.vat) || 0, Number(r.total) || 0]);
+ });
+ const all = keep.concat(add).sort(function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : (a[1] < b[1] ? -1 : 1); });
+ if (sheet.getLastRow() >= 2) sheet.getRange(2, 1, sheet.getLastRow() - 1, ECOUNT_SALE_HEADER.length).clearContent();
+ if (all.length) sheet.getRange(2, 1, all.length, ECOUNT_SALE_HEADER.length).setNumberFormat('@').setValues(all);
+ const stamp = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm') + ' (' + from + '~' + to + ')';
+ sheet.getRange(1, ECOUNT_SALE_HEADER.length + 1).setValue(stamp);
+ return jsonOut({ ok: true, replacedRange: from + '~' + to, added: add.length, kept: keep.length, importedAt: stamp });
+ } finally { lock.releaseLock(); }
 }
