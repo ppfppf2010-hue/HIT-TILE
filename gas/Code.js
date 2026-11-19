@@ -83,6 +83,7 @@
  if (action === 'save_balances') return handleSaveBalances(body);
  if (action === 'add_correction') return handleAddCorrection(body);
  if (action === 'list_vendor_names') return handleListVendorNames();
+ if (action === 'vendor_sheet_fix') return handleVendorSheetFix(body);
  if (action === 'list_item_master') return handleListItemMaster();
  if (action === 'check_vendor') return handleCheckVendor(body);
  if (action === 'sale_register_vendor') return handleSaleRegisterVendor(body);
