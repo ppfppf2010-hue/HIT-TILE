@@ -71,6 +71,18 @@ function handleVendorSheetFix(body) {
         }
       }
       if (mHit) changes.push({ type: '이름', sheet: MASTER_SHEET, count: mHit, before: from, after: to });
+      // 교정사전에서 옛 이름으로 고치던 줄(예: 화신세라믹 -> (주) H.S 세라믹)도 새 이름으로 바꾼다.
+      // 안 바꾸면 findVendor가 새 이름을 옛 이름으로 되돌려 거래처를 못 찾는다.
+      const cSheet = ss.getSheetByName(CORRECTION_SHEET);
+      if (cSheet) {
+        const cData = cSheet.getDataRange().getValues();
+        let cHit = 0;
+        for (let i = 1; i < cData.length; i++) {
+          if (t(cData[i][1]) === from) { cHit++; if (!dryRun) cSheet.getRange(i + 1, 2).setValue(to); }
+        }
+        if (cHit) changes.push({ type: '이름', sheet: CORRECTION_SHEET, count: cHit, before: from, after: to });
+        mHit += cHit;
+      }
       if (!vHit && !mHit) notFound.push('이름 바꿀 대상 없음: ' + from);
       corrections.push([from, to]);
     });
