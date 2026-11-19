@@ -91,6 +91,7 @@
  if (action === 'list_sale_vendor_names') return handleListSaleVendorNames();
  if (action === 'list_sale_vendor_contacts') return handleListSaleVendorContacts();
  if (action === 'sale_check_vendor') return handleCheckSaleVendor(body);
+ if (action === 'sale_list') return handleSaleList(body);
  if (action === 'sync_vendors_now') return handleSyncVendorsNow();
  if (action === 'debug_ecount_vendors') return handleDebugEcountVendors();
  if (action === 'sync_items_now') return handleSyncItemsNow();
