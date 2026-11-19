@@ -630,3 +630,37 @@
  sheet.getRange(1, 1, 1, header.length).setValues([header]);
  sheet.setFrozenRows(1);
  }
+
+// ---- 판매입력 조회 (읽기 전용) ----
+// 이카운트 OAPI에 판매 조회가 없어서, 우리 시스템으로 저장한 판매(판매입력 시트)를 화면 조작 없이 읽는다.
+// body: { vendor: '리바스'(거래처명 일부, 선택), from: '2026-11-18', to: '2026-11-18'(선택) }
+// 주의: 이카운트 화면에서 직접 입력한 전표는 이 시트에 없다.
+function handleSaleList(body) {
+ const vendorQ = normalizeVendorName(String(body.vendor || ''));
+ const toNum = function (v) {
+ if (v instanceof Date) return Number(Utilities.formatDate(v, 'Asia/Seoul', 'yyyyMMdd'));
+ const d = String(v || '').replace(/\D/g, '');
+ return d.length >= 8 ? Number(d.slice(0, 8)) : 0;
+ };
+ const from = toNum(body.from) || 0;
+ const to = toNum(body.to) || 99991231;
+ const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SALE_SHEET);
+ if (!sheet || sheet.getLastRow() < 2) return jsonOut({ ok: true, slips: [] });
+ const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, 18).getValues();
+ const slips = {};
+ values.forEach(function (r) {
+ const d = toNum(r[0]);
+ if (!d || d < from || d > to) return;
+ if (vendorQ && normalizeVendorName(String(r[3])).indexOf(vendorQ) < 0) return;
+ const key = d + '-' + r[1] + '-' + r[3];
+ if (!slips[key]) slips[key] = { date: String(d), seq: r[1], vendorName: r[3], items: [], supply: 0, vat: 0, total: 0, note: '' };
+ const s = slips[key];
+ const supply = Number(r[15]) || 0, vat = Number(r[16]) || 0;
+ s.items.push({ itemCode: r[9], itemName: r[10], spec: r[11], qty: r[12], unitPrice: r[13], supply: supply, vat: vat, note: r[17] });
+ s.supply += supply; s.vat += vat; s.total += supply + vat;
+ if (!s.note && r[17]) s.note = String(r[17]);
+ });
+ const list = Object.keys(slips).map(function (k) { return slips[k]; })
+ .sort(function (a, b) { return (a.date + a.seq) < (b.date + b.seq) ? -1 : 1; });
+ return jsonOut({ ok: true, count: list.length, slips: list, warning: '이카운트 화면에서 직접 입력한 전표는 포함되지 않습니다.' });
+}
