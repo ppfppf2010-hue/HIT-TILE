@@ -1,5 +1,5 @@
 ﻿# 히트타일 연락함 지킴이 (토큰 0)
-# 5분마다 비공개 연락함(ppfppf2010-hue/hittile-inbox PR #1)을 gh로 확인만 한다. Claude는 부르지 않는다.
+# 1분마다(11/19부터, 예전 5분) 비공개 연락함(ppfppf2010-hue/hittile-inbox PR #1)을 gh로 확인만 한다. Claude는 부르지 않는다.
 # "[까망이에게]"(예전 "[까망에게]"도 받음)로 시작하는 새 요청이 있을 때만 까망(Claude Code)을 한 번 실행해서 처리시킨다.
 # 설치: tools/inbox-watch-install.ps1   기록: %LOCALAPPDATA%\hittile-inbox-watch.log
 #
@@ -40,6 +40,77 @@ $todo = @($comments | Where-Object {
   (([string]$_.body).TrimStart() -match '^\[까망(이)?에게\]') -and -not $answered["$($_.id)"] -and -not $done["$($_.id)"]
 })
 if (-not $todo.Count) { exit 0 }   # 할 일 없음 → Claude를 부르지 않으므로 토큰 0
+
+# ── 정해진 모양의 요청은 Claude 없이 프로그램을 바로 실행 (11/19 대표님 「빠르게」, 토큰 0) ──
+#   [까망이에게] 명세서캡처 2026/11/19-10   → 도구\이카운트_명세서캡처.py
+#   사람이 PC를 쓰는 중이라 못 하면 다음 회차(1분 뒤)에 다시, 30분 넘게 못 하면 [까망이 진행중 #ID]로 답하고 멈춤.
+$Tools  = Join-Path $env:USERPROFILE 'Desktop\히트타일업무자동화\도구'
+$Retry  = Join-Path $env:LOCALAPPDATA 'hittile-inbox-direct-retry.txt'
+$direct = @($todo | Where-Object { ([string]$_.body).TrimStart() -match '^\[까망이?에게\]\s*명세서\s*캡처\s+(\d{4}/\d{1,2}/\d{1,2}\s*-\s*\d+)\s*(\r?\n|$)' })
+if ($direct.Count) {
+  New-Item -ItemType File -Path $Lock -Force | Out-Null
+  try {
+    $env:PYTHONIOENCODING = 'utf-8'
+    $first = @{}
+    if (Test-Path $Retry) { Get-Content $Retry | ForEach-Object { $kv = $_ -split ' ', 2; if ($kv.Count -eq 2) { $first[$kv[0]] = [datetime]$kv[1] } } }
+    foreach ($d in $direct) {
+      $null = ([string]$d.body).TrimStart() -match '^\[까망이?에게\]\s*명세서\s*캡처\s+(\d{4}/\d{1,2}/\d{1,2}\s*-\s*\d+)'
+      $slip = $Matches[1] -replace '\s', ''
+      $t0 = Get-Date
+      $out = (& python (Join-Path $Tools '이카운트_명세서캡처.py') $slip 2>&1 | ForEach-Object { "$_" }) -join "`n"
+      $code = $LASTEXITCODE
+      $sec = [int]((Get-Date) - $t0).TotalSeconds
+      Write-Log "바로 실행: 명세서캡처 $slip (#$($d.id)) → 코드 $code, ${sec}초"
+      if ($out -match '사람이 PC를 쓰는 중|화면잠금을 다른 세션이 쓰는 중') {
+        if (-not $first["$($d.id)"]) { $first["$($d.id)"] = Get-Date }
+        if (((Get-Date) - $first["$($d.id)"]).TotalMinutes -lt 30) { continue }   # 다음 회차에 다시
+        gh pr comment $Pr -R $Repo --body "[까망이 진행중 #$($d.id)] 명세서캡처 $slip — 30분 동안 PC를 쓰는 중이라 못 했습니다. 다시 시키려면 새 요청으로." | Out-Null
+      } elseif ($code -eq 0 -and $out -match '저장 (.+\.png)') {
+        $png = Split-Path -Leaf $Matches[1]
+        gh pr comment $Pr -R $Repo --body "[완료 #$($d.id)] 명세서캡처 $slip → ``자료/전표캡처/$png`` (${sec}초, Claude 없이 프로그램 바로 실행)" | Out-Null
+      } else {
+        $tail = (($out -split "`n") | Where-Object { $_ -and $_ -notmatch 'Deprecat|mss' } | Select-Object -Last 4) -join ' / '
+        gh pr comment $Pr -R $Repo --body "[까망이 오류 #$($d.id)] 명세서캡처 $slip 실패 (코드 $code): $tail" | Out-Null
+      }
+      "$($d.id)" | Out-File -FilePath $State -Append -Encoding utf8
+      $first.Remove("$($d.id)")
+    }
+    ($first.GetEnumerator() | ForEach-Object { "$($_.Key) $($_.Value.ToString('o'))" }) | Set-Content -Path $Retry -Encoding utf8
+  } finally { Remove-Item $Lock -Force -ErrorAction SilentlyContinue }
+  $todo = @($todo | Where-Object { $direct.id -notcontains $_.id })
+  if (-not $todo.Count) { exit 0 }
+}
+
+# [까망이에게] 최근전표  → 도구\이카운트_최근전표.py (판매 · 구매 최근 목록을 연락함 자료/최근전표/ 에 올림). 바빠서 못 하면 댓글 나이 30분까지 1분마다 다시.
+$recent = @($todo | Where-Object { ([string]$_.body).TrimStart() -match '^\[까망이?에게\]\s*최근\s*전표\s*(
+?
+|$)' })
+if ($recent.Count) {
+  New-Item -ItemType File -Path $Lock -Force | Out-Null
+  try {
+    $env:PYTHONIOENCODING = 'utf-8'
+    foreach ($d in $recent) {
+      $t0 = Get-Date
+      $out = (& python (Join-Path $Tools '이카운트_최근전표.py') 2>&1 | ForEach-Object { "$_" }) -join "`n"
+      $code = $LASTEXITCODE
+      $sec = [int]((Get-Date) - $t0).TotalSeconds
+      Write-Log "바로 실행: 최근전표 (#$($d.id)) → 코드 $code, ${sec}초"
+      if ($out -match '사람이 PC를 쓰는 중|화면잠금을 다른 세션이 쓰는 중') {
+        if (((Get-Date).ToUniversalTime() - [datetime]$d.created_at).TotalMinutes -lt 30) { continue }
+        gh pr comment $Pr -R $Repo --body "[까망이 진행중 #$($d.id)] 최근전표 — 30분 동안 PC를 쓰는 중이라 못 했습니다. 다시 시키려면 새 요청으로." | Out-Null
+      } elseif ($code -eq 0 -and $out -match '올림') {
+        $sum = (($out -split "`n") | Where-Object { $_ -match '건 \(최신' }) -join ' / '
+        gh pr comment $Pr -R $Repo --body "[완료 #$($d.id)] 최근전표 → ``자료/최근전표/판매.csv`` · ``구매.csv`` ($sum, ${sec}초, Claude 없이 프로그램 바로 실행)" | Out-Null
+      } else {
+        $tail = (($out -split "`n") | Where-Object { $_ -and $_ -notmatch 'Deprecat|mss' } | Select-Object -Last 4) -join ' / '
+        gh pr comment $Pr -R $Repo --body "[까망이 오류 #$($d.id)] 최근전표 실패 (코드 $code): $tail" | Out-Null
+      }
+      "$($d.id)" | Out-File -FilePath $State -Append -Encoding utf8
+    }
+  } finally { Remove-Item $Lock -Force -ErrorAction SilentlyContinue }
+  $todo = @($todo | Where-Object { $recent.id -notcontains $_.id })
+  if (-not $todo.Count) { exit 0 }
+}
 
 New-Item -ItemType File -Path $Lock -Force | Out-Null
 try {
