@@ -81,6 +81,37 @@ if ($direct.Count) {
   if (-not $todo.Count) { exit 0 }
 }
 
+# [까망이에게] 최근전표  → 도구\이카운트_최근전표.py (판매 · 구매 최근 목록을 연락함 자료/최근전표/ 에 올림). 바빠서 못 하면 댓글 나이 30분까지 1분마다 다시.
+$recent = @($todo | Where-Object { ([string]$_.body).TrimStart() -match '^\[까망이?에게\]\s*최근\s*전표\s*(
+?
+|$)' })
+if ($recent.Count) {
+  New-Item -ItemType File -Path $Lock -Force | Out-Null
+  try {
+    $env:PYTHONIOENCODING = 'utf-8'
+    foreach ($d in $recent) {
+      $t0 = Get-Date
+      $out = (& python (Join-Path $Tools '이카운트_최근전표.py') 2>&1 | ForEach-Object { "$_" }) -join "`n"
+      $code = $LASTEXITCODE
+      $sec = [int]((Get-Date) - $t0).TotalSeconds
+      Write-Log "바로 실행: 최근전표 (#$($d.id)) → 코드 $code, ${sec}초"
+      if ($out -match '사람이 PC를 쓰는 중|화면잠금을 다른 세션이 쓰는 중') {
+        if (((Get-Date).ToUniversalTime() - [datetime]$d.created_at).TotalMinutes -lt 30) { continue }
+        gh pr comment $Pr -R $Repo --body "[까망이 진행중 #$($d.id)] 최근전표 — 30분 동안 PC를 쓰는 중이라 못 했습니다. 다시 시키려면 새 요청으로." | Out-Null
+      } elseif ($code -eq 0 -and $out -match '올림') {
+        $sum = (($out -split "`n") | Where-Object { $_ -match '건 \(최신' }) -join ' / '
+        gh pr comment $Pr -R $Repo --body "[완료 #$($d.id)] 최근전표 → ``자료/최근전표/판매.csv`` · ``구매.csv`` ($sum, ${sec}초, Claude 없이 프로그램 바로 실행)" | Out-Null
+      } else {
+        $tail = (($out -split "`n") | Where-Object { $_ -and $_ -notmatch 'Deprecat|mss' } | Select-Object -Last 4) -join ' / '
+        gh pr comment $Pr -R $Repo --body "[까망이 오류 #$($d.id)] 최근전표 실패 (코드 $code): $tail" | Out-Null
+      }
+      "$($d.id)" | Out-File -FilePath $State -Append -Encoding utf8
+    }
+  } finally { Remove-Item $Lock -Force -ErrorAction SilentlyContinue }
+  $todo = @($todo | Where-Object { $recent.id -notcontains $_.id })
+  if (-not $todo.Count) { exit 0 }
+}
+
 New-Item -ItemType File -Path $Lock -Force | Out-Null
 try {
   $ids = ($todo | ForEach-Object { $_.id }) -join ', '
