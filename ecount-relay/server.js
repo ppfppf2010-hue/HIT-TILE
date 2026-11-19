@@ -296,7 +296,9 @@ app.post('/push-sale', async (req, res) => {
         USER_PRICE_VAT: String(r.unitPriceVat),
         SUPPLY_AMT: String(r.supply),
         VAT_AMT: String(r.vat),
-        REMARKS: r.remarks || ''
+        REMARKS: r.remarks || '',
+        // 현장명(배송주소) = 이카운트 판매입력 「현장명」 = 문자형식1(판매). 대표님 방침: 절대 빠지면 안 됨
+        ...(r.site ? { U_MEMO1: r.site } : {})
       }
     }));
 

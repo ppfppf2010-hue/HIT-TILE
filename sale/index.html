@@ -380,6 +380,11 @@
     </div>
   </div>
 
+  <div class="month-field">
+    <label for="manualSite">현장명 (배송 주소) — 꼭 넣어주세요</label>
+    <input type="text" id="manualSite" placeholder="예: 동구 아양로46길 80-1, 진로하이츠 502호" autocomplete="off">
+  </div>
+
   <div class="item-rows" id="itemRows"></div>
 
   <button type="button" class="add-row-btn" id="addRowBtn">+ 품목 추가</button>
@@ -488,6 +493,7 @@
   let lastResult = null;
 
   const manualVendorName = document.getElementById('manualVendorName');
+  const manualSite = document.getElementById('manualSite');
   const itemRows = document.getElementById('itemRows');
   const addRowBtn = document.getElementById('addRowBtn');
   const manualSubmitBtn = document.getElementById('manualSubmitBtn');
@@ -536,6 +542,7 @@
     missSection.classList.remove('show');
     manualErrorBox.classList.remove('show');
     manualVendorName.value = '';
+    manualSite.value = '';
     itemRows.innerHTML = '';
     for (let i = 0; i < 6; i++) addItemRow();
   }
@@ -691,6 +698,12 @@
       return;
     }
 
+    const site = manualSite.value.trim();
+    if (!site && !confirm('현장명(배송 주소)이 비어 있어요. 주소 없이 진행할까요?\n(나중에 이카운트에서 꼭 넣어주세요)')) {
+      manualSite.focus();
+      return;
+    }
+
     manualSubmitBtn.disabled = true;
     manualStatusBox.classList.add('show');
     manualErrorBox.classList.remove('show');
@@ -700,7 +713,7 @@
     try {
       const res = await fetch(ENDPOINT, {
         method: 'POST',
-        body: JSON.stringify({ action: 'sale_manual_entry', vendorName: vendorName, items: items })
+        body: JSON.stringify({ action: 'sale_manual_entry', vendorName: vendorName, site: site, items: items })
       });
       const data = await res.json();
       applySaleResponse(data);
@@ -860,8 +873,10 @@
         doneEcountStatus.style.display = '';
         const sale = ecount.sale;
         if (sale.ok) {
-          doneEcountStatus.textContent = '✓ 이카운트에도 판매전표까지 자동으로 올라갔어요.';
-          doneEcountStatus.classList.add('ok');
+          doneEcountStatus.textContent = data.siteMissing
+            ? '✓ 이카운트 판매전표 저장됨 — ⚠ 현장명(배송 주소)이 비어 있어요. 이카운트에서 꼭 넣어주세요.'
+            : '✓ 이카운트에도 판매전표까지 자동으로 올라갔어요. (현장명: ' + data.site + ')';
+          doneEcountStatus.classList.add(data.siteMissing ? 'err' : 'ok');
         } else {
           doneEcountStatus.textContent = '⚠ 이카운트 판매전표 등록 실패 — ' + (sale.error || '알 수 없는 오류') + ' (직접 확인/업로드가 필요해요)';
           doneEcountStatus.classList.add('err');
