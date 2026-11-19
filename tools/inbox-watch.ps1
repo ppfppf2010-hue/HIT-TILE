@@ -65,7 +65,7 @@ try {
   }
   Push-Location $Work
   try {
-    & claude -p $prompt --permission-mode auto 2>&1 | ForEach-Object { Write-Log "[까망이] $_" }
+    & claude -p $prompt --permission-mode bypassPermissions 2>&1 | ForEach-Object { Write-Log "[까망이] $_" }
     $code = $LASTEXITCODE
   } finally { Pop-Location }
   Write-Log "까망이 종료 (코드 $code)"
