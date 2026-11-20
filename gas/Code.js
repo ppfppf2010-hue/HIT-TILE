@@ -305,7 +305,7 @@
  sheet.setFrozenRows(1);
 
  // ---- 이카운트 중계서버로 거래처/품목 동기화 (실패해도 시트 저장은 이미 끝났으므로 결과만 담아 돌려준다) ----
- const ecountVendorResult = ecountSyncVendor(vendorName, vendorInfo ? vendorInfo.businessNo : reviewBusinessNo);
+ const ecountVendorResult = ecountSyncVendor(vendorName, vendorInfo ? vendorInfo.businessNo : reviewBusinessNo, vendorInfo ? vendorInfo.ecountCode : '');
  const ecountItemResults = items.map(function (it) {
  return { code: it.code, result: ecountSyncItem(it, vendorName) };
  });
@@ -1581,9 +1581,34 @@
  }
 
  // businessNo(사업자등록번호)는 이카운트의 실제 거래처코드라 필수 - 없으면 동기화를 건너뛴다.
- function ecountSyncVendor(vendorName, businessNo) {
+ // ecountCode: 시트 E열(이카운트거래처코드). 이미 있으면 이카운트에 그 거래처가 있다는 뜻이라 등록을 아예 부르지 않는다.
+ // (2026-11-20 공간제작소: E열이 「240-50-00578」인데 중계서버가 사업자번호 하이픈을 빼 「2405000578」로 저장해서
+ //  이카운트에 같은 거래처가 하나 더 생겼다. 이카운트 거래처코드는 하이픈 있는 것 · 없는 것 · 내부번호가 섞여 있다.)
+ function ecountSyncVendor(vendorName, businessNo, ecountCode) {
+ if (String(ecountCode || '').trim()) {
+ return { ok: true, skipped: true, message: '이카운트 거래처코드(' + String(ecountCode).trim() + ')가 시트에 있어 거래처 등록을 건너뛰었습니다.' };
+ }
  if (!businessNo) return { ok: false, error: '사업자등록번호가 없어 이카운트 거래처 동기화를 건너뛰었습니다.' };
  return ecountRelayCall('/register-vendor', { businessNo: businessNo, custName: vendorName });
+ }
+
+ // E열이 비어 있던 거래처를 방금 이카운트에 등록했으면, 등록된 코드(중계서버가 보내는 사업자번호 숫자만)를
+ // 그 시트 E열에 적어 둔다 — 다음 확정부터 등록을 다시 부르지 않고, 전표 CUST_CD와도 같은 값이 된다.
+ // sheetName: VENDOR_SHEET 또는 SALE_VENDOR_SHEET, rowIndex: 1부터 시작하는 행 번호
+ function saveRegisteredEcountVendorCode_(sheetName, rowIndex, businessNo, result) {
+ try {
+ if (!result || !result.ok || result.skipped || !rowIndex) return;
+ const code = String(businessNo || '').replace(/\D/g, '');
+ if (!code) return;
+ const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(sheetName);
+ if (!sheet) return;
+ const cell = sheet.getRange(rowIndex, 5);
+ if (String(cell.getDisplayValue() || '').trim()) return; // 그 사이 사람이 적었으면 덮어쓰지 않는다
+ cell.setNumberFormat('@');
+ cell.setValue(code);
+ } catch (e) {
+ Logger.log('이카운트 거래처코드 기록 실패: ' + e.message);
+ }
  }
 
  // 판매전표(매출) 저장 - Sale.js의 handleSaleConfirm에서 사용.

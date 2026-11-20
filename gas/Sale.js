@@ -459,7 +459,9 @@
 
  // ---- 이카운트 중계서버로 거래처 동기화 + 품목 동기화 + 판매전표 저장 ----
  // 실패해도 구글시트 저장은 이미 끝난 뒤이므로 흐름을 막지 않고 결과만 응답에 담아 돌려준다.
- const ecountVendorResult = ecountSyncVendor(vendorName, vendorInfo ? vendorInfo.businessNo : '');
+ // 판매거래처 시트 E열(이카운트거래처코드)이 있으면 등록을 부르지 않는다(중복 거래처 방지, 2026-11-20 공간제작소).
+ const ecountVendorResult = ecountSyncVendor(vendorName, vendorInfo ? vendorInfo.businessNo : '', vendorInfo ? vendorInfo.ecountCode : '');
+ if (vendorInfo) saveRegisteredEcountVendorCode_(SALE_VENDOR_SHEET, vendorInfo.rowIndex, vendorInfo.businessNo, ecountVendorResult);
 
  // 이미 이카운트에 있는 품목(1시간 대조에서 ✓ 일치 / ✎ 수정으로 확인된 품목)은 다시 등록하지 않는다.
  // 다시 보내면 "이미 존재하는 코드" 오류가 나서 이카운트 시간당 연속 오류 30건 한도를 깎아 먹는다.

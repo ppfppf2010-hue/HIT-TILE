@@ -331,7 +331,9 @@
 
  // ---- 이카운트 중계서버로 거래처 동기화 + 품목 동기화 + 매입전표 저장 ----
  // 실패해도 구글시트 저장은 이미 끝난 뒤이므로 흐름을 막지 않고 결과만 응답에 담아 돌려준다.
- const ecountVendorResult = ecountSyncVendor(vendorName, vendorInfo ? vendorInfo.businessNo : '');
+ // 거래처코드관리 E열(이카운트거래처코드)이 있으면 등록을 부르지 않는다(중복 거래처 방지, 2026-11-20 공간제작소).
+ const ecountVendorResult = ecountSyncVendor(vendorName, vendorInfo ? vendorInfo.businessNo : '', vendorInfo ? vendorInfo.ecountCode : '');
+ if (vendorInfo) saveRegisteredEcountVendorCode_(VENDOR_SHEET, vendorInfo.rowIndex, vendorInfo.businessNo, ecountVendorResult);
 
  const codesToSync = finalRows.filter(function (r) { return r.itemCode; }).map(function (r) { return r.itemCode; });
  const ecountItemResults = ecountSyncItemsByCode(codesToSync);
