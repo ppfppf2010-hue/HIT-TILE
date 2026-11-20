@@ -1646,19 +1646,53 @@
  return info.ecountCode || String(info.businessNo || '').replace(/\D/g, '');
  }
 
- // 품목등록마스터에서 코드로 조회해서 이카운트에 동기화한다 (구매확정 시, 시트에 이미 있는 코드 기준으로 재동기화할 때 사용).
+ // 품목등록마스터에서 코드로 조회해서 이카운트에 동기화한다 (구매 · 판매 확정 때 사용).
+ // 이카운트 품목 저장(SaveBasicProduct)은 「등록」 전용이라, 이미 있는 코드를 보내면 단가가 바뀌지 않고
+ // 「품목코드(이미 품목등록에 존재하는 코드입니다.)」 오류만 난다 — 이카운트 시간당 연속 오류 30건 한도를 깎아 먹는다
+ // (2026-11-20 화신 구매확정 5줄 → 오류 5건). 그래서 O열(이카운트대조상태)로 이카운트에 있다고 확인된 품목은 건너뛰고,
+ // 보낸 결과가 성공이거나 「이미 존재」 오류면 O열에 표시해 다음 확정부터 다시 보내지 않는다.
  function ecountSyncItemsByCode(codes) {
  const unique = codes.filter(function (c, i) { return c && codes.indexOf(c) === i; });
  if (!unique.length) return [];
  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
  const masterSheet = ss.getSheetByName(MASTER_SHEET);
  const masterData = masterSheet ? masterSheet.getDataRange().getValues() : [];
+ const label = Utilities.formatDate(new Date(), 'Asia/Seoul', 'MM/dd HH:mm');
  return unique.map(function (code) {
- const row = masterData.find(function (r) { return String(r[0]).trim() === code; });
- if (!row) return { code: code, result: { ok: false, error: '품목등록마스터에서 코드를 찾지 못했습니다.' } };
- return {
- code: code,
- result: ecountSyncItem({ code: code, name: row[1], spec: row[3], unit: row[6], inPrice: row[4], inVat: row[5], outPrice: row[10], outVat: row[11] }, row[12])
- };
+ const idx = masterData.findIndex(function (r) { return String(r[0]).trim() === code; });
+ if (idx < 1) return { code: code, result: { ok: false, error: '품목등록마스터에서 코드를 찾지 못했습니다.' } };
+ const row = masterData[idx];
+ if (isItemKnownInEcount_(row[ITEM_STATUS_COL - 1])) {
+ return { code: code, result: { ok: true, skipped: true, message: '이카운트에 이미 있는 품목이라 등록을 건너뛰었습니다.' } };
+ }
+ const result = ecountSyncItem({ code: code, name: row[1], spec: row[3], unit: row[6], inPrice: row[4], inVat: row[5], outPrice: row[10], outVat: row[11] }, row[12]);
+ if (result && result.ok) {
+ markItemInEcount_(masterSheet, idx + 1, '✓ 이카운트 등록됨 (확정 때, ' + label + ')');
+ } else if (isEcountItemExistsError_(result)) {
+ markItemInEcount_(masterSheet, idx + 1, '✓ 이카운트에 이미 있음 (확정 때 확인, ' + label + ')');
+ result.alreadyExists = true;
+ }
+ return { code: code, result: result };
  });
+ }
+
+ // O열 상태가 ✓(일치 · 등록됨) / ✎(이카운트 기준 수정) / ↑(시트 수정 이카운트 반영)으로 시작하면 이카운트에 있는 품목이다.
+ // ⚠(이카운트에 없음 · 반영 실패)나 빈칸은 등록을 시도한다.
+ function isItemKnownInEcount_(status) {
+ const st = String(status || '').trim();
+ return st.indexOf('✓') === 0 || st.indexOf('✎') === 0 || st.indexOf('↑') === 0;
+ }
+
+ function isEcountItemExistsError_(result) {
+ const msg = String((result && result.error) || '');
+ return msg.indexOf('이미') >= 0 && msg.indexOf('존재') >= 0;
+ }
+
+ // 기록이 실패해도 확정 흐름은 막지 않는다. rowIndex: 1부터 시작하는 행 번호
+ function markItemInEcount_(sheet, rowIndex, text) {
+ try {
+ if (sheet && rowIndex > 1) sheet.getRange(rowIndex, ITEM_STATUS_COL).setValue(text);
+ } catch (e) {
+ Logger.log('품목 이카운트 등록 표시 실패: ' + e.message);
+ }
  }

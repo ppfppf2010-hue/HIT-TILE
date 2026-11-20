@@ -302,6 +302,7 @@
  }
  });
 
+ const newItemResults = [], newItemCodes = {};
  if (newItemKeys.length) {
  if (!vendorInfo) throw new Error('거래처(' + vendorName + ')가 등록되어 있지 않아 신규 품목에 코드를 발급할 수 없습니다.');
  const toRegister = newItemKeys.map(function (key) { return newItemMap[key]; });
@@ -309,7 +310,12 @@
  const startNumber = Math.max(vendorInfo.lastUsed, sharedMax) + 1;
  const newRows = assignCodesAndPrices(toRegister, vendorInfo.prefix, startNumber, vendorName);
  appendToMasterSheet(vendorName, newRows);
- newRows.forEach(function (r) { ecountSyncItem(r, vendorName); }); // 실패해도 로컬 등록은 이미 끝났으니 무시하고 진행
+ // 실패해도 로컬 등록은 이미 끝났으니 무시하고 진행. 결과는 응답에 담고, 아래 ecountSyncItemsByCode에서 다시 보내지 않는다
+ // (다시 보내면 방금 등록한 코드라 「이미 존재」 오류가 난다).
+ newRows.forEach(function (r) {
+ newItemResults.push({ code: r.code, result: ecountSyncItem(r, vendorName) });
+ newItemCodes[r.code] = true;
+ });
  saveLastUsedByPrefix(vendorInfo.prefix, Math.max(startNumber + newRows.length - 1, sharedMax));
 
  const codeByKey = {};
@@ -335,8 +341,10 @@
  const ecountVendorResult = ecountSyncVendor(vendorName, vendorInfo ? vendorInfo.businessNo : '', vendorInfo ? vendorInfo.ecountCode : '');
  if (vendorInfo) saveRegisteredEcountVendorCode_(VENDOR_SHEET, vendorInfo.rowIndex, vendorInfo.businessNo, ecountVendorResult);
 
- const codesToSync = finalRows.filter(function (r) { return r.itemCode; }).map(function (r) { return r.itemCode; });
- const ecountItemResults = ecountSyncItemsByCode(codesToSync);
+ // 이번에 새로 채번한 품목은 위에서 이미 보냈으니 빼고, 기존 코드 품목은 ecountSyncItemsByCode가
+ // O열(이카운트대조상태)로 이카운트에 있는지 보고 없을 때만 등록한다(2026-11-20 화신 「이미 존재」 오류 5건).
+ const codesToSync = finalRows.filter(function (r) { return r.itemCode && !newItemCodes[r.itemCode]; }).map(function (r) { return r.itemCode; });
+ const ecountItemResults = newItemResults.concat(ecountSyncItemsByCode(codesToSync));
 
  const whCd = PropertiesService.getScriptProperties().getProperty('ECOUNT_DEFAULT_WH_CD') || '';
  // CUST_DES(이름)만 보내면 이카운트가 이름으로 알아서 매칭을 시도하다, 표기가 조금만 달라도
