@@ -1,6 +1,9 @@
 const ORDER_SHEET = '배송일정';
 const ORDER_ITEM_SHEET = '배송품목';
-const BANK_INFO = '국민은행 676301-04-294382 (예금주 이용광)';
+// 입금 계좌는 공개 저장소에 두지 않는다(2026-11-20). 스크립트 속성 HITTILE_BANK_INFO에서 읽고, 없으면 빈칸.
+function getDeliveryBankInfo_() {
+return PropertiesService.getScriptProperties().getProperty('HITTILE_BANK_INFO') || '';
+}
 const CALENDAR_NAME_DELIVERY = '히트타일 배송일정';
 const CALENDAR_NAME_RETURN = '히트타일 반품일정';
 
@@ -224,7 +227,7 @@ deliveredQty: (ir[9] === '' || ir[9] === undefined || ir[9] === null) ? null : N
 }
 orders.push(order);
 }
-return { ok: true, date: dateStr, orders: orders, bankInfo: BANK_INFO };
+return { ok: true, date: dateStr, orders: orders, bankInfo: getDeliveryBankInfo_() };
 }
 
 // ---- 특정 월의 날짜별 주문 건수 (달력 뱃지용) ----
