@@ -1589,6 +1589,10 @@
  return { ok: true, skipped: true, message: '이카운트 거래처코드(' + String(ecountCode).trim() + ')가 시트에 있어 거래처 등록을 건너뛰었습니다.' };
  }
  if (!businessNo) return { ok: false, error: '사업자등록번호가 없어 이카운트 거래처 동기화를 건너뛰었습니다.' };
+ // 사업자번호는 숫자 10자리. 아닌 값(예: 「900」)이면 엉뚱한 코드의 거래처가 생기므로 등록하지 않는다.
+ if (String(businessNo).replace(/\D/g, '').length !== 10) {
+ return { ok: false, skipped: true, error: '사업자등록번호(' + businessNo + ')가 10자리가 아니라 이카운트 거래처 등록을 건너뛰었습니다.' };
+ }
  return ecountRelayCall('/register-vendor', { businessNo: businessNo, custName: vendorName });
  }
 
