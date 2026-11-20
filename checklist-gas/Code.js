@@ -1,9 +1,6 @@
 var SHEET_NAME = 'Consultations';
 var HEADERS = ['id','timestamp','업체','현장주소','연락처','현장비번','타일시공일','도기시공일','tile_json','fixture_json','특이사항'];
 
-// 새 상담이 저장될 때마다 알림 메일을 받을 주소
-var NOTIFY_EMAIL = 'ppfppf2010@gmail.com';
-
 // 상담 저장 시 자동 등록할 캘린더 이름 (없으면 자동 생성됩니다)
 var ORDER_CALENDAR_NAME = '히트타일 발주';
 
@@ -41,12 +38,6 @@ function getSheet_() {
   return sheet;
 }
 
-// 메일 권한이 제대로 승인됐는지 확인하기 위한 테스트 함수.
-// Apps Script 편집기에서 이 함수를 선택해 직접 "실행"해보세요.
-function testEmail() {
-  MailApp.sendEmail(NOTIFY_EMAIL, '[HIT TILE] 테스트 메일', '이 메일이 보이면 메일 권한이 정상입니다.');
-}
-
 function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
@@ -75,7 +66,6 @@ function doPost(e) {
       data.note || ''
     ]);
 
-    sendNotificationEmail_(data);
     createOrderCalendarEvent_(data);
 
     return ContentService
@@ -85,50 +75,6 @@ function doPost(e) {
     return ContentService
       .createTextOutput(JSON.stringify({ success: false, error: err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-function sendNotificationEmail_(data) {
-  if (!NOTIFY_EMAIL) return;
-
-  try {
-    var lines = [];
-    lines.push('새 상담이 등록되었습니다.');
-    lines.push('');
-    lines.push('업체: ' + (data.company || '-'));
-    lines.push('현장주소: ' + (data.address || '-'));
-    lines.push('연락처: ' + (data.contact || '-'));
-    lines.push('현장비번: ' + (data.sitePw || '-'));
-    lines.push('타일시공일: ' + (data.tileDate || '-'));
-    lines.push('도기시공일: ' + (data.ceramicDate || '-'));
-    lines.push('');
-    lines.push('[타일 정보]');
-
-    var tile = data.tile || {};
-    Object.keys(tile).forEach(function(key) {
-      var d = tile[key];
-      if (d && (d.size || d.name || d.memo)) {
-        var label = d.label || key;
-        lines.push(label + ': ' + [d.size, d.name, d.memo].filter(Boolean).join(' / '));
-      }
-    });
-
-    if (data.note) {
-      lines.push('');
-      lines.push('[특이사항]');
-      lines.push(data.note);
-    }
-
-    lines.push('');
-    lines.push('※ 상세 이미지는 저장 화면에서 "이미지로 저장" 버튼으로 바로 받으실 수 있습니다.');
-
-    MailApp.sendEmail({
-      to: NOTIFY_EMAIL,
-      subject: '[HIT TILE] 새 상담 등록 - ' + (data.company || '업체명 미입력'),
-      body: lines.join('\n')
-    });
-  } catch (err) {
-    // 메일 발송 실패해도 저장 자체는 성공 처리되도록 조용히 무시
   }
 }
 
