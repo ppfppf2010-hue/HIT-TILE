@@ -727,3 +727,48 @@ function handleImportEcountSales(body) {
  return jsonOut({ ok: true, replacedRange: from + '~' + to, added: add.length, kept: keep.length, importedAt: stamp });
  } finally { lock.releaseLock(); }
 }
+
+// ---- 판매거래처 한 줄 넣기 · 바로잡기 (클라우드 세션이 시트에 직접 넣는 용도, 대표님 지시 2026-11-20) ----
+// action: 'sale_vendor_upsert'
+// body: { name, bizNo, ceo, phone, ecountCode, dryRun }
+//  - A열이 name과 정확히 같은 줄, 또는 A열이 "name |"로 시작하는 깨진 줄(한 칸에 통째로 붙여 넣은 것)을 찾아 그 줄의 A~E만 고친다.
+//  - 없으면 맨 아래에 새 줄. 같은 이름 줄이 2개 이상이면 아무것도 안 쓰고 오류.
+//  - dryRun=true면 쓰지 않고 바꾸기 전/후만 돌려준다. 다른 줄 · 다른 열은 건드리지 않고, 지우지도 않는다.
+//  - 사업자번호 · 거래처코드 · 전화는 하이픈 그대로 글자로 저장(숫자로 바뀌지 않게 서식 '@').
+function handleSaleVendorUpsert(body) {
+  const t = function (v) { return String(v == null ? '' : v).trim(); };
+  const name = t(body.name);
+  if (!name) throw new Error('거래처명(name)이 없습니다.');
+  const dryRun = body.dryRun === true;
+  const after = [name, t(body.bizNo), t(body.ceo), t(body.phone), t(body.ecountCode)];
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) throw new Error('다른 작업이 진행 중이에요. 잠시 후 다시 시도해주세요.');
+  try {
+    const sheet = setupSaleVendorSheet();
+    const lastRow = sheet.getLastRow();
+    const data = lastRow >= 2 ? sheet.getRange(2, 1, lastRow - 1, 5).getDisplayValues() : [];
+    const hits = [];
+    for (let i = 0; i < data.length; i++) {
+      const a = t(data[i][0]);
+      if (a === name || a.indexOf(name + ' |') === 0) hits.push({ row: i + 2, before: data[i].slice(0, 5), broken: a !== name });
+    }
+    if (hits.length > 1) {
+      return jsonOut({ ok: false, error: '같은 이름 줄이 ' + hits.length + '개 있어 아무것도 쓰지 않았습니다.', rows: hits });
+    }
+    const hit = hits[0];
+    const row = hit ? hit.row : lastRow + 1;
+    const result = { ok: true, dryRun: dryRun, mode: hit ? (hit.broken ? '깨진 줄 바로잡기' : '기존 줄 고치기') : '새 줄 추가',
+      row: row, before: hit ? hit.before : null, after: after };
+    if (!dryRun) {
+      const range = sheet.getRange(row, 1, 1, 5);
+      range.setNumberFormat('@');
+      range.setValues([after]);
+      SpreadsheetApp.flush();
+      result.saved = sheet.getRange(row, 1, 1, 5).getDisplayValues()[0];
+    }
+    return jsonOut(result);
+  } finally {
+    lock.releaseLock();
+  }
+}
