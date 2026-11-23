@@ -369,7 +369,7 @@
  // 한 전표 = 한 현장. 줄마다 다르게 적혀 있으면 첫 번째 값으로 통일한다.
  const site = (finalRows.filter(function (r) { return r.site; })[0] || {}).site || '';
  const pushRows = finalRows.filter(function (r) { return r.itemCode; }).map(function (r) {
- return { date: r.date, custCd: custCd, custDes: vendorName, whCd: whCd, prodCd: r.itemCode, prodDes: r.itemName, qty: r.qty, unitPriceVat: r.unitPrice, supply: r.supply, vat: r.vat, remarks: r.note || '', site: site };
+ return { date: r.date, custCd: custCd, custDes: vendorName, whCd: whCd, prodCd: r.itemCode, prodDes: r.itemName, qty: r.qty, unitPriceVat: r.unitPrice, supply: r.supply, vat: r.vat, remarks: ecountSafeRemarks_(r.note), site: site };
  });
  let ecountSaleResult;
  if (!pushRows.length) {
@@ -660,4 +660,11 @@ function handleSaleVendorUpsert(body) {
   } finally {
     lock.releaseLock();
   }
+}
+
+
+// 이카운트 적요(REMARKS)는 특수문자(→ · — 등)가 있으면 「적요(특수문자)」 오류로 전표 전체가 저장되지 않는다
+// (2026-11-23 신당동 반품). 한글 · 영문 · 숫자 · 공백 · 기본 문장부호만 남긴다. 구글시트 기록은 그대로 둔다.
+function ecountSafeRemarks_(note) {
+  return String(note || '').replace(/[^0-9A-Za-z가-힣ㄱ-ㅎㅏ-ㅣ\s()\[\].,\-\/:*+#%&]/g, ' ').replace(/\s+/g, ' ').trim();
 }

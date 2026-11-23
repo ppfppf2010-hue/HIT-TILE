@@ -356,7 +356,7 @@
  const custCd = vendorInfo && vendorInfo.ecountCode ? vendorInfo.ecountCode
  : (vendorInfo && vendorInfo.businessNo ? String(vendorInfo.businessNo).replace(/\D/g, '') : '');
  const pushRows = finalRows.filter(function (r) { return r.itemCode; }).map(function (r) {
- return { date: r.date, custCd: custCd, custDes: vendorName, whCd: whCd, prodCd: r.itemCode, prodDes: r.itemName, qty: r.qty, unitPriceVat: r.unitPrice, supply: r.supply, vat: r.vat, remarks: r.note || '' };
+ return { date: r.date, custCd: custCd, custDes: vendorName, whCd: whCd, prodCd: r.itemCode, prodDes: r.itemName, qty: r.qty, unitPriceVat: r.unitPrice, supply: r.supply, vat: r.vat, remarks: ecountSafeRemarks_(r.note) };
  });
  let ecountPurchaseResult;
  if (!pushRows.length) {
