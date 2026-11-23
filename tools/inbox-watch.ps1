@@ -112,6 +112,39 @@ if ($recent.Count) {
   if (-not $todo.Count) { exit 0 }
 }
 
+# [까망이에게] 현장납품내역 거래처 | 현장명 | 시작일 [| 종료일]  → 도구\이카운트_현장납품내역.py (PDF를 연락함 자료/현장납품내역/ 에 올림, 11/23). 바빠서 못 하면 댓글 나이 30분까지 1분마다 다시.
+$siteRe = '^\[까망이?에게\]\s*현장\s*납품\s*내역\s+([^|\r\n]+?)\s*\|\s*([^|\r\n]+?)\s*\|\s*(\d{4}/\d{1,2}/\d{1,2})(?:\s*\|\s*(\d{4}/\d{1,2}/\d{1,2}))?\s*(\r?\n|$)'
+$site = @($todo | Where-Object { ([string]$_.body).TrimStart() -match $siteRe })
+if ($site.Count) {
+  New-Item -ItemType File -Path $Lock -Force | Out-Null
+  try {
+    $env:PYTHONIOENCODING = 'utf-8'
+    foreach ($d in $site) {
+      $null = ([string]$d.body).TrimStart() -match $siteRe
+      $pd = { param($s) ($s -split '/' | ForEach-Object -Begin { $i = 0 } -Process { if ($i++ -eq 0) { $_ } else { $_.PadLeft(2, '0') } }) -join '/' }
+      $pyArgs = @($Matches[1], $Matches[2], (& $pd $Matches[3]))
+      if ($Matches[4]) { $pyArgs += (& $pd $Matches[4]) }
+      $t0 = Get-Date
+      $out = (& python (Join-Path $Tools '이카운트_현장납품내역.py') @pyArgs 2>&1 | ForEach-Object { "$_" }) -join "`n"
+      $code = $LASTEXITCODE
+      $sec = [int]((Get-Date) - $t0).TotalSeconds
+      Write-Log "바로 실행: 현장납품내역 $($pyArgs -join ' | ') (#$($d.id)) → 코드 $code, ${sec}초"
+      if ($out -match '사람이 PC를 쓰는 중|화면잠금을 다른 세션이 쓰는 중|카톡 담당이 응대 중') {
+        if (((Get-Date).ToUniversalTime() - [datetime]$d.created_at).TotalMinutes -lt 30) { continue }
+        gh pr comment $Pr -R $Repo --body "[까망이 진행중 #$($d.id)] 현장납품내역 — 30분 동안 PC를 쓰는 중이라 못 했습니다. 다시 시키려면 새 요청으로." | Out-Null
+      } elseif ($code -eq 0 -and $out -match '올림: (\S+\.pdf)') {
+        gh pr comment $Pr -R $Repo --body "[완료 #$($d.id)] 현장납품내역 $($pyArgs -join ' | ') → ``$($Matches[1])`` (${sec}초, Claude 없이 프로그램 바로 실행)" | Out-Null
+      } else {
+        $tail = (($out -split "`n") | Where-Object { $_ -and $_ -notmatch 'Deprecat|mss' } | Select-Object -Last 4) -join ' / '
+        gh pr comment $Pr -R $Repo --body "[까망이 오류 #$($d.id)] 현장납품내역 실패 (코드 $code): $tail" | Out-Null
+      }
+      "$($d.id)" | Out-File -FilePath $State -Append -Encoding utf8
+    }
+  } finally { Remove-Item $Lock -Force -ErrorAction SilentlyContinue }
+  $todo = @($todo | Where-Object { $site.id -notcontains $_.id })
+  if (-not $todo.Count) { exit 0 }
+}
+
 New-Item -ItemType File -Path $Lock -Force | Out-Null
 try {
   $ids = ($todo | ForEach-Object { $_.id }) -join ', '
