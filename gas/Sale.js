@@ -337,6 +337,10 @@
  throw new Error('품목코드가 없는 행이 있어요: ' + missingCodeNames.join(', ') + ' — "판매확인중" 시트에서 그 행의 품목코드 칸을 클릭해 기존 품목을 선택해주세요. 판매는 신규 품목을 자동 등록하지 않습니다.');
  }
 
+ // 대표님 11/23: 판매전표에 현장명 기재 — 현장명이 비어 있으면 확정하지 않는다(시트 · 이카운트 모두 저장 전, 판매확인중은 그대로 남음).
+ if (!finalRows.some(function (r) { return r.site; })) {
+   throw new Error('현장명이 비어 있어 확정하지 않았어요 — "판매확인중" 시트 현장명 칸(U열)에 배송 주소를 넣고 다시 확정해주세요. (대표님 방침: 판매전표에 현장명 기재)');
+ }
  const sheetGid = appendToSaleSheet(finalRows);
 
  // 판매확인중 시트는 헤더만 남기고 비움
