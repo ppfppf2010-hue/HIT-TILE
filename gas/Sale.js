@@ -582,6 +582,79 @@ function handleSaleList(body) {
  return jsonOut({ ok: true, count: list.length, slips: list, ecountImportedAt: ecLast, warning: '이카운트 전표는 까망이 PC가 올린 시점(ecountImportedAt)까지만 들어 있습니다. 판매등록 전표와 같은 건이 두 번(source 다름) 나올 수 있습니다.' });
 }
 
+// ---- 판매입력 시트 줄 지우기 (좁은 기능 — 이카운트 전송 실패로 시트에만 남은 줄 정리용, 대표님 OK 후) ----
+// 이카운트는 건드리지 않는다. 판매입력 시트의 줄만 지운다.
+// 찾기(읽기 전용): { find: { date: '2026-11-21', vendor: '개성인테리어'(일부), note: '신당동'(적요 일부) } }
+//   → 조건에 맞는 줄의 실제 행 번호 + 내용을 돌려준다(지우지 않음).
+// 지우기: { rows: [{ row: 25, date, vendorName, itemCode, note }], dryRun: true|false }
+//   → 각 행의 실제 일자 · 거래처명 · 품목코드 · 적요가 기대값과 「전부」 같을 때만, 아래 행부터 위로 지운다.
+//     하나라도 다르면 한 줄도 지우지 않는다. dryRun이면 대조 결과만 돌려준다.
+function handleSaleSheetDeleteRows(body) {
+ const ymd = function (v) {
+ if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Seoul', 'yyyyMMdd');
+ const d = String(v || '').replace(/\D/g, '');
+ return d.length >= 8 ? d.slice(0, 8) : '';
+ };
+ const str = function (v) { return String(v == null ? '' : v).trim(); };
+ const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SALE_SHEET);
+ if (!sheet) throw new Error('판매입력 시트가 없습니다.');
+ const lastRow = sheet.getLastRow();
+ const rowInfo = function (n, r) {
+ return { row: n, date: ymd(r[0]), seq: r[1], vendorName: str(r[3]), itemCode: str(r[9]), itemName: str(r[10]),
+ qty: r[12], unitPrice: r[13], supply: Number(r[15]) || 0, vat: Number(r[16]) || 0, note: str(r[17]) };
+ };
+
+ // 1) 찾기 — 읽기 전용
+ if (body.find) {
+ const f = body.find;
+ const fDate = ymd(f.date), fVendor = normalizeVendorName(str(f.vendor)), fNote = str(f.note);
+ if (!fDate) throw new Error('find.date(일자)가 필요합니다.');
+ const values = lastRow >= 2 ? sheet.getRange(2, 1, lastRow - 1, 18).getValues() : [];
+ const found = [];
+ values.forEach(function (r, i) {
+ if (ymd(r[0]) !== fDate) return;
+ if (fVendor && normalizeVendorName(str(r[3])).indexOf(fVendor) < 0) return;
+ if (fNote && str(r[17]).indexOf(fNote) < 0) return;
+ found.push(rowInfo(i + 2, r));
+ });
+ return jsonOut({ ok: true, mode: 'find', count: found.length, rows: found });
+ }
+
+ // 2) 대조 후 지우기
+ const targets = Array.isArray(body.rows) ? body.rows : [];
+ if (!targets.length) throw new Error('rows(지울 행 목록) 또는 find(찾기 조건)가 필요합니다.');
+ if (targets.length > 50) throw new Error('한 번에 50줄까지만 지울 수 있습니다.');
+ const lock = LockService.getScriptLock();
+ lock.waitLock(30000);
+ try {
+ const seen = {};
+ const checks = targets.map(function (t) {
+ const n = Number(t.row);
+ if (!(n >= 2 && n <= sheet.getLastRow() && Math.floor(n) === n)) return { row: t.row, ok: false, reason: '행 번호가 범위 밖' };
+ if (seen[n]) return { row: n, ok: false, reason: '행 번호 중복' };
+ seen[n] = true;
+ const r = sheet.getRange(n, 1, 1, 18).getValues()[0];
+ const actual = rowInfo(n, r);
+ const diff = [];
+ if (actual.date !== ymd(t.date)) diff.push('일자');
+ if (actual.vendorName !== str(t.vendorName)) diff.push('거래처명');
+ if (actual.itemCode !== str(t.itemCode)) diff.push('품목코드');
+ if (actual.note !== str(t.note)) diff.push('적요');
+ return { row: n, ok: diff.length === 0, reason: diff.length ? '다름: ' + diff.join(', ') : '', actual: actual };
+ });
+ const allOk = checks.every(function (c) { return c.ok; });
+ if (body.dryRun || !allOk) {
+ return jsonOut({ ok: allOk, mode: 'check', dryRun: !!body.dryRun, deleted: 0, checks: checks,
+ error: allOk ? undefined : '기대값과 다른 행이 있어 한 줄도 지우지 않았습니다.' });
+ }
+ const order = checks.map(function (c) { return c.row; }).sort(function (a, b) { return b - a; });
+ order.forEach(function (n) { sheet.deleteRow(n); });
+ return jsonOut({ ok: true, mode: 'delete', deleted: order.length, deletedRows: order, checks: checks });
+ } finally {
+ lock.releaseLock();
+ }
+}
+
 // ---- 이카운트 판매조회 엑셀 → 「이카운트판매」 시트 (까망이 PC 프로그램이 하루 1번 올림) ----
 // 이카운트 OAPI에 판매 조회가 없어서, PC가 판매조회 화면의 엑셀을 내려받아 줄 단위로 보낸다.
 // body: { from: '2026-11-01', to: '2026-11-19', rows: [{ date, slipNo('2026/11/17-9'), vendorName, site, itemCode, itemName, spec, qty, unitPrice, supply, vat, total }] }

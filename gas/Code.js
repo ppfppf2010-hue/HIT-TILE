@@ -94,6 +94,7 @@
  if (action === 'sale_check_vendor') return handleCheckSaleVendor(body);
  if (action === 'sale_vendor_upsert') return handleSaleVendorUpsert(body);
  if (action === 'sale_list') return handleSaleList(body);
+ if (action === 'sale_sheet_delete_rows') return handleSaleSheetDeleteRows(body);
  if (action === 'import_ecount_sales') return handleImportEcountSales(body);
  if (action === 'sync_vendors_now') return handleSyncVendorsNow();
  if (action === 'debug_ecount_vendors') return handleDebugEcountVendors();
