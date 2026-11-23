@@ -7,6 +7,7 @@
 - **대표님께는 한글로만** 말한다. 영어 문장 · 용어 남발 금지(코드 · 파일명은 예외).
 - 결론부터, 짧게. 표를 쓸 수 있으면 표로.
 - 대표님께 무언가를 부탁할 때는 **바로 열 수 있는 링크를 같이** 준다.
+- **대표님께 물을 것 · 부탁할 것은 「대표님 확인」(/confirm/)에 올리고, 채팅에는 한 줄 요약 + 링크**(대표님 11/24 — 채팅의 긴 표 질문은 보기 힘듦). 올리기 · 처리는 웹앱 `owner_check_upsert` · `owner_check_close`(system.md). 대표님이 체크 · 답하면 PC 연락함 지킴이가 연락함에 `[클라우드에게] 대표님 확인 답 #ID …`로 알려 준다(토큰 0).
 - 사진에서 잘린 값(단가 등)이나 애매한 값(부가세 포함 여부, 거래처)은 추측해서 저장하지 말고 묻는다.
 - 인증키 · 비밀번호는 채팅에 쓰지 말라고 안내한다. 받아도 다른 세션 · 파일로 옮기지 않는다.
 
@@ -14,6 +15,7 @@
 | 이름 | 주소 |
 |---|---|
 | 업무 사이트 첫 화면 | https://ppfppf2010-hue.github.io/HIT-TILE/ |
+| 대표님 확인 | https://ppfppf2010-hue.github.io/HIT-TILE/confirm/ |
 | 판매등록 | https://ppfppf2010-hue.github.io/HIT-TILE/sale/ |
 | 구매등록 | https://ppfppf2010-hue.github.io/HIT-TILE/purchase/ |
 | 품목등록 | https://ppfppf2010-hue.github.io/HIT-TILE/itemregister/ |

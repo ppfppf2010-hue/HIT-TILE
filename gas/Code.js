@@ -100,6 +100,12 @@
  if (action === 'debug_ecount_vendors') return handleDebugEcountVendors();
  if (action === 'sync_items_now') return handleSyncItemsNow();
  if (action === 'debug_ecount_items') return handleDebugEcountItems();
+ if (action === 'owner_check_list') return handleOwnerCheckList(body);
+ if (action === 'owner_check_upsert') return handleOwnerCheckUpsert(body);
+ if (action === 'owner_check_answer') return handleOwnerCheckAnswer(body);
+ if (action === 'owner_check_pending_notify') return handleOwnerCheckPendingNotify(body);
+ if (action === 'owner_check_mark_notified') return handleOwnerCheckMarkNotified(body);
+ if (action === 'owner_check_close') return handleOwnerCheckClose(body);
  throw new Error('알 수 없는 action: ' + action);
  } catch (err) {
  return jsonOut({ ok: false, error: err.message });

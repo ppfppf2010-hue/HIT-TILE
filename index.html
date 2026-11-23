@@ -81,6 +81,7 @@
 
         const categories = [
             { id: 'all', name: '전체' },
+            { id: 'owner', name: '대표님' },
             { id: 'consult', name: '고객상담' },
             { id: 'photo', name: '사진·카탈로그' },
             { id: 'schedule', name: '일정' },
@@ -91,6 +92,7 @@
 
         // badge: 누가 쓰는 화면인지 (사무실 / 고객용 / 기사용 / 시트 / 캘린더)
         const menuData = [
+            { id: 'confirm', title: '대표님 확인', category: 'owner', desc: '클라우드가 여쭙는 것 · 부탁 — 누르고 적으면 바로 저장', url: BASE + 'confirm/', icon: '✅', badge: '대표님' },
             { id: 'checklist', title: '상담 체크리스트', category: 'consult', desc: '상담 기록 · 고객 리포트(A4) · 수량계산 · 판매등록 연결', url: BASE + 'checklist/', icon: '📋', badge: '사무실' },
             { id: 'tilecalc', title: '타일량 계산기', category: 'consult', desc: '공간별 박스 · 압착 · 본드 · 에폭시 · 몰탈 → 판매등록', url: BASE + 'tile-calc/', icon: '📐', badge: '사무실' },
             { id: 'catalog', title: '시공사진 카탈로그', category: 'photo', desc: '고객에게 보여주는 시공 사례 갤러리', url: 'https://hittile.store/', icon: '🖼️', badge: '고객용' },
@@ -107,6 +109,7 @@
 
         // 최근 업데이트 — 새로 바뀐 게 있으면 맨 위에 추가한다(첫 줄이 상단 배너에 나옴)
         const updates = [
+            { tag: 'NEW', date: '11/24', title: '대표님 확인 화면', body: '클라우드 질문 · 부탁을 카드로. 선택 · 답변 · 완료 체크가 바로 저장되고 클라우드에 자동으로 알려짐', link: BASE + 'confirm/' },
             { tag: 'NEW', date: '10/29', title: '상담 고객 리포트 (A4 출력)', body: '상담체크리스트에서 고르신 타일 · 도기를 사진 카드로 정리해 출력. 타일 1장 · 도기 1장', link: BASE + 'checklist/' },
             { tag: 'NEW', date: '10/23', title: '타일량 계산기 → 판매등록 바로 진행', body: '계산 결과로 판매등록 화면이 채워지고, 적요에 공간명(외욕실 · 내욕실 · 현관 등)이 들어감. 베란다 등 바닥은 + 버튼으로 구역 추가', link: BASE + 'tile-calc/' },
             { tag: 'UPDATE', date: '10/20', title: '타일량 계산기 추가', body: '공간별 박스 · 압착 · 본드 · 에폭시 · 몰탈 · 발주서, 상담 체크리스트와 연결', link: BASE + 'tile-calc/' },
