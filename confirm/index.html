@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>히트타일 대표님 확인</title>
+<!--
+  대표님 확인: 클라우드 Claude가 시트 「대표님확인」 탭에 올린 질문 · 부탁을 카드로 보여 준다.
+  선택 · 답변 · 완료 체크는 바로 저장(웹앱 owner_check_answer). 30초마다, 화면에 돌아올 때 새로고침.
+  대표님 PC 연락함 지킴이가 새 답을 비공개 연락함에 알려서 클라우드가 바로 안다.
+-->
+<style>
+  :root{
+    --bg:#f5f6f8; --ink:#1a1a1a; --muted:#6b7280; --line:rgba(17,17,17,0.09);
+    --brass:#2563eb; --brass-deep:#1d4ed8; --brass-soft:#eff6ff; --card:#ffffff; --ok:#15803d; --warn:#b1503f;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Malgun Gothic',sans-serif;
+    background:var(--bg); color:var(--ink); padding:0 0 60px; }
+  header{ padding:20px 5vw 14px; border-bottom:1px solid var(--line); position:relative; }
+  header p{ padding-right:70px; }
+  header h1{ margin:0 0 4px; font-size:20px; }
+  header p{ margin:0; color:var(--muted); font-size:12.5px; }
+  .home-link{ position:absolute; top:22px; right:5vw; font-size:12px; color:var(--muted); text-decoration:none;
+    border:1px solid var(--line); border-radius:999px; padding:6px 12px; background:var(--card); }
+  main{ max-width:640px; margin:0 auto; padding:14px 4vw 0; }
+
+  .bar{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin:2px 0 12px; font-size:12px; color:var(--muted); }
+  .bar button{ font:inherit; font-size:12px; padding:6px 12px; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--ink); }
+  .bar .err{ color:var(--warn); font-weight:600; }
+
+  .section-title{ font-size:13px; font-weight:700; margin:16px 2px 8px; }
+  .count{ display:inline-block; min-width:20px; padding:1px 7px; border-radius:999px; background:var(--brass); color:#fff; font-size:11.5px; margin-left:4px; text-align:center; }
+  .empty{ background:var(--card); border:1px dashed var(--line); border-radius:14px; padding:22px; text-align:center; color:var(--muted); font-size:13px; }
+
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 14px 12px; margin-bottom:12px; }
+  .card.done{ opacity:.85; }
+  .card-top{ display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+  .cat{ font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px; color:#fff; background:#64748b; white-space:nowrap; }
+  .cat.c-돈{ background:#b45309; } .cat.c-확정{ background:#7c3aed; } .cat.c-전송{ background:#0369a1; }
+  .cat.c-결정{ background:#b91c1c; } .cat.c-대표님손{ background:#15803d; } .cat.c-참고{ background:#64748b; }
+  .cid{ font-size:11px; color:var(--muted); }
+  .when{ margin-left:auto; font-size:11px; color:var(--muted); }
+  .title{ font-size:15.5px; font-weight:700; line-height:1.4; margin:0 0 6px; word-break:keep-all; overflow-wrap:anywhere; }
+  .desc{ font-size:13.5px; line-height:1.6; color:#334155; white-space:pre-line; margin:0 0 10px; overflow-wrap:anywhere; }
+  .link-btn{ display:inline-block; font-size:13px; font-weight:600; color:var(--brass-deep); background:var(--brass-soft);
+    border:1px solid var(--brass); border-radius:10px; padding:8px 12px; text-decoration:none; margin:0 0 10px; }
+  .opts{ display:flex; flex-wrap:wrap; gap:6px; margin:0 0 10px; }
+  .opt{ font:inherit; font-size:13.5px; padding:9px 14px; border-radius:10px; border:1px solid var(--line); background:#f8fafc; color:var(--ink); }
+  .opt.on{ background:var(--brass); border-color:var(--brass); color:#fff; font-weight:700; }
+  .multi-hint{ font-size:11px; color:var(--muted); margin:-4px 0 8px; }
+  textarea{ width:100%; min-height:64px; font:inherit; font-size:14px; padding:9px 10px; border-radius:10px; border:1px solid var(--line);
+    background:#fff; resize:vertical; outline:none; }
+  .card-bottom{ display:flex; align-items:center; gap:8px; margin-top:8px; }
+  .done-btn{ font:inherit; font-size:13.5px; font-weight:700; padding:9px 14px; border-radius:10px; border:1px solid var(--ok); background:#fff; color:var(--ok); }
+  .done-btn.on{ background:var(--ok); color:#fff; }
+  .status{ margin-left:auto; font-size:12px; color:var(--muted); text-align:right; }
+  .status.ok{ color:var(--ok); } .status.fail{ color:var(--warn); font-weight:600; }
+  .status button{ font:inherit; font-size:12px; margin-left:4px; padding:3px 9px; border-radius:8px; border:1px solid var(--warn); background:#fff; color:var(--warn); }
+  .memo{ margin-top:8px; font-size:12px; color:var(--muted); background:#f8fafc; border-radius:8px; padding:6px 8px; white-space:pre-line; }
+
+  details.done-box{ margin-top:8px; }
+  details.done-box > summary{ cursor:pointer; font-size:13px; font-weight:700; margin:10px 2px; color:var(--muted); }
+</style>
+<link rel="stylesheet" href="../assets/hit-theme.css">
+</head>
+<body>
+
+<header>
+  <h1>대표님 확인</h1>
+  <p>클라우드가 여쭙는 것 · 부탁드리는 것. 누르고 적으면 바로 저장돼요.</p>
+  <a class="home-link" href="../">첫 화면</a>
+</header>
+
+<main>
+  <div class="bar">
+    <span id="lastLoad">불러오는 중...</span>
+    <button type="button" id="refreshBtn">새로고침</button>
+  </div>
+
+  <div class="section-title">대기 중 <span class="count" id="pendingCount">0</span></div>
+  <div id="pendingList"><div class="empty">불러오는 중...</div></div>
+
+  <details class="done-box" id="doneBox">
+    <summary>끝난 것 <span id="doneCount">0</span>건 (눌러서 펼치기)</summary>
+    <div id="doneList"></div>
+  </details>
+</main>
+
+<script>
+  const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec';
+  const REFRESH_MS = 30000;
+  const TYPE_SAVE_MS = 1500;   // 답변을 쓰다 멈추고 1.5초 뒤 저장
+
+  let items = [];
+  const pending = {};   // id -> 아직 저장 안 끝난 변경 { choice?, answer?, done? }
+  const saving = {};    // id -> 저장 중
+  const timers = {};    // id -> 답변 입력 타이머
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  // 저장이 막힌 곳(카톡 인앱 · 시크릿)에서도 화면은 떠야 하므로 실패는 무시
+  function draftKey(id) { return 'hittile_confirm_draft_' + id; }
+  function setDraft(id, v) { try { if (v == null) localStorage.removeItem(draftKey(id)); else localStorage.setItem(draftKey(id), v); } catch (e) {} }
+  function getDraft(id) { try { return localStorage.getItem(draftKey(id)); } catch (e) { return null; } }
+
+  async function api(payload) {
+    const res = await fetch(ENDPOINT, { method: 'POST', body: JSON.stringify(payload) });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || '서버 오류');
+    return data;
+  }
+
+  function busy() {
+    const a = document.activeElement;
+    if (a && a.tagName === 'TEXTAREA') return true;
+    return Object.keys(pending).length > 0 || Object.keys(saving).length > 0;
+  }
+
+  async function load(force) {
+    if (!force && busy()) return;   // 쓰는 중이면 화면을 덮지 않고 다음 회차에
+    const lastLoad = document.getElementById('lastLoad');
+    try {
+      const data = await api({ action: 'owner_check_list', status: '전체' });
+      if (!force && busy()) return;
+      items = data.items || [];
+      render();
+      const t = new Date();
+      lastLoad.textContent = '마지막 확인 ' + t.getHours() + ':' + String(t.getMinutes()).padStart(2, '0') + ' · 30초마다 자동';
+      lastLoad.className = '';
+    } catch (err) {
+      lastLoad.textContent = '불러오지 못했어요 — 인터넷 확인 후 새로고침 (' + (err.message || err) + ')';
+      lastLoad.className = 'err';
+      if (!items.length) document.getElementById('pendingList').innerHTML = '<div class="empty">불러오지 못했어요. 위 「새로고침」을 눌러 주세요.</div>';
+    }
+  }
+
+  function chosen(it) {
+    return String(it.choice || '').split(',').map(function (s) { return s.trim(); }).filter(String);
+  }
+
+  function cardHtml(it) {
+    const isDone = it.status === '완료';
+    const cat = it.category || '참고';
+    const ch = chosen(it);
+    const draft = getDraft(it.id);
+    const answer = draft != null ? draft : (it.answer || '');
+    let h = '<div class="card' + (isDone ? ' done' : '') + '" data-id="' + esc(it.id) + '">';
+    h += '<div class="card-top"><span class="cat c-' + esc(cat.replace(/\s/g, '')) + '">' + esc(cat) + '</span>'
+      + '<span class="cid">#' + esc(it.id) + '</span><span class="when">' + esc(String(it.createdAt || '').slice(5, 16)) + '</span></div>';
+    h += '<p class="title">' + esc(it.title) + '</p>';
+    if (it.desc) h += '<p class="desc">' + esc(it.desc) + '</p>';
+    if (it.link && /^https?:\/\//.test(it.link)) h += '<a class="link-btn" href="' + esc(it.link) + '" target="_blank" rel="noopener">링크 열기 ↗</a>';
+    if (it.options && it.options.length) {
+      h += '<div class="opts">' + it.options.map(function (o) {
+        return '<button type="button" class="opt' + (ch.indexOf(o) >= 0 ? ' on' : '') + '" data-opt="' + esc(o) + '">' + esc(o) + '</button>';
+      }).join('') + '</div>';
+      if (it.multi) h += '<div class="multi-hint">여러 개 고를 수 있어요</div>';
+    }
+    h += '<textarea placeholder="답변이 필요하면 여기에 적어 주세요 (쓰면 바로 저장)">' + esc(answer) + '</textarea>';
+    h += '<div class="card-bottom"><button type="button" class="done-btn' + (isDone ? ' on' : '') + '">' + (isDone ? '✓ 완료됨 (누르면 되돌리기)' : '완료 체크') + '</button>'
+      + '<span class="status">' + (it.answeredAt ? '저장됨 ' + esc(String(it.answeredAt).slice(5, 16)) : '') + '</span></div>';
+    if (it.cloudMemo) h += '<div class="memo">클라우드 처리: ' + esc(it.cloudMemo) + '</div>';
+    h += '</div>';
+    return h;
+  }
+
+  function render() {
+    const wait = items.filter(function (it) { return it.status !== '완료'; });
+    const done = items.filter(function (it) { return it.status === '완료'; }).reverse();
+    document.getElementById('pendingCount').textContent = wait.length;
+    document.getElementById('doneCount').textContent = done.length;
+    document.getElementById('pendingList').innerHTML = wait.length ? wait.map(cardHtml).join('') : '<div class="empty">지금 확인하실 것이 없어요.</div>';
+    document.getElementById('doneList').innerHTML = done.map(cardHtml).join('');
+  }
+
+  function find(id) { return items.filter(function (x) { return String(x.id) === String(id); })[0]; }
+  function cardEl(id) {
+    return Array.prototype.filter.call(document.querySelectorAll('.card'), function (c) { return c.getAttribute('data-id') === String(id); })[0];
+  }
+
+  function setStatus(id, cls, text, retry) {
+    const el = cardEl(id);
+    if (!el) return;
+    const st = el.querySelector('.status');
+    st.className = 'status' + (cls ? ' ' + cls : '');
+    st.innerHTML = esc(text) + (retry ? '<button type="button" class="retry">다시 시도</button>' : '');
+  }
+
+  async function save(id) {
+    if (saving[id]) return;   // 끝나면 남은 변경을 이어서 저장
+    const change = pending[id];
+    if (!change) return;
+    delete pending[id];
+    saving[id] = true;
+    setStatus(id, '', '저장 중...');
+    try {
+      const data = await api(Object.assign({ action: 'owner_check_answer', id: id }, change));
+      const it = find(id);
+      if (it && data.item) Object.assign(it, data.item);
+      if (change.answer != null) setDraft(id, null);
+      delete saving[id];
+      if (pending[id]) return save(id);
+      setStatus(id, 'ok', '저장됨 ✓');
+      if (change.done != null) render();   // 완료 · 되돌리기는 위아래로 옮김
+    } catch (err) {
+      delete saving[id];
+      pending[id] = Object.assign({}, change, pending[id] || {});
+      setStatus(id, 'fail', '저장 실패 — 인터넷 확인', true);
+    }
+  }
+
+  function queue(id, patch, now) {
+    pending[id] = Object.assign(pending[id] || {}, patch);
+    if (now) { clearTimeout(timers[id]); save(id); }
+  }
+
+  document.addEventListener('click', function (e) {
+    const card = e.target.closest('.card');
+    if (!card) return;
+    const id = card.getAttribute('data-id');
+    const it = find(id);
+    if (!it) return;
+    if (e.target.classList.contains('opt')) {
+      const o = e.target.getAttribute('data-opt');
+      let ch = chosen(it);
+      if (it.multi) ch = ch.indexOf(o) >= 0 ? ch.filter(function (x) { return x !== o; }) : ch.concat([o]);
+      else ch = ch.length === 1 && ch[0] === o ? [] : [o];
+      it.choice = ch.join(', ');
+      card.querySelectorAll('.opt').forEach(function (b) { b.classList.toggle('on', ch.indexOf(b.getAttribute('data-opt')) >= 0); });
+      queue(id, { choice: it.choice }, true);
+    } else if (e.target.classList.contains('done-btn')) {
+      const done = it.status !== '완료';
+      it.status = done ? '완료' : '대기';
+      const ta = card.querySelector('textarea');
+      const patch = { done: done };
+      if (ta && ta.value !== (it.answer || '')) patch.answer = ta.value;   // 쓰던 답도 같이 저장
+      e.target.classList.toggle('on', done);
+      e.target.textContent = done ? '✓ 완료됨 (누르면 되돌리기)' : '완료 체크';
+      queue(id, patch, true);
+    } else if (e.target.classList.contains('retry')) {
+      save(id);
+    }
+  });
+
+  document.addEventListener('input', function (e) {
+    if (e.target.tagName !== 'TEXTAREA') return;
+    const card = e.target.closest('.card');
+    const id = card.getAttribute('data-id');
+    setDraft(id, e.target.value);
+    setStatus(id, '', '쓰는 중...');
+    pending[id] = Object.assign(pending[id] || {}, { answer: e.target.value });
+    clearTimeout(timers[id]);
+    timers[id] = setTimeout(function () { save(id); }, TYPE_SAVE_MS);
+  });
+  document.addEventListener('focusout', function (e) {
+    if (e.target.tagName !== 'TEXTAREA') return;
+    const id = e.target.closest('.card').getAttribute('data-id');
+    if (pending[id]) { clearTimeout(timers[id]); save(id); }
+  });
+
+  document.getElementById('refreshBtn').addEventListener('click', function () { load(true); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) load(false); });
+  window.addEventListener('focus', function () { load(false); });
+  setInterval(function () { if (!document.hidden) load(false); }, REFRESH_MS);
+  load(true);
+</script>
+</body>
+</html>

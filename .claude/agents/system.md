@@ -23,6 +23,18 @@ PC에서 할 일은 대표님이 PC 세션(Remote Control 또는 "이카운터 �
 무인 로그인: `claude setup-token`으로 만든 토큰을 대표님이 `tools/inbox-watch-set-token.ps1`로 저장 → `%LOCALAPPDATA%\hittile-claude-token.dat`(DPAPI 암호화).
 지킴이가 실행할 때만 `CLAUDE_CODE_OAUTH_TOKEN`으로 넣는다. 토큰 값은 채팅 · 연락함 · 저장소 · 로그 어디에도 쓰지 않는다.
 
+**대표님 확인** (화면 `confirm/`, 서버 `gas/OwnerCheck.js`, 시트 탭 「대표님확인」 자동 생성): 클라우드가 대표님께 물을 것 · 부탁을 올리면 대표님이 휴대폰에서 선택 · 답변 · 완료 체크(바로 저장, 30초마다 새로고침).
+| action | 누가 | 보내는 값 |
+|---|---|---|
+| `owner_check_list` | 화면 · 클라우드 | `status`: 대기 / 완료 / 전체(기본) |
+| `owner_check_upsert` | 클라우드 | `items: [{ id?, category(돈·확정·전송·결정·대표님 손·참고), title, desc, link, options(배열 또는 쉼표), multi, status }]` — id 있으면 보낸 칸만 수정 |
+| `owner_check_answer` | 화면 | `id, choice?, answer?, done?` — 답변시각 기록 · 알림여부 비움 |
+| `owner_check_pending_notify` | PC 지킴이 | `settleSec`(기본 90): 완료 체크된 것은 바로, 아니면 마지막 저장 후 90초 지난 것 |
+| `owner_check_mark_notified` | PC 지킴이 | `items: [{ id, answeredAt }]` — 그 사이 새 답이 오면 표시 안 함(다음 회차에 다시 알림) |
+| `owner_check_close` | 클라우드 | `id, memo` — 완료 + 「클라우드처리」 메모 |
+연락함 지킴이(`tools/inbox-watch.ps1`)가 1분마다 새 답을 연락함 PR #1에 `[클라우드에게] 대표님 확인 답 #ID 제목 — 선택: … / 답: …`로 남긴다(`[까망이에게]`가 아니라 까망이는 안 깸, 토큰 0).
+지킴이 스크립트는 PC 저장소 파일을 그대로 실행하므로, PC 자동 배포가 main을 받으면 다음 1분 회차부터 바뀐 스크립트가 돈다.
+
 **PC 자동 배포** (`tools/pc-auto-deploy.ps1`, 설치 `tools/pc-auto-deploy-install.ps1`): 대표님 PC가 10분마다 main을 받아서
 `gas/` · `checklist-gas/`가 바뀌었으면 clasp push + 기존 웹앱 배포 업데이트를 자동으로 한다. 켜져 있으면 클라우드 세션은 **main에 합치기만** 하면 되고,
 10~15분 뒤 웹앱을 직접 호출해서 반영됐는지 확인한다. PC에 커밋 안 한 수정이 있거나 main이 아니면 건너뛴다(기록: `%LOCALAPPDATA%\hittile-auto-deploy.log`).

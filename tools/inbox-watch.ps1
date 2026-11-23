@@ -19,6 +19,45 @@ $State  = Join-Path $env:LOCALAPPDATA 'hittile-inbox-dispatched.txt'
 $Lock   = Join-Path $env:LOCALAPPDATA 'hittile-inbox-watch.lock'
 function Write-Log($m) { "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $m" | Out-File -FilePath $Log -Append -Encoding utf8 }
 
+# ── 대표님 확인(/confirm/) 새 답 → 연락함에 [클라우드에게] 댓글 (11/24, 토큰 0) ──
+#   웹앱 owner_check_pending_notify로 대표님이 체크 · 선택 · 답한 것 중 아직 안 알린 것을 받아 댓글을 남기고
+#   owner_check_mark_notified로 표시한다. [클라우드에게]로 시작하므로 아래 [까망이에게] 요청으로 잡히지 않는다(까망이 안 깨움).
+#   까망이가 오래 일하는 중(아래 잠금)에도 알림은 늦지 않게 따로 짧은 잠금을 쓴다. 실패하면 기록만 남기고 다음 회차에 다시.
+$WebApp = 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec'
+function Invoke-WebApp($payload) {
+  $bytes = [Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Depth 5 -Compress))
+  $r = Invoke-WebRequest -UseBasicParsing -Uri $WebApp -Method Post -ContentType 'application/json; charset=utf-8' -Body $bytes -TimeoutSec 60
+  return ([Text.Encoding]::UTF8.GetString($r.RawContentStream.ToArray()) | ConvertFrom-Json)
+}
+$OcLock = Join-Path $env:LOCALAPPDATA 'hittile-ownercheck.lock'
+if (-not (Test-Path $OcLock) -or ((Get-Date) - (Get-Item $OcLock).LastWriteTime).TotalMinutes -ge 5) {
+  New-Item -ItemType File -Path $OcLock -Force | Out-Null
+  try {
+    $oc = Invoke-WebApp @{ action = 'owner_check_pending_notify' }
+    if (-not $oc.ok) { Write-Log "대표님 확인: 목록 실패 $($oc.error)" }
+    foreach ($it in @($oc.items)) {
+      if (-not $it -or -not $it.id) { continue }
+      $cut = { param($s, $n) $s = [string]$s; if ($s.Length -gt $n) { $s.Substring(0, $n) + '…' } else { $s } }
+      $parts = @()
+      if ($it.choice) { $parts += "선택: $($it.choice)" }
+      if ($it.answer) { $parts += "답: $(& $cut $it.answer 1500)" }
+      if ($it.status -eq '완료') { $parts += '완료 체크' }
+      if (-not $parts.Count) { $parts += '(선택 · 답 지움)' }
+      $body = "[클라우드에게] 대표님 확인 답 #$($it.id) $($it.title) — $($parts -join ' / ')`n(https://ppfppf2010-hue.github.io/HIT-TILE/confirm/ · 지킴이 자동, 토큰 0)"
+      # 답에 따옴표 · 줄바꿈이 있어도 깨지지 않게 파일로 넘긴다(UTF-8, BOM 없음)
+      $bf = Join-Path $env:TEMP "hittile-ownercheck-$($it.id).txt"
+      [IO.File]::WriteAllText($bf, $body, (New-Object Text.UTF8Encoding $false))
+      gh pr comment $Pr -R $Repo --body-file $bf | Out-Null
+      $ghCode = $LASTEXITCODE
+      Remove-Item $bf -Force -ErrorAction SilentlyContinue
+      if ($ghCode -ne 0) { Write-Log "대표님 확인: 댓글 실패 #$($it.id) → 다음 회차에 다시"; continue }
+      $mk = Invoke-WebApp @{ action = 'owner_check_mark_notified'; items = @(@{ id = [string]$it.id; answeredAt = [string]$it.answeredAt }) }
+      Write-Log "대표님 확인: 연락함에 알림 #$($it.id) (표시 $(@($mk.marked).Count)건)"
+    }
+  } catch { Write-Log "대표님 확인: 확인 실패 $($_.Exception.Message)" }
+  finally { Remove-Item $OcLock -Force -ErrorAction SilentlyContinue }
+}
+
 if (Test-Path $Lock) {
   if (((Get-Date) - (Get-Item $Lock).LastWriteTime).TotalMinutes -lt 30) { exit 0 }
   Remove-Item $Lock -Force   # 30분 넘은 잠금은 비정상 종료로 보고 푼다
