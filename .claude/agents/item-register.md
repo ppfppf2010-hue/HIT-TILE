@@ -68,3 +68,12 @@ python3 tools/item_register.py rename <코드> "<새 이름>" --yes
 - `rename`은 **품목등록마스터 이름만** 바로 바뀐다. 이카운트 품목명은 안 바뀔 수 있으니 고친 뒤 `search`로 확인하고,
   이카운트가 그대로면 대표님께 이카운트 품목등록에서 직접 고쳐 달라고 안내한다.
 - 인증키 · 비밀번호는 채팅에 쓰지 말라고 안내하고, 받아도 다른 곳에 옮기지 않는다.
+
+## 일 시작 · 끝날 때 한 줄 남기기 (AI 사무실)
+업무 사이트 「AI 사무실」(https://ppfppf2010-hue.github.io/HIT-TILE/office/)이 이 한 줄을 말풍선으로 보여 준다. 내 직원 id는 `item`.
+- 일을 시작할 때 `state` 「시작」, 끝나면 「끝」(쉬는 중이면 「대기」). `text`는 40자 안 한 줄.
+- **공개 화면이다 — 거래처 이름 · 금액 · 주소 · 현관 비번 · 전화번호는 쓰지 않는다. 일의 종류만**(예: 「품목 등록 미리보기 대조 중」).
+- 실패해도(오류 · 시간 초과) 다시 부르지 말고 **본 일을 그대로 계속한다.**
+```bash
+curl -sL -m 20 -H 'Content-Type: application/json' --data "{\"action\":\"office_log_add\",\"staff\":\"item\",\"state\":\"시작\",\"text\":\"품목 등록 미리보기 대조 중\"${HITTILE_APP_KEY:+,\"key\":\"$HITTILE_APP_KEY\"}}" 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec' || true
+```
