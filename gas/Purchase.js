@@ -111,16 +111,18 @@
  const finalVendorName = vendorInfo.storedName;
 
  const rows = buildPurchaseRows(parsed, finalVendorName);
- const reviewUrl = stageForPurchaseReview(rows);
+ const staged = stageForPurchaseReview(rows);
 
  return jsonOut({
  ok: true,
  vendorName: finalVendorName,
  vendorMatched: true,
+ batchId: staged.batchId, // 확정(purchase_confirm) 때 그대로 넘기면 이 묶음만 확정된다
+ pendingBatches: staged.pendingBatches,
  rows: rows,
  totalExtracted: totalExtracted,
  filteredByMonth: !!filteredByMonth,
- reviewUrl: reviewUrl
+ reviewUrl: staged.reviewUrl
  });
  }
 
@@ -129,28 +131,26 @@
  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
  let sheet = ss.getSheetByName(PURCHASE_REVIEW_SHEET);
  if (!sheet) sheet = ss.insertSheet(PURCHASE_REVIEW_SHEET);
- sheet.clear();
 
- sheet.appendRow(PURCHASE_REVIEW_HEADERS);
- rows.forEach(function (r) {
- sheet.appendRow([
+ // 대표님 11/24: 시트를 지우지 않고 묶음번호(Y열)를 붙여 아래에 쌓는다(ReviewBatch.js).
+ const values = rows.map(function (r) {
+ return [
  r.date, r.seq, r.vendorCode, r.vendorName, r.manager, r.warehouse,
  r.dealType, r.currency, r.rate, r.itemCode, r.itemName, r.spec,
  r.qty, r.unitPrice, r.foreignAmount, r.supply, r.vat, r.note,
  r.itemName, r.spec // 원본값 (수정 여부 비교용, 숨김열)
- ]);
+ ];
  });
+ const staged = appendReviewBatch_(sheet, PURCHASE_REVIEW_HEADERS, values, 'P');
 
- sheet.setFrozenRows(1);
  try { sheet.autoResizeColumns(1, 18); } catch (e) { /* ignore */ }
  try { sheet.hideColumns(19, 2); } catch (e) { /* ignore */ }
- const headerRange = sheet.getRange(1, 1, 1, PURCHASE_REVIEW_HEADERS.length);
- headerRange.setFontWeight('bold').setBackground('#eef4ff');
 
- if (rows.length) applyItemCodeDropdown(sheet, rows.length);
+ if (rows.length) applyItemCodeDropdown(sheet, staged.endRow - 1);
 
  SpreadsheetApp.flush();
- return ss.getUrl() + '#gid=' + sheet.getSheetId();
+ return { batchId: staged.batchId, pendingBatches: listReviewBatches_(sheet).length,
+ reviewUrl: ss.getUrl() + '#gid=' + sheet.getSheetId() + '&range=A' + staged.startRow };
  }
 
  // ---- 품목코드 칸(J열)에서 "코드 | 품목명 | 규격" 형태로 기존 품목을 검색/선택할 수 있게 드롭다운을 건다 ----
@@ -223,17 +223,15 @@
  }
  }
 
- // ---- "구매확인중" 시트 내용을 그대로 읽어와 "구매입력"에 확정 저장 ----
- function handlePurchaseConfirm() {
+ // ---- "구매확인중" 시트에서 묶음 하나를 읽어와 "구매입력"에 확정 저장 ----
+ // body.batchId: 확정할 묶음(purchase_extract 응답의 batchId). 묶음이 1개뿐이면 생략 가능.
+ function handlePurchaseConfirm(body) {
  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
  const sheet = ss.getSheetByName(PURCHASE_REVIEW_SHEET);
  if (!sheet) throw new Error('구매확인중 시트를 찾을 수 없습니다.');
 
- const data = sheet.getDataRange().getValues();
- if (data.length <= 1) throw new Error('구매확인중 시트에 저장할 품목이 없습니다. (다 지우신 건 아닌지 확인해주세요)');
-
- const rows = data.slice(1).filter(function (r) { return String(r[10]).trim() !== ''; });
- if (!rows.length) throw new Error('구매확인중 시트에 저장할 품목이 없습니다.');
+ const batch = pickReviewBatch_(sheet, body && body.batchId, '구매확인중');
+ const rows = batch.rows;
 
  // 원본(자동인식값) vs 수정본 비교 -> 교정사전에 자동 기록
  const corrections = [];
@@ -330,10 +328,8 @@
 
  const sheetGid = appendToPurchaseSheet(finalRows);
 
- // 구매확인중 시트는 헤더만 남기고 비움
- sheet.clear();
- sheet.appendRow(PURCHASE_REVIEW_HEADERS);
- sheet.setFrozenRows(1);
+ // 구매확인중 시트에서 이 묶음만 뺀다(다른 묶음은 그대로)
+ removeReviewBatch_(sheet, batch);
 
  // ---- 이카운트 중계서버로 거래처 동기화 + 품목 동기화 + 매입전표 저장 ----
  // 실패해도 구글시트 저장은 이미 끝난 뒤이므로 흐름을 막지 않고 결과만 응답에 담아 돌려준다.
@@ -366,9 +362,15 @@
  } else {
  ecountPurchaseResult = ecountRelayCall('/push-purchase', { rows: pushRows });
  }
+ // 업그레이드 2번: 이카운트가 일부 줄을 거절해도 ok:true로 오는 경우를 잡아 실패로 바꾸고 보고 한 줄을 만든다
+ const purchaseSlip = ecountSlipReport_(ecountPurchaseResult, pushRows.length || finalRows.length);
+ if (ecountPurchaseResult && ecountPurchaseResult.ok && !purchaseSlip.ok) ecountPurchaseResult = Object.assign({}, ecountPurchaseResult, { ok: false, error: purchaseSlip.error });
+ const report = buildConfirmReport_('매입', vendorName, '', pushRows.length || finalRows.length, purchaseSlip, ecountVendorResult, ecountItemResults);
 
- return jsonOut({ ok: true, vendorName: vendorName, savedCount: finalRows.length, rows: finalRows, sheetGid: sheetGid,
- ecount: { vendor: ecountVendorResult, items: ecountItemResults, purchase: ecountPurchaseResult } });
+ return jsonOut({ ok: true, report: report, batchId: batch.batchId, remainingBatches: listReviewBatches_(sheet).length,
+ vendorName: vendorName, savedCount: finalRows.length, rows: finalRows, sheetGid: sheetGid,
+ ecount: { vendor: ecountVendorResult, items: ecountItemResults, purchase: ecountPurchaseResult,
+ slip: { ok: purchaseSlip.ok, successCnt: purchaseSlip.successCnt, failCnt: purchaseSlip.failCnt, slipNos: purchaseSlip.slipNos, error: purchaseSlip.error } } });
  }
 
  // ---- 품목코드 매칭 + 공급가액/부가세 계산해서 행 조립 ----
