@@ -65,7 +65,7 @@
  if (action === 'price_search') return handlePriceSearch(body);
  if (action === 'purchase_extract') return handlePurchaseExtract(body);
  if (action === 'purchase_register_vendor') return handlePurchaseRegisterVendor(body);
- if (action === 'purchase_confirm') return handlePurchaseConfirm();
+ if (action === 'purchase_confirm') return handlePurchaseConfirm(body);
  if (action === 'create_order') return handleCreateOrder(body);
  if (action === 'korean_name_preview') return handleKoreanNamePreview(body);
  if (action === 'korean_name_apply') return handleKoreanNameApply(body);
@@ -94,7 +94,7 @@
  if (action === 'check_vendor') return handleCheckVendor(body);
  if (action === 'sale_register_vendor') return handleSaleRegisterVendor(body);
  if (action === 'sale_manual_entry') return handleSaleManualEntry(body);
- if (action === 'sale_confirm') return handleSaleConfirm();
+ if (action === 'sale_confirm') return handleSaleConfirm(body);
  if (action === 'list_sale_vendor_names') return handleListSaleVendorNames();
  if (action === 'list_sale_vendor_contacts') return handleListSaleVendorContacts();
  if (action === 'sale_check_vendor') return handleCheckSaleVendor(body);

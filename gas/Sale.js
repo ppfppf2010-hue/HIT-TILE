@@ -267,7 +267,7 @@
  }
 
  // ---- "판매확인중" 시트 내용을 그대로 읽어와 "판매입력"에 확정 저장 ----
- function handleSaleConfirm() {
+ function handleSaleConfirm(body) {
  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
  const sheet = ss.getSheetByName(SALE_REVIEW_SHEET);
  if (!sheet) throw new Error('판매확인중 시트를 찾을 수 없습니다.');
@@ -277,6 +277,10 @@
 
  const rows = data.slice(1).filter(function (r) { return String(r[10]).trim() !== ''; });
  if (!rows.length) throw new Error('판매확인중 시트에 저장할 품목이 없습니다.');
+
+ // 날짜가 미래 · 30일 넘게 과거면 아무것도 저장하기 전에 멈춘다(allowDate:true면 통과, 검사는 Purchase.js checkVoucherDates_)
+ const dateProblems = checkVoucherDates_(rows);
+ if (dateProblems.length && !(body && body.allowDate)) return voucherDateBlockResponse_(dateProblems, SALE_REVIEW_SHEET);
 
  // 원본(자동인식값) vs 수정본 비교 -> 교정사전에 자동 기록
  const corrections = [];
