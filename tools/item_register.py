@@ -16,6 +16,7 @@
 """
 import argparse
 import json
+import os
 import re
 import sys
 import urllib.request
@@ -27,6 +28,10 @@ ECOUNT_URL = 'https://loginbb.ecount.com'
 
 
 def call(payload, timeout=200):
+    # 웹앱 열쇠: 환경변수 HITTILE_APP_KEY가 있으면 key로 같이 보낸다(없으면 예전과 같게)
+    app_key = os.environ.get('HITTILE_APP_KEY', '').strip()
+    if app_key:
+        payload = dict(payload, key=app_key)
     req = urllib.request.Request(ENDPOINT, data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
                                  headers={'Content-Type': 'text/plain;charset=utf-8'})
     with urllib.request.urlopen(req, timeout=timeout) as res:

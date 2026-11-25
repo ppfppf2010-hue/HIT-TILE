@@ -25,6 +25,8 @@ function Write-Log($m) { "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $m" | Out-Fi
 #   까망이가 오래 일하는 중(아래 잠금)에도 알림은 늦지 않게 따로 짧은 잠금을 쓴다. 실패하면 기록만 남기고 다음 회차에 다시.
 $WebApp = 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec'
 function Invoke-WebApp($payload) {
+  # 웹앱 열쇠: 환경변수 HITTILE_APP_KEY가 있으면 key로 같이 보낸다(없으면 예전과 같게). 값은 기록에 남기지 않는다.
+  if ($env:HITTILE_APP_KEY) { $payload = $payload.Clone(); $payload['key'] = $env:HITTILE_APP_KEY }
   $bytes = [Text.Encoding]::UTF8.GetBytes(($payload | ConvertTo-Json -Depth 5 -Compress))
   $r = Invoke-WebRequest -UseBasicParsing -Uri $WebApp -Method Post -ContentType 'application/json; charset=utf-8' -Body $bytes -TimeoutSec 60
   return ([Text.Encoding]::UTF8.GetString($r.RawContentStream.ToArray()) | ConvertFrom-Json)

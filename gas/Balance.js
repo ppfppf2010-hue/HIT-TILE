@@ -4,6 +4,9 @@ const BALANCE_SHEET = '거래처잔액';
 function doGet(e) {
 try {
 const action = (e && e.parameter && e.parameter.action) || '';
+// 웹앱 열쇠 검사(AppKey.js) — 스크립트 속성 APP_KEY가 있을 때만
+const blocked = appKeyGate_(action, e && e.parameter && e.parameter.key);
+if (blocked) return blocked;
 if (action === 'balances') return jsonOut(getBalances());
 if (action === 'delivery_by_date') return jsonOut(getDeliveryByDate(e.parameter.date || ''));
 if (action === 'delivery_month') return jsonOut(getDeliveryMonthCounts(e.parameter.month || ''));

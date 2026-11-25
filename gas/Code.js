@@ -52,6 +52,12 @@
  const body = JSON.parse(e.postData.contents);
  const action = body.action || 'extract';
 
+ // 웹앱 열쇠 검사(AppKey.js) — 스크립트 속성 APP_KEY가 있을 때만. 열쇠는 처리 함수로 넘기지 않는다.
+ const keyGiven = body.key !== undefined ? body.key : (e.parameter && e.parameter.key);
+ delete body.key;
+ const blocked = appKeyGate_(action, keyGiven);
+ if (blocked) return blocked;
+
  if (action === 'extract') return handleExtract(body);
  if (action === 'previewNew') return handlePreviewNew(body);
  if (action === 'confirm') return handleConfirm(body);
