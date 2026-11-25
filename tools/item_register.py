@@ -11,6 +11,12 @@
       --spec GB-3000 --unit EA --price 25000 --margin 1.4    # 미리보기만 (저장 안 함)
   python3 tools/item_register.py add ... --yes                 # 실제 등록
   python3 tools/item_register.py rename VG00034 "타일IBIZA BEIGE 600*600 (이비자 베이지)" --yes
+  python3 tools/item_register.py price DSS00001 --out 120000         # 단가 수정 미리보기 (저장 안 함)
+  python3 tools/item_register.py price DSS00001 --out 120000 --yes   # 실제 수정 (--in 입고단가도 가능)
+  python3 tools/item_register.py price DSS00001 --release --yes      # 단가 고정 풀기(다음 대조 때 이카운트 값으로)
+
+price: 품목등록마스터 단가를 고치고 「단가 고정」을 걸어 1시간 이카운트 대조가 되돌리지 않게 한다(웹앱 item_price_update).
+이카운트 OAPI에 품목 수정 API가 없어서 이카운트 품목 기본 단가는 그대로다(웹앱 · 클라우드 판매 전표는 새 단가로 들어감).
 
 --price 는 입고단가(부가세 포함)다. 부가세 별도 금액이면 --price-ex-vat 로 넣으면 1.1배 해서 넣는다.
 """
@@ -130,6 +136,29 @@ def cmd_rename(args):
     print(json.dumps(call({'action': 'korean_name_set', 'items': [{'code': args.code, 'name': args.name}]}), ensure_ascii=False))
 
 
+def cmd_price(args):
+    if not args.release and args.in_price is None and args.out_price is None:
+        sys.exit('--in(입고단가) · --out(출고단가) 중 하나는 넣으세요. 고정만 풀려면 --release')
+    item = {'code': args.code}
+    if args.release:
+        item['release'] = True
+    if args.in_price is not None:
+        item['inPrice'] = args.in_price
+    if args.out_price is not None:
+        item['outPrice'] = args.out_price
+    res = call({'action': 'item_price_update', 'items': [item], 'dryRun': not args.yes})
+    if not res.get('ok'):
+        sys.exit('실패: ' + json.dumps(res, ensure_ascii=False))
+    for c in res.get('changes', []):
+        b, a = c.get('before', {}), c.get('after', {})
+        tail = ' (단가 고정 풀기)' if c.get('released') else ''
+        print(f"{c.get('code')} | {c.get('name')} [{c.get('spec')}] | 입고 {b.get('inPrice')} → {a.get('inPrice')}"
+              f" | 출고 {b.get('outPrice')} → {a.get('outPrice')}{tail}")
+    print(res.get('note', ''))
+    if res.get('dryRun'):
+        print('(미리보기만 했습니다. 바꾸려면 --yes)')
+
+
 def main():
     p = argparse.ArgumentParser(description='히트타일 품목등록 도구')
     sub = p.add_subparsers(dest='cmd', required=True)
@@ -152,6 +181,13 @@ def main():
     a.add_argument('--yes', action='store_true')
     a.set_defaults(fn=cmd_add)
     r = sub.add_parser('rename'); r.add_argument('code'); r.add_argument('name'); r.add_argument('--yes', action='store_true'); r.set_defaults(fn=cmd_rename)
+    pr = sub.add_parser('price', help='품목 단가(입고 · 출고) 수정')
+    pr.add_argument('code')
+    pr.add_argument('--in', dest='in_price', type=float, help='입고단가 (부가세 포함)')
+    pr.add_argument('--out', dest='out_price', type=float, help='출고단가 (부가세 포함)')
+    pr.add_argument('--release', action='store_true', help='단가 고정 풀기')
+    pr.add_argument('--yes', action='store_true')
+    pr.set_defaults(fn=cmd_price)
     args = p.parse_args()
     args.fn(args)
 

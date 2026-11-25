@@ -116,6 +116,8 @@
  if (action === 'office_log_recent') return handleOfficeLogRecent(body);
  if (action === 'stock_list') return handleStockList(body);   // 가창 재고(Stock.js)
  if (action === 'stock_adjust') return handleStockAdjust(body);
+ if (action === 'item_price_update') return handleItemPriceUpdate(body); // 품목 단가 수정(ItemPrice.js)
+ if (action === 'item_price_holds') return handleItemPriceHolds();
  throw new Error('알 수 없는 action: ' + action);
  } catch (err) {
  return jsonOut({ ok: false, error: err.message });

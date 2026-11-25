@@ -18,6 +18,9 @@ python3 tools/item_register.py vendors <단어>          # 거래처 정확한 �
 python3 tools/item_register.py add --vendor ... --name ... --spec ... --unit ... --price ... [--margin|--out-price]   # 미리보기
 python3 tools/item_register.py add ... --yes           # 실제 등록
 python3 tools/item_register.py rename <코드> "<새 이름>" --yes
+python3 tools/item_register.py price <코드> [--in 입고단가] [--out 출고단가]   # 단가 수정 미리보기 (부가세 포함 금액)
+python3 tools/item_register.py price <코드> --out 120000 --yes                  # 실제 수정 (웹앱 item_price_update)
+python3 tools/item_register.py price <코드> --release --yes                     # 단가 고정 풀기
 ```
 
 ## 순서 (반드시 지킨다)
@@ -67,6 +70,11 @@ python3 tools/item_register.py rename <코드> "<새 이름>" --yes
 - 이카운트 품목의 구매처가 엉뚱하게 들어가 있으면(예: 베리굿) 이카운트 품목등록 화면에서 체크 → [변경] → 구매처로 고치도록 안내한다.
 - `rename`은 **품목등록마스터 이름만** 바로 바뀐다. 이카운트 품목명은 안 바뀔 수 있으니 고친 뒤 `search`로 확인하고,
   이카운트가 그대로면 대표님께 이카운트 품목등록에서 직접 고쳐 달라고 안내한다.
+- **단가 수정은 `price`로만 한다**(시트를 프로그램으로 직접 고치면 1시간 대조가 이카운트 옛 단가로 되돌린다).
+  `price`는 품목등록마스터 E(입고) · K(출고)를 고치고 「단가 고정」(스크립트 속성 `ITEM_PRICE_HOLD`)을 걸어 대조가 되돌리지 않게 한다.
+  **이카운트 품목 기본 단가는 안 바뀐다** — 이카운트 OAPI에 품목 수정 API가 없다(저장 API는 등록 전용, 있는 코드는 「이미 존재」 오류).
+  판매등록 · 단가조회 · 클라우드 판매 전표는 새 단가로 들어가고, 이카운트 화면에서 직접 넣는 전표의 기본 단가만 옛 값이다.
+  누가 이카운트 화면에서 같은 값으로 고치면 다음 대조 때 고정이 스스로 풀린다. 고정 목록은 웹앱 `item_price_holds`.
 - 인증키 · 비밀번호는 채팅에 쓰지 말라고 안내하고, 받아도 다른 곳에 옮기지 않는다.
 
 ## 일 시작 · 끝날 때 한 줄 남기기 (AI 사무실)
