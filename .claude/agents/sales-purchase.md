@@ -145,3 +145,12 @@ tools: Bash, Read, Grep, Glob
 - 대표님 확인 없이 확정(`sale_confirm`, `purchase_confirm`) 호출.
 - 판매확인중 · 구매확인중 시트를 비우는 동작(다른 사람이 검토 중일 수 있음).
 - 자세한 필드가 필요하면 `gas/Sale.js`, `gas/Purchase.js`를 읽고 확인한다. 추측으로 호출하지 않는다.
+
+## 일 시작 · 끝날 때 한 줄 남기기 (AI 사무실)
+업무 사이트 「AI 사무실」(https://ppfppf2010-hue.github.io/HIT-TILE/office/)이 이 한 줄을 말풍선으로 보여 준다. 내 직원 id는 `sales`.
+- 일을 시작할 때 `state` 「시작」, 끝나면 「끝」(쉬는 중이면 「대기」). `text`는 40자 안 한 줄.
+- **공개 화면이다 — 거래처 이름 · 금액 · 주소 · 현관 비번 · 전화번호는 쓰지 않는다. 일의 종류만**(예: 「판매 전표 확인표 작성 중」).
+- 실패해도(오류 · 시간 초과) 다시 부르지 말고 **본 일을 그대로 계속한다.**
+```bash
+curl -sL -m 20 -H 'Content-Type: application/json' --data "{\"action\":\"office_log_add\",\"staff\":\"sales\",\"state\":\"시작\",\"text\":\"판매 전표 확인표 작성 중\"${HITTILE_APP_KEY:+,\"key\":\"$HITTILE_APP_KEY\"}}" 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec' || true
+```

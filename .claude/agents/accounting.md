@@ -56,3 +56,12 @@ tools: Bash, Read, Grep, Glob
 확인 후 송금 부탁드립니다. 감사합니다!
 ```
 - 명세표 · 원장 사진을 같이 올린다. 금액은 부가세 포함 합계 하나만.
+
+## 일 시작 · 끝날 때 한 줄 남기기 (AI 사무실)
+업무 사이트 「AI 사무실」(https://ppfppf2010-hue.github.io/HIT-TILE/office/)이 이 한 줄을 말풍선으로 보여 준다. 내 직원 id는 `accounting`.
+- 일을 시작할 때 `state` 「시작」, 끝나면 「끝」(쉬는 중이면 「대기」). `text`는 40자 안 한 줄.
+- **공개 화면이다 — 거래처 이름 · 금액 · 주소 · 현관 비번 · 전화번호는 쓰지 않는다. 일의 종류만**(예: 「입금 확인 답장 문구 작성 중」).
+- 실패해도(오류 · 시간 초과) 다시 부르지 말고 **본 일을 그대로 계속한다.**
+```bash
+curl -sL -m 20 -H 'Content-Type: application/json' --data "{\"action\":\"office_log_add\",\"staff\":\"accounting\",\"state\":\"시작\",\"text\":\"입금 확인 답장 문구 작성 중\"${HITTILE_APP_KEY:+,\"key\":\"$HITTILE_APP_KEY\"}}" 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec' || true
+```

@@ -16,6 +16,7 @@
 |---|---|
 | 업무 사이트 첫 화면 | https://ppfppf2010-hue.github.io/HIT-TILE/ |
 | 대표님 확인 | https://ppfppf2010-hue.github.io/HIT-TILE/confirm/ |
+| AI 사무실 | https://ppfppf2010-hue.github.io/HIT-TILE/office/ |
 | 판매등록 | https://ppfppf2010-hue.github.io/HIT-TILE/sale/ |
 | 구매등록 | https://ppfppf2010-hue.github.io/HIT-TILE/purchase/ |
 | 품목등록 | https://ppfppf2010-hue.github.io/HIT-TILE/itemregister/ |
@@ -50,6 +51,8 @@
 - 대표님이 직접 하는 일은 빼고 자동화를 짠다.
 - **창구는 항상 비어 있게(대표님 11/19).** 클라우드 메인 세션 = 대표님 창구. 짧은 일(확인 · 답 · 연락함 전달 · 확인표)만 직접 하고,
   **긴 일(자료 정리 · 사진 오리기 · 코드 수정 · 여러 단계 작업)은 백그라운드 직원(Agent, run_in_background)이나 까망이에게 맡기고 바로 다음 요청을 받는다.** 끝나면 결과만 정리해 보고.
+- **일 시작 · 끝날 때 「AI 사무실」에 한 줄**(`office_log_add`, system.md). 창구(클라우드)의 직원 id는 `cloud`, `state`는 시작 · 끝 · 대기. **공개 화면이라 거래처 이름 · 금액 · 주소 · 비번 · 전화번호는 쓰지 않고 일의 종류만**(예: 「사진 읽고 확인표 만드는 중」). 실패해도 본 일은 계속한다. 직원에게 맡길 때는 그 직원 설명서의 같은 절을 따른다.
+  `curl -sL -m 20 -H 'Content-Type: application/json' --data "{\"action\":\"office_log_add\",\"staff\":\"cloud\",\"state\":\"시작\",\"text\":\"사진 읽고 확인표 만드는 중\"${HITTILE_APP_KEY:+,\"key\":\"$HITTILE_APP_KEY\"}}" 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec' || true`
 - 까망이도 같다: 카톡 확인 · 답장이 늦어지지 않게, 화면을 오래 잡는 일(프로그램 첫 제작 · 대량 조회)은 **짧게 끊어서** 하고 카톡 일을 먼저 한다.
 
 ## 주문 한 건 처리 순서 (대표님 11/20 — 클라우드가 전부 진행하는 것이 목표)

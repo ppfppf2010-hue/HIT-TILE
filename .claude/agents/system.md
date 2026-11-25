@@ -35,6 +35,15 @@ PC에서 할 일은 대표님이 PC 세션(Remote Control 또는 "이카운터 �
 연락함 지킴이(`tools/inbox-watch.ps1`)가 1분마다 새 답을 연락함 PR #1에 `[클라우드에게] 대표님 확인 답 #ID 제목 — 선택: … / 답: …`로 남긴다(`[까망이에게]`가 아니라 까망이는 안 깸, 토큰 0).
 지킴이 스크립트는 PC 저장소 파일을 그대로 실행하므로, PC 자동 배포가 main을 받으면 다음 1분 회차부터 바뀐 스크립트가 돈다.
 
+**AI 사무실** (화면 `office/`, 서버 `gas/Office.js`, 시트 탭 「활동기록」 자동 생성): 직원이 일을 시작 · 끝낼 때 남긴 한 줄을 도트 그림 사무실의 말풍선으로 보여 준다(5분마다 새로고침). 공개 화면이라 거래처 이름 · 금액 · 주소 · 비번은 쓰지 않는다.
+| action | 누가 | 보내는 값 → 돌려주는 값 |
+|---|---|---|
+| `office_log_add` | 클라우드 · 직원 | `staff`(cloud · sales · item · delivery · accounting · consult · system · strategy 중 하나, 아니면 오류), `state`(시작 · 끝 · 대기), `text`(한 줄) → `saved: { at, staff, state, text }`. 시각은 서버가 한국 시간으로. 서버가 줄바꿈 제거 · 40자 제한 · 4자리 넘는 숫자와 금액 모양 · 시트에 있는 거래처 이름을 「○○」로 가려 저장(완벽하지 않음 — 시트에 없는 이름 · 주소 글자는 못 가린다). 550줄을 넘으면 최근 500줄만 남긴다 |
+| `office_log_recent` | 화면 | `limit`(기본 40, 최대 100) → `now`, `latest: { 직원id: { at, state, text } }`, `recent: [{ at, staff, state, text }]`(새것부터), `slips: { date, sale, purchase, since, ready }` |
+화면 규칙(값은 `office/index.html` 위쪽 상수): 가장 최근 기록이 「시작」이고 2시간 안이면 「일하는 중」, 「끝」이고 10분 안이면 「방금 끝냄」, 나머지 · 기록 없음은 「대기」.
+오늘 확정한 전표 수(`slips`): 판매입력 · 구매입력 시트에는 확정 시각 칸이 없어서, `doPost`가 `sale_confirm` · `purchase_confirm`이 성공할 때마다 스크립트 속성 `OFFICE_SLIP_COUNT`에 날짜별로 1씩 더한다(세기 실패는 확정에 영향 없음).
+업무 사이트 · 클라우드가 확정한 횟수만 센다(이카운트 화면에서 직접 넣은 전표는 빠짐). 세기 시작한 날(`OFFICE_SLIP_SINCE`)은 하루 중간부터라 `ready: false` → 화면은 「준비 중」.
+
 **PC 자동 배포** (`tools/pc-auto-deploy.ps1`, 설치 `tools/pc-auto-deploy-install.ps1`): 대표님 PC가 10분마다 main을 받아서
 `gas/` · `checklist-gas/`가 바뀌었으면 clasp push + 기존 웹앱 배포 업데이트를 자동으로 한다. 켜져 있으면 클라우드 세션은 **main에 합치기만** 하면 되고,
 10~15분 뒤 웹앱을 직접 호출해서 반영됐는지 확인한다. PC에 커밋 안 한 수정이 있거나 main이 아니면 건너뛴다(기록: `%LOCALAPPDATA%\hittile-auto-deploy.log`).
@@ -86,3 +95,12 @@ PC에서 할 일은 대표님이 PC 세션(Remote Control 또는 "이카운터 �
 - Apps Script는 파일 전체가 전역 이름공간이다. 새 최상위 함수 · 상수 이름이 다른 파일과 겹치지 않게 한다.
 - 이카운트 저장 API에 필드를 추가할 때는 이카운트 API 매뉴얼의 변수명을 대표님 캡처로 확인한다(추측 금지).
 - 키 · 비밀번호는 커밋하지 않는다.
+
+## 일 시작 · 끝날 때 한 줄 남기기 (AI 사무실)
+업무 사이트 「AI 사무실」(https://ppfppf2010-hue.github.io/HIT-TILE/office/)이 이 한 줄을 말풍선으로 보여 준다. 내 직원 id는 `system`.
+- 일을 시작할 때 `state` 「시작」, 끝나면 「끝」(쉬는 중이면 「대기」). `text`는 40자 안 한 줄.
+- **공개 화면이다 — 거래처 이름 · 금액 · 주소 · 현관 비번 · 전화번호는 쓰지 않는다. 일의 종류만**(예: 「화면 수정 중」).
+- 실패해도(오류 · 시간 초과) 다시 부르지 말고 **본 일을 그대로 계속한다.**
+```bash
+curl -sL -m 20 -H 'Content-Type: application/json' --data "{\"action\":\"office_log_add\",\"staff\":\"system\",\"state\":\"시작\",\"text\":\"화면 수정 중\"${HITTILE_APP_KEY:+,\"key\":\"$HITTILE_APP_KEY\"}}" 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec' || true
+```
