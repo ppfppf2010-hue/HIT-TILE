@@ -161,6 +161,8 @@ function officeSlipBump_(stored, today, kind) {
 // (실패는 throw라서 안 온다). 세는 데 실패해도 확정 결과는 그대로 돌려준다.
 function officeSlipCounted_(kind, output) {
   try {
+    // 확정이 실패 응답(ok:false)으로 끝났으면 세지 않는다.
+    try { const o = JSON.parse(output.getContent()); if (o && o.ok === false) return output; } catch (e2) { /* 읽을 수 없으면 그대로 센다 */ }
     const lock = LockService.getScriptLock();
     if (lock.tryLock(5000)) {
       try {
