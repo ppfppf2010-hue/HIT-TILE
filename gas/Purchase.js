@@ -223,8 +223,42 @@
  }
  }
 
+ // ---- 확정 전 전표 날짜 검사 (2026-11-25 무진타일 구매 2026/12/12-1 — 명세서 날짜 오독으로 미래 날짜 전표가 이카운트에 들어감) ----
+ // 확인중 시트 A열(일자)이 오늘보다 미래이거나 오늘보다 30일 넘게 과거이면 문제 목록을 돌려준다.
+ // 시트가 숫자(20261212)나 날짜(Date)로 바꿔 둔 경우도 YYYYMMDD로 맞춰 비교한다. 문제가 없으면 빈 배열.
+ const VOUCHER_DATE_MAX_PAST_DAYS = 30;
+ function checkVoucherDates_(rows) {
+ const tz = 'Asia/Seoul';
+ const today = Utilities.formatDate(new Date(), tz, 'yyyyMMdd');
+ const todayMs = Date.UTC(+today.slice(0, 4), +today.slice(4, 6) - 1, +today.slice(6, 8));
+ const seen = {}, problems = [];
+ rows.forEach(function (r) {
+ const raw = r[0];
+ if (raw === '' || raw === null) return; // 빈 칸은 예전처럼 그대로 둔다
+ const ymd = raw instanceof Date ? Utilities.formatDate(raw, tz, 'yyyyMMdd') : normalizeDateYyyyMmDd(raw);
+ const key = ymd || String(raw);
+ if (seen[key]) return;
+ seen[key] = true;
+ if (!ymd) { problems.push({ date: String(raw), reason: '날짜 형식을 알 수 없음' }); return; }
+ const days = Math.round((Date.UTC(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8)) - todayMs) / 86400000);
+ if (days > 0) problems.push({ date: ymd, reason: '오늘(' + today + ')보다 ' + days + '일 미래' });
+ else if (-days > VOUCHER_DATE_MAX_PAST_DAYS) problems.push({ date: ymd, reason: '오늘(' + today + ')보다 ' + (-days) + '일 과거(' + VOUCHER_DATE_MAX_PAST_DAYS + '일 초과)' });
+ });
+ return problems;
+ }
+
+ // 날짜 문제가 있으면 확정을 막는 응답(ok:false + dateCheck)을 만든다. 정말 그 날짜가 맞으면 allowDate:true로 다시 부른다.
+ function voucherDateBlockResponse_(problems, sheetName) {
+ return jsonOut({
+ ok: false,
+ dateCheck: problems,
+ error: '전표 날짜를 확인해주세요 — ' + problems.map(function (p) { return p.date + ' (' + p.reason + ')'; }).join(', ') +
+ '. ' + sheetName + ' 시트 A열(일자)을 고친 뒤 다시 확정하세요. 그 날짜가 맞으면 allowDate:true로 다시 확정하면 됩니다.'
+ });
+ }
+
  // ---- "구매확인중" 시트 내용을 그대로 읽어와 "구매입력"에 확정 저장 ----
- function handlePurchaseConfirm() {
+ function handlePurchaseConfirm(body) {
  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
  const sheet = ss.getSheetByName(PURCHASE_REVIEW_SHEET);
  if (!sheet) throw new Error('구매확인중 시트를 찾을 수 없습니다.');
@@ -234,6 +268,10 @@
 
  const rows = data.slice(1).filter(function (r) { return String(r[10]).trim() !== ''; });
  if (!rows.length) throw new Error('구매확인중 시트에 저장할 품목이 없습니다.');
+
+ // 날짜가 미래 · 30일 넘게 과거면 아무것도 저장하기 전에 멈춘다(allowDate:true면 통과)
+ const dateProblems = checkVoucherDates_(rows);
+ if (dateProblems.length && !(body && body.allowDate)) return voucherDateBlockResponse_(dateProblems, PURCHASE_REVIEW_SHEET);
 
  // 원본(자동인식값) vs 수정본 비교 -> 교정사전에 자동 기록
  const corrections = [];
