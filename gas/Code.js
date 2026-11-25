@@ -114,6 +114,8 @@
  if (action === 'owner_check_close') return handleOwnerCheckClose(body);
  if (action === 'office_log_add') return handleOfficeLogAdd(body);
  if (action === 'office_log_recent') return handleOfficeLogRecent(body);
+ if (action === 'stock_list') return handleStockList(body);   // 가창 재고(Stock.js)
+ if (action === 'stock_adjust') return handleStockAdjust(body);
  throw new Error('알 수 없는 action: ' + action);
  } catch (err) {
  return jsonOut({ ok: false, error: err.message });

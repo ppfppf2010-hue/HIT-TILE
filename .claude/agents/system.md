@@ -40,6 +40,8 @@ PC에서 할 일은 대표님이 PC 세션(Remote Control 또는 "이카운터 �
 |---|---|---|
 | `office_log_add` | 클라우드 · 직원 | `staff`(cloud · sales · item · delivery · accounting · consult · system · strategy 중 하나, 아니면 오류), `state`(시작 · 끝 · 대기), `text`(한 줄) → `saved: { at, staff, state, text }`. 시각은 서버가 한국 시간으로. 서버가 줄바꿈 제거 · 40자 제한 · 4자리 넘는 숫자와 금액 모양 · 시트에 있는 거래처 이름을 「○○」로 가려 저장(완벽하지 않음 — 시트에 없는 이름 · 주소 글자는 못 가린다). 550줄을 넘으면 최근 500줄만 남긴다 |
 | `office_log_recent` | 화면 | `limit`(기본 40, 최대 100) → `now`, `latest: { 직원id: { at, state, text } }`, `recent: [{ at, staff, state, text }]`(새것부터), `slips: { date, sale, purchase, since, ready }` |
+| `stock_list` | 클라우드 | 가창 재고(`gas/Stock.js`, 탭 「가창재고」 자동 생성). `q?`(코드 · 품목명 · 규격 · 출처 · 메모 찾기), `includeZero?`(기본 0인 줄 뺌) → `items: [{ code, name, spec, qty, unit, inDate, source, memo, updatedAt }]` |
+| `stock_adjust` | 클라우드 | `items: [{ code?, name, spec?, qty(+/−), unit?, source?, memo?, inDate?, reason? }]`, `reason`(줄마다 또는 맨 위 — 없으면 오류), `dryRun` → `changes: [{ before, after, short, created … }]`. 한 줄이라도 틀리면 저장 안 함, 0 밑으로는 0 + `short`. 이력은 탭 「가창재고기록」 |
 화면 규칙(값은 `office/index.html` 위쪽 상수): 가장 최근 기록이 「시작」이고 2시간 안이면 「일하는 중」, 「끝」이고 10분 안이면 「방금 끝냄」, 나머지 · 기록 없음은 「대기」.
 오늘 확정한 전표 수(`slips`): 판매입력 · 구매입력 시트에는 확정 시각 칸이 없어서, `doPost`가 `sale_confirm` · `purchase_confirm`이 성공할 때마다 스크립트 속성 `OFFICE_SLIP_COUNT`에 날짜별로 1씩 더한다(세기 실패는 확정에 영향 없음).
 업무 사이트 · 클라우드가 확정한 횟수만 센다(이카운트 화면에서 직접 넣은 전표는 빠짐). 세기 시작한 날(`OFFICE_SLIP_SINCE`)은 하루 중간부터라 `ready: false` → 화면은 「준비 중」.
