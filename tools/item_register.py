@@ -11,12 +11,15 @@
       --spec GB-3000 --unit EA --price 25000 --margin 1.4    # 미리보기만 (저장 안 함)
   python3 tools/item_register.py add ... --yes                 # 실제 등록
   python3 tools/item_register.py rename VG00034 "타일IBIZA BEIGE 600*600 (이비자 베이지)" --yes
+  python3 tools/item_register.py rename VG00034 --release --yes     # 이름 고정 풀기(다음 대조 때 이카운트 이름으로)
   python3 tools/item_register.py price DSS00001 --out 120000         # 단가 수정 미리보기 (저장 안 함)
   python3 tools/item_register.py price DSS00001 --out 120000 --yes   # 실제 수정 (--in 입고단가도 가능)
   python3 tools/item_register.py price DSS00001 --release --yes      # 단가 고정 풀기(다음 대조 때 이카운트 값으로)
 
 price: 품목등록마스터 단가를 고치고 「단가 고정」을 걸어 1시간 이카운트 대조가 되돌리지 않게 한다(웹앱 item_price_update).
 이카운트 OAPI에 품목 수정 API가 없어서 이카운트 품목 기본 단가는 그대로다(웹앱 · 클라우드 판매 전표는 새 단가로 들어감).
+rename: 품목등록마스터 이름(B열)만 고치고 「이름 고정」을 걸어 1시간 대조가 되돌리지 않게 한다(웹앱 korean_name_set).
+이카운트는 부르지 않는다(수정 API가 없어 「이미 존재」 오류로 연속 오류 한도만 깎임) — 이카운트 화면 이름은 대표님이 품목등록에서 직접.
 
 --price 는 입고단가(부가세 포함)다. 부가세 별도 금액이면 --price-ex-vat 로 넣으면 1.1배 해서 넣는다.
 """
@@ -130,10 +133,34 @@ def cmd_add(args):
 
 
 def cmd_rename(args):
+    if not args.release and not args.name:
+        sys.exit('새 이름을 넣으세요. 이름 고정만 풀려면 --release')
+    item = {'code': args.code}
+    if args.release:
+        item['release'] = True
+    else:
+        item['name'] = args.name
     if not args.yes:
-        print(f"{args.code} → {args.name} (미리보기. 바꾸려면 --yes)")
+        what = '이름 고정 풀기' if args.release else f'→ {args.name}'
+        print(f"{args.code} {what} (미리보기. 바꾸려면 --yes)")
         return
-    print(json.dumps(call({'action': 'korean_name_set', 'items': [{'code': args.code, 'name': args.name}]}), ensure_ascii=False))
+    res = call({'action': 'korean_name_set', 'items': [item]})
+    if not res.get('ok'):
+        sys.exit('실패: ' + json.dumps(res, ensure_ascii=False))
+    bad = False
+    for r in res.get('results', []):
+        if not r.get('ok'):
+            bad = True
+            print(f"{r.get('code')} | 실패: {r.get('error')}")
+        elif r.get('held'):
+            print(f"{r.get('code')} | {r.get('before')} → {r.get('name')} (시트 이름 고정)")
+        else:
+            print(f"{r.get('code')} | {r.get('name')} (이름 고정 {'풀림' if r.get('released') else '없었음'})")
+    if res.get('ecountNameUnchanged'):
+        print('※ ' + (res.get('note') or '이카운트 품목명은 그대로예요. 이카운트 화면 이름은 대표님이 품목등록에서 직접 고쳐 주세요.'))
+        print('  이카운트: ' + ECOUNT_URL)
+    if bad:
+        sys.exit(1)
 
 
 def cmd_price(args):
@@ -180,7 +207,10 @@ def main():
     a.add_argument('--force', action='store_true')
     a.add_argument('--yes', action='store_true')
     a.set_defaults(fn=cmd_add)
-    r = sub.add_parser('rename'); r.add_argument('code'); r.add_argument('name'); r.add_argument('--yes', action='store_true'); r.set_defaults(fn=cmd_rename)
+    r = sub.add_parser('rename', help='품목명 수정(시트 이름 + 이름 고정, 이카운트 이름은 그대로)')
+    r.add_argument('code'); r.add_argument('name', nargs='?')
+    r.add_argument('--release', action='store_true', help='이름 고정 풀기')
+    r.add_argument('--yes', action='store_true'); r.set_defaults(fn=cmd_rename)
     pr = sub.add_parser('price', help='품목 단가(입고 · 출고) 수정')
     pr.add_argument('code')
     pr.add_argument('--in', dest='in_price', type=float, help='입고단가 (부가세 포함)')

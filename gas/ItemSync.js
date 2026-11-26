@@ -103,7 +103,9 @@ function runItemSyncAll() {
     const seenCodes = {};
     const priceHold = itemPriceHoldRead_(); // 웹앱으로 고친 단가(ItemPrice.js) — 이카운트 값으로 덮지 않는다
     const holdBefore = JSON.stringify(priceHold);
-    let heldCount = 0;
+    const nameHold = itemNameHoldRead_(); // 웹앱으로 고친 품목명(KoreanNames.js 「이름 고정」) — 이카운트 이름으로 덮지 않는다
+    const nameHoldBefore = JSON.stringify(nameHold);
+    let heldCount = 0, nameHeldCount = 0;
     let updated = 0, unchanged = 0, flagged = 0, repaired = 0, duplicates = 0;
     const dupLabel = function () { return '⚠ 중복 행 (같은 품목코드가 이미 있음) - 삭제 권장 (' + label + ')'; };
 
@@ -139,7 +141,8 @@ function runItemSyncAll() {
         if (value === null || value === undefined) return;
         if (Number(value) !== Number(row[idx])) { row[idx] = Number(value); changes.push(fieldName); }
       }
-      setStr(1, p.prodDes, '품목명');
+      const nameHeld = itemNameHoldDecide_(nameHold, code, p.prodDes) === 'keep';
+      if (!nameHeld) setStr(1, p.prodDes, '품목명');
       setStr(3, p.spec, '규격');
       if (String(row[3] || '').trim() && !String(row[2] || '').trim()) row[2] = '사이즈';
       setStr(6, p.unit, '단위');
@@ -150,14 +153,16 @@ function runItemSyncAll() {
       if (itemPriceHoldDecide_(priceHold, code, 'outPrice', p.outPrice) === 'keep') held.push('출고단가');
       else setNum(10, p.outPrice, '출고단가');
       setNum(11, normalizeVatFlag(p.outPriceVat), '출고VAT');
-      const heldNote = held.length ? ' · 웹앱 단가 고정 유지(이카운트와 다름): ' + held.join(', ') : '';
+      const heldNote = (nameHeld ? ' · 웹앱 이름 고정 유지(이카운트 이름: ' + String(p.prodDes || '').trim() + ')' : '') +
+        (held.length ? ' · 웹앱 단가 고정 유지(이카운트와 다름): ' + held.join(', ') : '');
       if (held.length) heldCount++;
+      if (nameHeld) nameHeldCount++;
 
       if (changes.length) {
         row[ITEM_STATUS_COL - 1] = '✎ 이카운트 기준으로 수정: ' + changes.join(', ') + heldNote + ' (' + label + ')';
         updated++;
       } else {
-        row[ITEM_STATUS_COL - 1] = (held.length ? '✓ 이카운트에 있음' : '✓ 이카운트 일치') + heldNote + ' (' + label + ')';
+        row[ITEM_STATUS_COL - 1] = (held.length || nameHeld ? '✓ 이카운트에 있음' : '✓ 이카운트 일치') + heldNote + ' (' + label + ')';
         unchanged++;
       }
     });
@@ -166,6 +171,7 @@ function runItemSyncAll() {
     if (data.length) sheet.getRange(2, 1, data.length, ITEM_STATUS_COL).setValues(data);
     // 이카운트가 고정값을 따라잡은 칸은 고정을 풀었다(itemPriceHoldDecide_) — 바뀌었을 때만 저장
     if (JSON.stringify(priceHold) !== holdBefore) itemPriceHoldWrite_(priceHold);
+    if (JSON.stringify(nameHold) !== nameHoldBefore) itemNameHoldWrite_(nameHold);
 
     // 품목등록마스터 정리: 이카운트에 두 번 연속 없던 행 + 같은 코드 중복 행을 시트에서만 지운다(이카운트는 건드리지 않음).
     const deleted = deleteMasterRowsByStatus_(sheet, [MISSING_DELETE_MARK, '⚠ 중복 행'], ecItems.length);
@@ -217,7 +223,7 @@ function runItemSyncAll() {
 
     const result = {
       ok: true, ecountItemCount: ecItems.length, updated: updated, unchanged: unchanged,
-      flagged: flagged, priceHeld: heldCount, added: newRows.length, repaired: repaired, duplicates: duplicates, deleted: deleted, bumpedPrefixes: bumpedPrefixes
+      flagged: flagged, priceHeld: heldCount, nameHeld: nameHeldCount, added: newRows.length, repaired: repaired, duplicates: duplicates, deleted: deleted, bumpedPrefixes: bumpedPrefixes
     };
     Logger.log(JSON.stringify(result));
     return result;
@@ -299,6 +305,19 @@ function onMasterSheetEdit(e) {
     if (touched) itemPriceHoldWrite_(hold);
   } catch (err) {
     Logger.log('단가 고정 갱신 실패: ' + err.message);
+  }
+  // 웹앱으로 이름을 고정한 품목(KoreanNames.js)을 사람이 시트에서 다시 고쳤으면 고정 이름도 새 시트 값으로 맞춘다.
+  try {
+    const nameHold = itemNameHoldRead_();
+    let nameTouched = false;
+    rows.forEach(function (r) {
+      const code = String(r[0] || '').trim();
+      const nm = String(r[1] || '').trim();
+      if (code && nm && Object.prototype.hasOwnProperty.call(nameHold, code) && nameHold[code] !== nm) { nameHold[code] = nm; nameTouched = true; }
+    });
+    if (nameTouched) itemNameHoldWrite_(nameHold);
+  } catch (err) {
+    Logger.log('이름 고정 갱신 실패: ' + err.message);
   }
 }
 

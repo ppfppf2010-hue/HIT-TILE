@@ -6,12 +6,22 @@
  *    한글이 없는 품목을 골라 Claude로 한글명을 만들고 "한글명검토" 탭에 적는다.
  *    이미 탭에 있는 품목은 다시 번역하지 않는다(사람이 고친 한글명을 지키기 위함).
  * 2) 사람이 "한글명검토" 탭의 한글명을 확인/수정한다.
- * 3) action="korean_name_apply" : 탭의 한글명으로 이카운트(/register-item, SaveBasicProduct)와
- *    품목등록마스터 품목명을 "영문명 (한글명)"으로 바꾼다. 실행시간 제한 때문에 limit개씩 끊어서 처리하고,
+ * 3) action="korean_name_apply" : 탭의 한글명으로 품목등록마스터 품목명을 "영문명 (한글명)"으로 바꾸고 이름 고정을 건다
+ *    (이카운트 품목명은 못 바꾼다 — 아래 「이름 고정」). 실행시간 제한 때문에 limit개씩 끊어서 처리하고,
  *    끝난 줄은 상태 칸에 "완료"를 남겨 다시 호출하면 남은 것부터 이어 간다.
  * 4) 자동: runKoreanNameAuto를 1시간마다 실행(action="setup_korean_name_auto"로 트리거 등록).
  *    새 영문 품목은 1)로 한글명을 만들고 3)으로 바로 적용한다. 한글명 칸이 비었거나 한글이 없는 줄은 건너뛰므로,
  *    모델번호만 있는 품목은 사람이 "한글명검토" 탭에 이름을 적어 두면 다음 실행 때 적용된다.
+ *
+ * ===== 이름 고정(ITEM_NAME_HOLD, 2026-11-26) =====
+ *   이카운트 OAPI에는 품목 「수정」 API가 없다. 저장(SaveBasicProduct)은 등록 전용이라 이미 있는 코드는 「이미 존재」 오류만 나고
+ *   이카운트 이름은 안 바뀐다 — 그 오류는 이카운트 시간당 연속 오류 30건 한도도 깎는다(11/26 한도 초과 사고).
+ *   그런데 1시간 대조(runItemSyncAll)는 이카운트 이름으로 B열을 덮어써서, 웹앱으로 바꾼 이름이 1시간 뒤 전부 옛 이름으로 돌아갔다.
+ *   그래서 korean_name_set · korean_name_apply는 이카운트를 부르지 않고 시트 B열만 고친 뒤
+ *   스크립트 속성 ITEM_NAME_HOLD에 {코드: 이름}을 남긴다(「이름 고정」 — 단가 고정 ItemPrice.js와 같은 방식).
+ *   runItemSyncAll은 고정된 코드의 품목명을 덮지 않고, 이카운트 이름이 고정 이름과 같아지면(대표님이 이카운트 화면에서 고치면) 고정을 스스로 푼다.
+ *   이카운트 화면의 품목명은 대표님이 이카운트 품목등록에서 직접 고친다. 고정 목록: action item_name_holds.
+ *   속성 한 칸은 9KB까지라 이름이 많으면 ITEM_NAME_HOLD, ITEM_NAME_HOLD_2, … 로 나눠 저장한다.
  */
 
 const KO_REVIEW_SHEET = '한글명검토';
@@ -20,6 +30,56 @@ const KO_BATCH = 60;
 const HANGUL_RE = /[가-힣]/;
 // 이미 끝에 "(한글)"이 붙은 이름 — 예: "타일IBIZA GREY (이비자 그레이)"
 const KO_SUFFIX_RE = /\([^)]*[가-힣][^)]*\)\s*$/;
+
+const ITEM_NAME_HOLD_PROP = 'ITEM_NAME_HOLD';
+const ITEM_NAME_HOLD_CHUNK = 2500; // 글자 수 — 한글 3바이트여도 9KB 한도 안쪽
+const ITEM_NAME_ECOUNT_NOTE = '이카운트 OAPI에 품목 수정 API가 없어 이카운트 품목명은 그대로예요. 시트 이름을 고정해서 1시간 대조가 되돌리지 않습니다. ' +
+  '이카운트 화면 이름은 대표님이 이카운트 품목등록에서 직접 고쳐 주세요(같아지면 고정은 스스로 풀림).';
+
+// { 코드: 이름 }
+function itemNameHoldRead_() {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    let raw = props.getProperty(ITEM_NAME_HOLD_PROP) || '';
+    for (let i = 2; raw; i++) {
+      const more = props.getProperty(ITEM_NAME_HOLD_PROP + '_' + i);
+      if (!more) break;
+      raw += more;
+    }
+    const obj = raw ? JSON.parse(raw) : {};
+    return obj && typeof obj === 'object' ? obj : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function itemNameHoldWrite_(hold) {
+  const props = PropertiesService.getScriptProperties();
+  const raw = Object.keys(hold).length ? JSON.stringify(hold) : '';
+  const parts = [];
+  for (let i = 0; i < raw.length; i += ITEM_NAME_HOLD_CHUNK) parts.push(raw.slice(i, i + ITEM_NAME_HOLD_CHUNK));
+  if (parts.length) props.setProperty(ITEM_NAME_HOLD_PROP, parts[0]);
+  else props.deleteProperty(ITEM_NAME_HOLD_PROP);
+  for (let i = 1; i < parts.length; i++) props.setProperty(ITEM_NAME_HOLD_PROP + '_' + (i + 1), parts[i]);
+  // 줄어든 만큼 뒤쪽 조각을 지운다
+  for (let i = Math.max(parts.length, 1) + 1; props.getProperty(ITEM_NAME_HOLD_PROP + '_' + i) !== null; i++) {
+    props.deleteProperty(ITEM_NAME_HOLD_PROP + '_' + i);
+  }
+}
+
+// 순수 함수(시험용): 대조 때 품목명을 이카운트 이름으로 덮을지. hold는 그 자리에서 바뀐다.
+//   → 'sync'(평소대로) | 'keep'(고정 — 덮지 않음) | 'caught'(이카운트 이름이 고정 이름과 같아짐 — 고정 풀고 평소대로)
+function itemNameHoldDecide_(hold, code, ecountName) {
+  if (!hold || !Object.prototype.hasOwnProperty.call(hold, code)) return 'sync';
+  const want = String(hold[code] || '').trim();
+  if (!want) { delete hold[code]; return 'sync'; }
+  if (String(ecountName || '').trim() === want) { delete hold[code]; return 'caught'; }
+  return 'keep';
+}
+
+function handleItemNameHolds() {
+  return jsonOut({ ok: true, holds: itemNameHoldRead_() });
+}
 
 function koTargetRows_(masterData, keyword, prefix) {
   return masterData.slice(1).filter(function (r) {
@@ -136,8 +196,6 @@ function translateNamesWithClaude_(items) {
 function handleKoreanNameApply(body) {
   const limit = Math.max(1, Math.min(Number(body && body.limit) || 40, 80));
   const onlyCode = body && body.code ? String(body.code).trim() : '';
-  // 이카운트는 연달아 호출하면 HTML 오류 페이지를 돌려준다 → 호출 사이를 띄우고, 그 오류면 한 번 더 기다렸다 재시도
-  const delayMs = Math.max(0, Number(body && body.delayMs) || 12000);
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName(KO_REVIEW_SHEET);
   if (!sheet || sheet.getLastRow() < 2) return jsonOut({ ok: false, error: '한글명검토 탭이 비어 있습니다. 먼저 korean_name_preview를 실행하세요.' });
@@ -149,6 +207,8 @@ function handleKoreanNameApply(body) {
 
   const review = sheet.getRange(2, 1, sheet.getLastRow() - 1, KO_HEADERS.length).getValues();
   const results = [];
+  const nameHold = itemNameHoldRead_();
+  let holdTouched = false;
   let processed = 0;
   for (let i = 0; i < review.length && processed < limit; i++) {
     const code = String(review[i][0]).trim();
@@ -166,27 +226,23 @@ function handleKoreanNameApply(body) {
     if (KO_SUFFIX_RE.test(current)) { statusCell.setValue('완료(이미 한글 병기)'); results.push({ code: code, ok: true, skipped: true }); continue; }
 
     const newName = current + ' (' + ko + ')';
-    const item = { code: code, name: newName, spec: m[3], unit: m[6], inPrice: m[4], inVat: m[5], outPrice: m[10], outVat: m[11] };
-    if (processed > 1) Utilities.sleep(delayMs);
-    let res = ecountSyncItem(item, m[12]);
-    if (res && !res.ok && /DOCTYPE|JSON/.test(String(res.error || ''))) {
-      Utilities.sleep(10000);
-      res = ecountSyncItem(item, m[12]);
-    }
-    if (res && res.ok) {
+    // 이카운트는 부르지 않는다(이미 있는 품목은 「이미 존재」 오류만 나고 연속 오류 한도를 깎음) — 시트 이름 + 이름 고정
+    try {
       masterSheet.getRange(masterRow, 2).setValue(newName);
-      statusCell.setValue('완료 ' + Utilities.formatDate(new Date(), 'Asia/Seoul', 'MM-dd HH:mm'));
-      results.push({ code: code, ok: true, name: newName });
-    } else {
-      const err = (res && (res.error || res.rawBody)) || '알 수 없는 오류';
+      nameHold[code] = newName;
+      holdTouched = true;
+      statusCell.setValue('완료 ' + Utilities.formatDate(new Date(), 'Asia/Seoul', 'MM-dd HH:mm') + ' (시트 이름 고정 · 이카운트 이름은 그대로)');
+      results.push({ code: code, ok: true, name: newName, held: true });
+    } catch (err) {
       statusCell.setValue('실패: ' + String(err).slice(0, 200));
-      results.push({ code: code, ok: false, error: err, ecount: res && res.ecount });
+      results.push({ code: code, ok: false, error: String(err) });
     }
   }
+  if (holdTouched) itemNameHoldWrite_(nameHold);
 
   const remaining = sheet.getRange(2, 1, sheet.getLastRow() - 1, KO_HEADERS.length).getValues()
     .filter(function (r) { return r[0] && HANGUL_RE.test(String(r[3])) && String(r[5]).indexOf('완료') !== 0; }).length;
-  return jsonOut({ ok: true, processed: processed, remaining: remaining, results: results });
+  return jsonOut({ ok: true, processed: processed, remaining: remaining, results: results, ecountNameUnchanged: true, note: ITEM_NAME_ECOUNT_NOTE });
 }
 
 // 이카운트에 실제로 저장된 품목 정보 확인 (적용 전후 비교용)
@@ -195,22 +251,42 @@ function handleKoreanNameCheck(body) {
   return jsonOut({ ok: true, items: codes.map(function (c) { return { code: c, ecount: ecountRelayCall('/list-items', { prodCd: c }) }; }) });
 }
 
-// 품목명을 통째로 지정해서 바꾼다 (예: "(무광)"을 빼고 한글명으로 바꾸는 경우) — body.items = [{code, name}]
+// 품목명을 통째로 지정해서 바꾼다 (예: "(무광)"을 빼고 한글명으로 바꾸는 경우) — body.items = [{code, name} 또는 {code, release:true}]
+// 이카운트는 부르지 않는다 — 품목 수정 API가 없어 이름이 안 바뀌고 「이미 존재」 오류로 연속 오류 한도만 깎인다(위 「이름 고정」).
+// 시트 B열을 고치고 이름 고정을 건다. release:true → 시트는 그대로 두고 고정만 푼다(다음 대조 때 이카운트 이름으로 돌아감).
 function handleKoreanNameSet(body) {
-  const delayMs = Math.max(0, Number(body && body.delayMs) || 12000);
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const masterSheet = ss.getSheetByName(MASTER_SHEET);
-  const masterData = masterSheet.getDataRange().getValues();
-  const results = ((body && body.items) || []).map(function (it, i) {
-    const idx = masterData.findIndex(function (r) { return String(r[0]).trim() === String(it.code).trim(); });
-    if (idx < 1 || !it.name) return { code: it.code, ok: false, error: '코드 없음 또는 이름 없음' };
-    const m = masterData[idx];
-    if (i > 0) Utilities.sleep(delayMs);
-    const res = ecountSyncItem({ code: it.code, name: it.name, spec: m[3], unit: m[6], inPrice: m[4], inVat: m[5], outPrice: m[10], outVat: m[11] }, m[12]);
-    if (res && res.ok) masterSheet.getRange(idx + 1, 2).setValue(it.name);
-    return { code: it.code, ok: !!(res && res.ok), name: it.name, error: res && res.error };
-  });
-  return jsonOut({ ok: true, results: results });
+  const list = (body && body.items) || [];
+  const lock = LockService.getScriptLock(); // 1시간 대조(runItemSyncAll)가 옛 값으로 되써 버리지 않게 같은 잠금
+  if (!lock.tryLock(30000)) throw new Error('다른 품목 작업(대조 등)이 진행 중이에요. 잠시 후 다시 시도해주세요.');
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const masterSheet = ss.getSheetByName(MASTER_SHEET);
+    const masterData = masterSheet.getDataRange().getValues();
+    const hold = itemNameHoldRead_();
+    const label = nowLabel();
+    const results = list.map(function (it) {
+      const code = String((it && it.code) || '').trim();
+      const name = String((it && it.name) || '').trim();
+      const idx = masterData.findIndex(function (r, i) { return i > 0 && String(r[0]).trim() === code; });
+      if (idx < 1) return { code: code, ok: false, error: '품목등록마스터에 없는 코드예요.' };
+      const before = String(masterData[idx][1] || '').trim();
+      if (it.release === true) {
+        const had = Object.prototype.hasOwnProperty.call(hold, code);
+        delete hold[code];
+        return { code: code, ok: true, name: before, released: had };
+      }
+      if (!name) return { code: code, ok: false, error: '이름(name)이 없어요.' };
+      masterSheet.getRange(idx + 1, 2).setValue(name);
+      masterSheet.getRange(idx + 1, ITEM_STATUS_COL).setValue('✎ 웹앱 이름 수정: ' + before + ' → ' + name + ' · 이카운트 품목명은 그대로(이름 고정) (' + label + ')');
+      masterData[idx][1] = name;
+      hold[code] = name;
+      return { code: code, ok: true, before: before, name: name, held: true };
+    });
+    itemNameHoldWrite_(hold);
+    return jsonOut({ ok: true, results: results, ecountNameUnchanged: true, note: ITEM_NAME_ECOUNT_NOTE });
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // 한글명을 사람이 정해야 하는 품목(모델번호만 있는 타일 등)을 한글명 칸을 비운 채 탭에 올려 둔다 — body.items = [{code, status}]
