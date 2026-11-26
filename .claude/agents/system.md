@@ -17,7 +17,7 @@ tools: Bash, Read, Grep, Glob, Edit, Write
 PC에서 할 일은 대표님이 PC 세션(Remote Control 또는 "이카운터 연동 작업")에 붙여 넣을 수 있게 **한 덩어리 문장**으로 만들어 준다.
 
 **연락함 지킴이** (`tools/inbox-watch.ps1`, 설치 `tools/inbox-watch-install.ps1`): 대표님 PC 작업 스케줄러 "HitTile InboxWatch"가 **1분마다**
-비공개 연락함 PR(열린 것 중 head 브랜치가 `inbox`로 시작하는 가장 큰 번호 — 매주 새 PR, 대표님 11/26)을 `gh`로 확인만 하고(토큰 0), `[까망이에게]` 새 요청이 있을 때만 `claude -p`로 까망이를 실행한다.
+비공개 연락함 PR(열린 것 중 head 브랜치가 `inbox`로 시작하는 가장 큰 번호 — 인수인계 때마다 새 PR, 대표님 11/26)을 `gh`로 확인만 하고(토큰 0), `[까망이에게]` 새 요청이 있을 때만 `claude -p`로 까망이를 실행한다.
 `명세서캡처` · `최근전표` 같은 바로 실행 명령은 Claude 없이 PC 프로그램을 바로 돌린다.
 처리한 요청 ID는 `%LOCALAPPDATA%\hittile-inbox-dispatched.txt`에 기록해 두 번 하지 않는다. 기록: `%LOCALAPPDATA%\hittile-inbox-watch.log`.
 무인 로그인: `claude setup-token`으로 만든 토큰을 대표님이 `tools/inbox-watch-set-token.ps1`로 저장 → `%LOCALAPPDATA%\hittile-claude-token.dat`(DPAPI 암호화).
