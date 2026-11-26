@@ -17,7 +17,7 @@ tools: Bash, Read, Grep, Glob, Edit, Write
 PC에서 할 일은 대표님이 PC 세션(Remote Control 또는 "이카운터 연동 작업")에 붙여 넣을 수 있게 **한 덩어리 문장**으로 만들어 준다.
 
 **연락함 지킴이** (`tools/inbox-watch.ps1`, 설치 `tools/inbox-watch-install.ps1`): 대표님 PC 작업 스케줄러 "HitTile InboxWatch"가 **1분마다**
-비공개 연락함 PR #1을 `gh`로 확인만 하고(토큰 0), `[까망이에게]` 새 요청이 있을 때만 `claude -p`로 까망이를 실행한다.
+비공개 연락함 PR(열린 것 중 head 브랜치가 `inbox`로 시작하는 가장 큰 번호 — 매주 새 PR, 대표님 11/26)을 `gh`로 확인만 하고(토큰 0), `[까망이에게]` 새 요청이 있을 때만 `claude -p`로 까망이를 실행한다.
 `명세서캡처` · `최근전표` 같은 바로 실행 명령은 Claude 없이 PC 프로그램을 바로 돌린다.
 처리한 요청 ID는 `%LOCALAPPDATA%\hittile-inbox-dispatched.txt`에 기록해 두 번 하지 않는다. 기록: `%LOCALAPPDATA%\hittile-inbox-watch.log`.
 무인 로그인: `claude setup-token`으로 만든 토큰을 대표님이 `tools/inbox-watch-set-token.ps1`로 저장 → `%LOCALAPPDATA%\hittile-claude-token.dat`(DPAPI 암호화).
@@ -43,7 +43,7 @@ PC에서 할 일은 대표님이 PC 세션(Remote Control 또는 "이카운터 �
 | `owner_check_pending_notify` | PC 지킴이 | `settleSec`(기본 90): 완료 체크된 것은 바로, 아니면 마지막 저장 후 90초 지난 것 |
 | `owner_check_mark_notified` | PC 지킴이 | `items: [{ id, answeredAt }]` — 그 사이 새 답이 오면 표시 안 함(다음 회차에 다시 알림) |
 | `owner_check_close` | 클라우드 | `id, memo` — 완료 + 「클라우드처리」 메모 |
-연락함 지킴이(`tools/inbox-watch.ps1`)가 1분마다 새 답을 연락함 PR #1에 `[클라우드에게] 대표님 확인 답 #ID 제목 — 선택: … / 답: …`로 남긴다(`[까망이에게]`가 아니라 까망이는 안 깸, 토큰 0).
+연락함 지킴이(`tools/inbox-watch.ps1`)가 1분마다 새 답을 연락함 PR에 `[클라우드에게] 대표님 확인 답 #ID 제목 — 선택: … / 답: …`로 남긴다(`[까망이에게]`가 아니라 까망이는 안 깸, 토큰 0).
 지킴이 스크립트는 PC 저장소 파일을 그대로 실행하므로, PC 자동 배포가 main을 받으면 다음 1분 회차부터 바뀐 스크립트가 돈다.
 
 **AI 사무실** (화면 `office/`, 서버 `gas/Office.js`, 시트 탭 「활동기록」 자동 생성): 직원이 일을 시작 · 끝낼 때 남긴 한 줄을 도트 그림 사무실의 말풍선으로 보여 준다(5분마다 새로고침). 공개 화면이라 거래처 이름 · 금액 · 주소 · 비번은 쓰지 않는다.
@@ -64,7 +64,7 @@ PC에서 할 일은 대표님이 PC 세션(Remote Control 또는 "이카운터 �
 중계서버(ecount-relay/)는 자동 배포 대상이 아니다.
 
 **신호 지킴이** (`tools/signal_watch.py`, 실행기 `tools/signal-watch.ps1`, 설치 `tools/signal-watch-install.ps1`, 대표님 11/26 「일이 생겼을 때만 클라우드를 깨우기」): 집 PC 작업 스케줄러 "HitTile SignalWatch"가 **10분마다** 한 번 돌고 끝난다(Claude 안 씀, 토큰 0).
-아래 신호가 있으면 연락함 PR #1에 `[클라우드에게] 신호 n건 …` 댓글 **하나**(표로 묶음, 끝에 `(신호 지킴이 · 프로그램 자동 글 · 토큰 0)`)를 남겨 창구 세션을 깨운다. `[까망이에게]`가 아니라 까망이 · 작업 담당은 안 깬다.
+아래 신호가 있으면 연락함 PR에 `[클라우드에게] 신호 n건 …` 댓글 **하나**(표로 묶음, 끝에 `(신호 지킴이 · 프로그램 자동 글 · 토큰 0)`)를 남겨 창구 세션을 깨운다. `[까망이에게]`가 아니라 까망이 · 작업 담당은 안 깬다.
 | 신호 | 조건 | 상수(`signal_watch.py` 위쪽) | 같은 신호 다시 알림 |
 |---|---|---|---|
 | A 보류 · 오류 묵음 | 댓글 맨 앞이 `[까망이 보류/오류 #ID]` · `[작업담당 보류/오류 #ID]`이고 2시간 지났는데, 그 뒤에 그 ID나 그 댓글 ID를 적은 `[까망이에게]` · `[작업담당에게]` · `[클라우드 확인 #ID]` · `[클라우드 처리 #ID]` 글도 `[완료 #ID]`도 없음. **영업시간 안에서만 알림** | `A_HOLD_HOURS` `B_OPEN` `B_CLOSE` `B_DAYS` | 댓글마다 한 번 |

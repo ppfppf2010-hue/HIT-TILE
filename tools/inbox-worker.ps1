@@ -11,7 +11,13 @@ param([string]$Ids = '')
 $ErrorActionPreference = 'Continue'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $Repo    = 'ppfppf2010-hue/hittile-inbox'
-$Pr      = 1
+# 연락함 PR 번호: 주마다 새 PR을 연다(대표님 11/26) → 지금 열린 PR 중 head 브랜치가 inbox로 시작하는 가장 큰 번호. 못 찾으면 1.
+$Pr = 1
+try {
+  $prs = (gh pr list -R $Repo --state open --json number,headRefName --limit 50 2>$null) -join "`n" | ConvertFrom-Json
+  $cand = @($prs | Where-Object { $_.headRefName -like 'inbox*' } | Sort-Object number -Descending)
+  if ($cand.Count -gt 0) { $Pr = [int]$cand[0].number }
+} catch { }
 $Work    = Split-Path -Parent $PSScriptRoot      # HIT-TILE 저장소 폴더
 $Log     = Join-Path $env:LOCALAPPDATA 'hittile-inbox-watch.log'
 $WLock   = Join-Path $env:LOCALAPPDATA 'hittile-inbox-worker.lock'

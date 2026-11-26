@@ -1,5 +1,5 @@
 ﻿# 히트타일 연락함 지킴이 (토큰 0)
-# 1분마다(11/19부터, 예전 5분) 비공개 연락함(ppfppf2010-hue/hittile-inbox PR #1)을 gh로 확인만 한다. Claude는 부르지 않는다.
+# 1분마다(11/19부터, 예전 5분) 비공개 연락함(ppfppf2010-hue/hittile-inbox, 지금 열린 연락함 PR — 주마다 새로)을 gh로 확인만 한다. Claude는 부르지 않는다.
 # "[까망이에게]"(예전 "[까망에게]"도 받음)로 시작하는 새 요청이 있을 때만 까망(Claude Code)을 한 번 실행해서 처리시킨다.
 # "[작업담당에게]"로 시작하는 새 요청은 화면을 안 쓰는 작업 담당 일꾼(tools/inbox-worker.ps1)을 따로 띄운다(11/26, 카톡 담당과 동시에).
 # 설치: tools/inbox-watch-install.ps1   기록: %LOCALAPPDATA%\hittile-inbox-watch.log
@@ -14,7 +14,13 @@
 $ErrorActionPreference = 'Continue'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $Repo   = 'ppfppf2010-hue/hittile-inbox'
-$Pr     = 1
+# 연락함 PR 번호: 주마다 새 PR을 연다(대표님 11/26) → 지금 열린 PR 중 head 브랜치가 inbox로 시작하는 가장 큰 번호. 못 찾으면 1.
+$Pr = 1
+try {
+  $prs = (gh pr list -R $Repo --state open --json number,headRefName --limit 50 2>$null) -join "`n" | ConvertFrom-Json
+  $cand = @($prs | Where-Object { $_.headRefName -like 'inbox*' } | Sort-Object number -Descending)
+  if ($cand.Count -gt 0) { $Pr = [int]$cand[0].number }
+} catch { }
 $Work   = Split-Path -Parent $PSScriptRoot      # HIT-TILE 저장소 폴더 (까망이 일하는 곳)
 $Log    = Join-Path $env:LOCALAPPDATA 'hittile-inbox-watch.log'
 $State  = Join-Path $env:LOCALAPPDATA 'hittile-inbox-dispatched.txt'

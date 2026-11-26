@@ -558,6 +558,25 @@ class TestCommon(Base):
         self.assertFalse(os.path.exists(seen['cmd'][-1]))                             # 임시 파일 지움
 
 
+class TestResolvePr(unittest.TestCase):
+    """연락함은 주마다 새 PR — auto 면 열린 PR 중 head 가 inbox 로 시작하는 가장 큰 번호."""
+    def run_with(self, stdout, rc=0, which='gh'):
+        fake = mock.Mock(returncode=rc, stdout=stdout.encode('utf-8'), stderr=b'')
+        with mock.patch.object(sw.shutil, 'which', return_value=which), \
+                mock.patch.object(sw.subprocess, 'run', return_value=fake):
+            return sw.resolve_inbox_pr('a/b', 'auto')
+
+    def test_picks_newest_inbox(self):
+        rows = '[{"number":1,"headRefName":"inbox"},{"number":7,"headRefName":"inbox-2026-11-26"},{"number":9,"headRefName":"claude/x"}]'
+        self.assertEqual(self.run_with(rows), '7')
+
+    def test_fallbacks(self):
+        self.assertEqual(self.run_with('[]'), '1')
+        self.assertEqual(self.run_with('', rc=1), '1')
+        self.assertEqual(self.run_with('[]', which=None), '1')
+        self.assertEqual(sw.resolve_inbox_pr('a/b', '5'), '5')
+
+
 if __name__ == '__main__':
     unittest.main()
 

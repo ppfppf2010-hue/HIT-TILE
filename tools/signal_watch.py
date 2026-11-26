@@ -32,7 +32,9 @@ from datetime import datetime, timedelta, timezone, time as dtime
 
 # ───────────────────────── 값은 여기 한 곳에서 바꾼다 ─────────────────────────
 REPO = 'ppfppf2010-hue/hittile-inbox'   # tools/inbox-watch.ps1 과 같은 값 (--repo 로 바꿀 수 있음)
-PR = 1                                  # (--pr)
+PR = 'auto'                             # (--pr) auto = 지금 열린 연락함 PR(head 브랜치가 inbox로 시작, 번호 큰 것). 못 찾으면 PR_FALLBACK
+PR_FALLBACK = 1
+INBOX_HEAD_PREFIX = 'inbox'             # 연락함 PR head 브랜치 이름 앞부분(주마다 새 PR: inbox-YYYY-MM-DD)
 KST = timezone(timedelta(hours=9))      # 한국 시간 고정(Windows에 tzdata가 없어도 되게 zoneinfo를 안 씀)
 
 COMMENTS_LOOKBACK_HOURS = 48    # 댓글은 최근 이만큼만 읽는다(gh api ...?since=)
@@ -527,6 +529,24 @@ def collect(comments, now, args, all_hours=False):
     return sigs
 
 
+
+def resolve_inbox_pr(repo, pr):
+    """--pr 이 숫자면 그대로, auto 면 지금 열린 연락함 PR 번호(head 브랜치가 inbox로 시작하는 것 중 가장 큰 번호)."""
+    if str(pr).isdigit():
+        return str(pr)
+    if not shutil.which('gh'):
+        return str(PR_FALLBACK)
+    try:
+        r = subprocess.run(['gh', 'pr', 'list', '-R', repo, '--state', 'open', '--json', 'number,headRefName', '--limit', '50'],
+                           capture_output=True, timeout=60)
+        rows = json.loads(r.stdout.decode('utf-8', 'replace') or '[]') if r.returncode == 0 else []
+        nums = [int(x['number']) for x in rows if str(x.get('headRefName', '')).startswith(INBOX_HEAD_PREFIX)]
+        if nums:
+            return str(max(nums))
+    except Exception:   # gh 실패 · 시험 등 — 예전 번호로
+        pass
+    return str(PR_FALLBACK)
+
 def parse_args(argv=None):
     p = argparse.ArgumentParser(description='히트타일 신호 지킴이 (토큰 0)')
     p.add_argument('--repo', default=REPO)
@@ -590,6 +610,8 @@ def main(argv=None):
         return 0
 
     # 댓글 읽기. 실패해도 C · D · E 는 PC 파일만 보므로 계속하고, 끝에 0이 아닌 코드로 끝낸다.
+    if not args.comments_file:
+        args.pr = resolve_inbox_pr(args.repo, args.pr)
     comments, read_error = None, None
     try:
         if args.comments_file:
