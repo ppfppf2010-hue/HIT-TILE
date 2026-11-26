@@ -63,6 +63,23 @@ PC에서 할 일은 대표님이 PC 세션(Remote Control 또는 "이카운터 �
 10~15분 뒤 웹앱을 직접 호출해서 반영됐는지 확인한다. PC에 커밋 안 한 수정이 있거나 main이 아니면 건너뛴다(기록: `%LOCALAPPDATA%\hittile-auto-deploy.log`).
 중계서버(ecount-relay/)는 자동 배포 대상이 아니다.
 
+**신호 지킴이** (`tools/signal_watch.py`, 실행기 `tools/signal-watch.ps1`, 설치 `tools/signal-watch-install.ps1`, 대표님 11/26 「일이 생겼을 때만 클라우드를 깨우기」): 집 PC 작업 스케줄러 "HitTile SignalWatch"가 **10분마다** 한 번 돌고 끝난다(Claude 안 씀, 토큰 0).
+아래 신호가 있으면 연락함 PR #1에 `[클라우드에게] 신호 n건 …` 댓글 **하나**(표로 묶음, 끝에 `(신호 지킴이 · 프로그램 자동 글 · 토큰 0)`)를 남겨 창구 세션을 깨운다. `[까망이에게]`가 아니라 까망이 · 작업 담당은 안 깬다.
+| 신호 | 조건 | 상수(`signal_watch.py` 위쪽) | 같은 신호 다시 알림 |
+|---|---|---|---|
+| A 보류 · 오류 묵음 | 댓글 맨 앞이 `[까망이 보류/오류 #ID]` · `[작업담당 보류/오류 #ID]`이고 2시간 지났는데, 그 뒤에 그 ID나 그 댓글 ID를 적은 `[까망이에게]` · `[작업담당에게]` 글도 `[완료 #ID]`도 없음 | `A_HOLD_HOURS` | 댓글마다 한 번 |
+| B 클라우드 요청 묵음 | `[클라우드에게] 일 요청` · `[클라우드에게] 질문` 뒤 영업시간(월~토 08:00~19:00)으로 30분 동안, 그 댓글 ID(질문은 `#ID`도)를 적은 `[까망이에게]` · `[작업담당에게]` 글이 없음. `[클라우드에게] 신호` · `대표님 확인 답`은 대상 아님 | `B_WAIT_MIN` `B_OPEN` `B_CLOSE` `B_DAYS` | 댓글마다 한 번 |
+| C 지킴이 멈춤 · 오류 몰림 | 기록 파일의 최근 30분 「실패」 · 「오류」 줄이 5개 이상. 멈춤: 카톡 지킴이는 마지막 줄이 15분 넘게 오래됨, **연락함 지킴이는 일이 없으면 기록을 안 남기므로** 마지막 줄이 15분 넘게 오래되고 **15분 넘게 아무 답 없는 `[까망이에게]` · `[작업담당에게]` 요청이 있을 때만** | `C_STALE_MIN` `C_ERR_WINDOW_MIN` `C_ERR_COUNT` `C_ERR_AGAIN_HOURS` | 멈춤은 마지막 기록 시각마다 한 번, 오류 몰림은 3시간 뒤 |
+| D 최근전표 안 올라옴 | 연락함 로컬 복사본 `자료/최근전표/판매.csv` 수정 시각이 평일 09:00~18:30 안에서 센 시간으로 2시간 넘게 그대로 | `D_STALE_HOURS` `D_OPEN` `D_CLOSE` | 하루 한 번 |
+| E 낮까지 판매 전표 0건 | 평일 15:00~19:00, `판매_누적.csv`(없으면 `판매.csv`)에 오늘 전표번호(`YYYY/MM/DD-n`)가 0건 | `E_AFTER` `E_UNTIL` | 하루 한 번 |
+- 일요일은 아무 신호도 보내지 않는다(`SILENT_DAYS`). 한 번에 12줄까지(`MAX_ROWS`), 넘으면 「외 n건」 → 다음 회차. 댓글은 최근 48시간 · 200개만 읽는다(`COMMENTS_LOOKBACK_HOURS` · `COMMENTS_MAX`).
+- 알린 것은 `%LOCALAPPDATA%\hittile-signal-watch.json`에 기억(14일). 기록 `%LOCALAPPDATA%\hittile-signal-watch.log`. 댓글 달기에 실패하면 기억하지 않고 다음 회차에 다시. GitHub를 못 읽어도 C · D · E는 PC 파일만으로 본다.
+- 폴더가 기본과 다르면 환경변수(`setx`, 다음 실행부터): `HITTILE_INBOX_DIR`(연락함 로컬 복사본, 기본 `바탕화면\히트타일업무자동화\연락함` — 없으면 D · E 건너뜀), `HITTILE_KAKAO_LOG`(카톡 지킴이 기록 파일 — 없으면 카톡 지킴이는 안 봄. 그 기록이 매 회차 남지 않으면 실행기에 `--kakao-stale-min 0`).
+- 설치(집 PC, 한 번): `powershell -ExecutionPolicy Bypass -File tools\signal-watch-install.ps1` · 시험: `python tools\signal_watch.py --dry-run`(댓글 안 달고 출력만, `--now "2026-11-26T15:30:00+09:00"`로 시각 지정) · 단위 시험 `python -m unittest tools/test_signal_watch.py`
+- 끄기: `schtasks /Delete /TN "HitTile SignalWatch" /F`. 처음부터 다시 알리게 하려면 `hittile-signal-watch.json`을 지운다.
+- 신호를 받은 창구가 할 일: A는 다시 시키거나 닫기(다시 시킬 때 그 ID를 적는다), B는 `[까망이에게] 답 #ID …`로 답하기(**ID를 안 적으면 답으로 안 본다**), C · D는 작업 담당에게 원인 확인 요청, E는 사무실 입력 여부 확인.
+- 못 잡는 것: **PC가 꺼지면 이 지킴이도 같이 멈춘다**(저녁 점검 예약이 맡는다). 연락함 지킴이가 매 회차 `%LOCALAPPDATA%\hittile-inbox-watch.alive`를 갱신하게 고치면 그 시각으로 멈춤을 바로 본다(지금은 그 파일이 없어 위 조건으로 본다).
+
 ## 웹앱 열쇠 (`gas/AppKey.js` · `appkey.js`)
 메인 웹앱 주소는 이 공개 저장소에 적혀 있다. 스크립트 속성 `APP_KEY`를 넣으면 요청의 `key`가 같을 때만 action을 실행하고,
 아니면 `{ok:false, needKey:true, error:'열쇠가 필요합니다.'}`를 돌려준다. **속성이 비어 있으면 검사하지 않는다**(예전과 똑같이 동작).
