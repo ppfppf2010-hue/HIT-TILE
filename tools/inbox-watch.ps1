@@ -1,6 +1,7 @@
 ﻿# 히트타일 연락함 지킴이 (토큰 0)
 # 1분마다(11/19부터, 예전 5분) 비공개 연락함(ppfppf2010-hue/hittile-inbox PR #1)을 gh로 확인만 한다. Claude는 부르지 않는다.
 # "[까망이에게]"(예전 "[까망에게]"도 받음)로 시작하는 새 요청이 있을 때만 까망(Claude Code)을 한 번 실행해서 처리시킨다.
+# "[작업담당에게]"로 시작하는 새 요청은 화면을 안 쓰는 작업 담당 일꾼(tools/inbox-worker.ps1)을 따로 띄운다(11/26, 카톡 담당과 동시에).
 # 설치: tools/inbox-watch-install.ps1   기록: %LOCALAPPDATA%\hittile-inbox-watch.log
 #
 # 안전장치
@@ -8,6 +9,7 @@
 #   (진행중 = PC 사용 중 등으로 대기. 5분마다 다시 실행하면 토큰만 드니 다시 하지 않고, 필요하면 새 요청으로 다시 시킨다.)
 # - 처리를 맡긴 요청 ID는 기록해 두고 다시 맡기지 않는다(같은 일 두 번 방지).
 # - 앞 실행이 아직 돌고 있으면(잠금 파일) 이번 회차는 건너뛴다.
+# - 작업 담당은 별도 잠금(hittile-inbox-worker.lock)으로 한 번에 하나만. 화면잠금 · 까망이 잠금과는 상관없이 돈다.
 
 $ErrorActionPreference = 'Continue'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -60,22 +62,58 @@ if (-not (Test-Path $OcLock) -or ((Get-Date) - (Get-Item $OcLock).LastWriteTime)
   finally { Remove-Item $OcLock -Force -ErrorAction SilentlyContinue }
 }
 
-if (Test-Path $Lock) {
-  if (((Get-Date) - (Get-Item $Lock).LastWriteTime).TotalMinutes -lt 30) { exit 0 }
-  Remove-Item $Lock -Force   # 30분 넘은 잠금은 비정상 종료로 보고 푼다
-}
-
+# 연락함 댓글은 까망이 잠금을 보기 전에 읽는다 — 까망이가 일하는 중에도 [작업담당에게] 요청은 바로 띄우기 위해(11/26).
 $json = gh api "repos/$Repo/issues/$Pr/comments" --paginate 2>$null
 if ($LASTEXITCODE -ne 0 -or -not $json) { Write-Log '건너뜀: GitHub 확인 실패 (gh 로그인 · 인터넷 확인)'; exit 0 }
 $comments = ($json -join "`n") | ConvertFrom-Json
 if ($comments -isnot [array]) { $comments = @($comments) }
 
+# 이미 답이 있는 요청: [완료 #ID] · [대표님 확인 필요 #ID] · [까망이 오류/보류/진행중 #ID] · [작업담당 오류/보류/진행중 #ID] · [클라우드에게] 질문 #ID
+#   (tools/inbox-worker.ps1 도 같은 모양을 쓴다 — 바꾸면 같이 바꾼다)
+$AnsRe = '\[(완료|대표님 확인 필요|까망이? 오류|까망이? 보류|(?:까망이?\s*)?진행\s?중|작업\s*담당\s*(?:오류|보류|진행\s?중))\s*#(\d+)\]|\[클라우드에게\]\s*질문\s*#(\d+)'
 $answered = @{}
 foreach ($c in $comments) {
-  foreach ($m in [regex]::Matches([string]$c.body, '\[(완료|대표님 확인 필요|까망이? 오류|까망이? 보류|(?:까망이?\s*)?진행\s?중)\s*#(\d+)\]|\[클라우드에게\]\s*질문\s*#(\d+)')) { $answered[($m.Groups[2].Value + $m.Groups[3].Value)] = $true }
+  foreach ($m in [regex]::Matches([string]$c.body, $AnsRe)) { $answered[($m.Groups[2].Value + $m.Groups[3].Value)] = $true }
 }
 $done = @{}
 if (Test-Path $State) { Get-Content $State | ForEach-Object { if ($_) { $done[$_.Trim()] = $true } } }
+
+# ── [작업담당에게] → 작업 담당 일꾼을 따로 띄운다 (일꾼분리 계획 4단계, 대표님 11/26 「대기하는 일이 없이」) ──
+#   화면(pyautogui · 앞 창 · 카톡)을 안 쓰는 일꾼이라 화면잠금 · 까망이 잠금을 잡지 않고, 카톡 담당과 동시에 돈다.
+#   작업 담당끼리는 하나만: 별도 잠금(hittile-inbox-worker.lock). 돌고 있으면 새 요청은 기록하지 않고 다음 회차(1분 뒤)에 다시 본다.
+#   일꾼은 별도 PowerShell로 띄우고 지킴이는 기다리지 않는다(작업 스케줄러는 지킴이가 끝나야 다음 회차를 띄우므로).
+#   처리를 맡긴 ID는 까망이와 같은 파일($State)에 기록 → 두 번 맡기지 않는다. 실행 시간 상한 · 답 없을 때 오류 답은 일꾼 스크립트가 한다.
+$WLock = Join-Path $env:LOCALAPPDATA 'hittile-inbox-worker.lock'
+$wtodo = @($comments | Where-Object {
+  (([string]$_.body).TrimStart() -match '^\[작업\s*담당에게\]') -and -not $answered["$($_.id)"] -and -not $done["$($_.id)"]
+})
+if ($wtodo.Count) {
+  $wbusy = $false
+  if (Test-Path $WLock) {
+    # 일꾼 상한 15분 + 여유. 그보다 오래된 잠금은 비정상 종료로 보고 푼다.
+    if (((Get-Date) - (Get-Item $WLock).LastWriteTime).TotalMinutes -lt 20) { $wbusy = $true }
+    else { Remove-Item $WLock -Force -ErrorAction SilentlyContinue; Write-Log '작업 담당: 20분 넘은 잠금을 풂' }
+  }
+  if (-not $wbusy) {
+    $wids = ($wtodo | ForEach-Object { "$($_.id)" }) -join ','
+    New-Item -ItemType File -Path $WLock -Force | Out-Null
+    $wtodo | ForEach-Object { "$($_.id)" | Out-File -FilePath $State -Append -Encoding utf8 }
+    Write-Log "새 요청 $($wtodo.Count)건 → 작업 담당 실행 (댓글 ID: $wids)"
+    try {
+      $wScript = Join-Path $PSScriptRoot 'inbox-worker.ps1'
+      Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$wScript`"", '-Ids', $wids) | Out-Null
+    } catch {
+      Remove-Item $WLock -Force -ErrorAction SilentlyContinue
+      Write-Log "작업 담당: 일꾼을 띄우지 못함 $($_.Exception.Message)"
+      foreach ($t in $wtodo) { gh pr comment $Pr -R $Repo --body "[작업담당 오류 #$($t.id)] 지킴이가 작업 담당 일꾼을 띄우지 못했습니다. 집 PC 기록: %LOCALAPPDATA%\hittile-inbox-watch.log · 다시 시키려면 새 요청으로." | Out-Null }
+    }
+  }
+}
+
+if (Test-Path $Lock) {
+  if (((Get-Date) - (Get-Item $Lock).LastWriteTime).TotalMinutes -lt 30) { exit 0 }
+  Remove-Item $Lock -Force   # 30분 넘은 잠금은 비정상 종료로 보고 푼다
+}
 
 $todo = @($comments | Where-Object {
   (([string]$_.body).TrimStart() -match '^\[까망(이)?에게\]') -and -not $answered["$($_.id)"] -and -not $done["$($_.id)"]
@@ -220,7 +258,7 @@ try {
   # 답을 못 남기고 끝난 요청은 오류 답을 대신 남겨서 클라우드가 알게 한다.
   $after = ((gh api "repos/$Repo/issues/$Pr/comments" --paginate 2>$null) -join "`n") | ConvertFrom-Json
   $ans2 = @{}
-  foreach ($c in @($after)) { foreach ($m in [regex]::Matches([string]$c.body, '\[(완료|대표님 확인 필요|까망이? 오류|까망이? 보류|(?:까망이?\s*)?진행\s?중)\s*#(\d+)\]|\[클라우드에게\]\s*질문\s*#(\d+)')) { $ans2[($m.Groups[2].Value + $m.Groups[3].Value)] = $true } }
+  foreach ($c in @($after)) { foreach ($m in [regex]::Matches([string]$c.body, $AnsRe)) { $ans2[($m.Groups[2].Value + $m.Groups[3].Value)] = $true } }
   foreach ($t in $todo) {
     if (-not $ans2["$($t.id)"]) {
       gh pr comment $Pr -R $Repo --body "[까망이 오류 #$($t.id)] 까망이가 답을 남기지 못하고 끝났습니다 (종료 코드 $code). 까망이 PC의 기록: %LOCALAPPDATA%\hittile-inbox-watch.log" | Out-Null
