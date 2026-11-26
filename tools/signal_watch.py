@@ -6,8 +6,9 @@
 같은 신호는 상태 파일(%LOCALAPPDATA%\\hittile-signal-watch.json)에 적어 두고 두 번 알리지 않는다.
 
   A. [까망이 보류/오류 #ID] · [작업담당 보류/오류 #ID] 가 2시간 넘게 그대로
-  B. [클라우드에게] 일 요청 / 질문 이 영업시간 30분 넘게 답 없음
+  B. [클라우드에게] 일 요청 / 질문 이 영업시간 60분 넘게 답 없음
   C. 지킴이(연락함 · 카톡)가 멈춤 또는 실패 · 오류 줄이 몰림
+     (A · C 는 영업시간 월~토 08:00~19:00 안에서만 알림 — 밤에 걸린 것은 다음 영업시간 첫 회차에, 그때도 걸릴 때만)
   D. 최근전표(판매.csv)가 평일 낮에 2시간 넘게 안 올라옴
   E. 평일 15시가 지나도록 오늘 판매 전표 0건 (하루 한 번)
 
@@ -38,8 +39,8 @@ FIRST_LINE_MAX = 80             # 첫 줄 인용 글자 수
 
 A_HOLD_HOURS = 2                # A: 보류 · 오류 뒤 이 시간 동안 다시 시킨 글이 없으면 알림
 
-B_WAIT_MIN = 30                 # B: 영업시간으로 이만큼 지나도록 답이 없으면 알림
-B_OPEN, B_CLOSE = dtime(8, 0), dtime(19, 0)
+B_WAIT_MIN = 60                 # B: 영업시간으로 이만큼 지나도록 답이 없으면 알림
+B_OPEN, B_CLOSE = dtime(8, 0), dtime(19, 0)   # 영업시간 — A · C 도 이 시간 안에서만 알린다(밤에 창구를 깨우지 않게)
 B_DAYS = (0, 1, 2, 3, 4, 5)     # 월(0)~토(5). 일요일은 세지 않는다
 
 C_STALE_MIN = 15                # C: 지킴이 마지막 기록이 이만큼 오래되면 「멈춤」
@@ -112,6 +113,12 @@ def business_minutes(start, end, open_t, close_t, days):
                 total += (hi - lo).total_seconds() / 60.0
         day += timedelta(days=1)
     return total
+
+
+def in_business_hours(now):
+    """지금이 영업시간(B_DAYS · B_OPEN~B_CLOSE) 안인지."""
+    now = now.astimezone(KST)
+    return now.weekday() in B_DAYS and B_OPEN <= now.timetz().replace(tzinfo=None) <= B_CLOSE
 
 
 def fmt_dur(minutes):
@@ -468,14 +475,17 @@ def write_log(path, msg):
 def collect(comments, now, args):
     """지금 조건에 걸리는 신호 전부(이미 알린 것 포함)."""
     sigs = []
+    open_now = in_business_hours(now)   # A · C 는 영업시간 안에서만 알린다(밤에는 건너뛰고 다음 영업시간에 다시 봄)
     if comments is not None:
-        sigs += signal_a(comments, now)
+        if open_now:
+            sigs += signal_a(comments, now)
         sigs += signal_b(comments, now)
-    waiting = waiting_pc_requests(comments, now, C_STALE_MIN) if comments is not None else []
-    sigs += signal_c('연락함 지킴이', 'inbox', args.inbox_log, now, C_STALE_MIN,
-                     alive_path=args.inbox_alive, quiet_ok=True, waiting=waiting)
-    if args.kakao_log:
-        sigs += signal_c('카톡 지킴이', 'kakao', args.kakao_log, now, args.kakao_stale_min)
+    if open_now:
+        waiting = waiting_pc_requests(comments, now, C_STALE_MIN) if comments is not None else []
+        sigs += signal_c('연락함 지킴이', 'inbox', args.inbox_log, now, C_STALE_MIN,
+                         alive_path=args.inbox_alive, quiet_ok=True, waiting=waiting)
+        if args.kakao_log:
+            sigs += signal_c('카톡 지킴이', 'kakao', args.kakao_log, now, args.kakao_stale_min)
     if args.inbox_dir and os.path.isdir(args.inbox_dir):
         sigs += signal_d(args.inbox_dir, now)
         sigs += signal_e(args.inbox_dir, now)

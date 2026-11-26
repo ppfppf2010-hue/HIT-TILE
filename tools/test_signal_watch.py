@@ -167,31 +167,98 @@ class TestSignalA(Base):
         self.assertEqual(self.posted, [])
 
 
+class TestBusinessHoursOnly(Base):
+    """A · C 는 영업시간(월~토 08:00~19:00) 안에서만 알린다. 밤에 걸린 것은 다음 영업시간 첫 회차에, 그때도 걸릴 때만."""
+
+    def test_in_business_hours(self):
+        f = lambda t: sw.in_business_hours(kst(t))
+        self.assertTrue(f('2026-11-26T08:00:00+09:00'))
+        self.assertTrue(f('2026-11-26T19:00:00+09:00'))
+        self.assertTrue(f('2026-11-28T12:00:00+09:00'))     # 토요일
+        self.assertFalse(f('2026-11-26T07:59:00+09:00'))
+        self.assertFalse(f('2026-11-26T19:01:00+09:00'))
+        self.assertFalse(f('2026-11-29T12:00:00+09:00'))    # 일요일
+
+    def test_a_waits_for_morning(self):
+        cs = [cmt(1002, '2026-11-26T18:00:00+09:00', '[까망이 보류 #1001] 로그인이 필요함')]
+        for night in ('2026-11-26T20:10:00+09:00', '2026-11-26T23:50:00+09:00', '2026-11-27T07:50:00+09:00'):
+            code, _ = self.run_main(night, cs)
+            self.assertEqual((code, self.posted), (0, []), night)
+        self.assertFalse(os.path.exists(self.state))        # 밤에는 알린 것으로 적지도 않는다
+        self.run_main('2026-11-27T08:00:00+09:00', cs)      # 다음 영업시간 첫 회차
+        self.assertEqual(len(self.posted), 1)
+        self.assertIn('댓글 1002', self.posted[0])
+        self.run_main('2026-11-27T08:10:00+09:00', cs)
+        self.assertEqual(len(self.posted), 1)
+
+    def test_a_resolved_overnight_never_alerts(self):
+        cs = [cmt(1002, '2026-11-26T18:00:00+09:00', '[까망이 보류 #1001] 로그인이 필요함')]
+        self.run_main('2026-11-26T21:00:00+09:00', cs)
+        cs.append(cmt(1003, '2026-11-26T22:00:00+09:00', '[까망이에게] #1001 다시'))
+        self.run_main('2026-11-27T08:00:00+09:00', cs)
+        self.assertEqual(self.posted, [])
+
+    def test_c_waits_for_morning(self):
+        klog = os.path.join(self.tmp, 'kakao.log')
+        self.write_log_file(klog, ['2026-11-26 19:30:00 확인 끝'])
+        self.write_log_file(self.inbox_log, ['2026-11-26 21:%02d:00 댓글 실패' % m for m in range(1, 9)])
+        code, _ = self.run_main('2026-11-26T21:10:00+09:00', [], extra=['--kakao-log', klog])
+        self.assertEqual((code, self.posted), (0, []))      # 밤: 멈춤도 오류 몰림도 안 알림
+        self.run_main('2026-11-27T08:00:00+09:00', [], extra=['--kakao-log', klog])
+        self.assertEqual(len(self.posted), 1)               # 아침에도 멈춰 있으면 알림(오류 몰림은 지나서 빠짐)
+        self.assertIn('카톡 지킴이', self.posted[0])
+        self.assertNotIn('오류 몰림', self.posted[0])
+
+    def test_c_recovered_overnight_never_alerts(self):
+        klog = os.path.join(self.tmp, 'kakao.log')
+        self.write_log_file(klog, ['2026-11-26 19:30:00 확인 끝'])
+        self.run_main('2026-11-26T21:10:00+09:00', [], extra=['--kakao-log', klog])
+        self.write_log_file(klog, ['2026-11-27 07:55:00 확인 끝'])
+        self.run_main('2026-11-27T08:00:00+09:00', [], extra=['--kakao-log', klog])
+        self.assertEqual(self.posted, [])
+
+    def test_b_d_e_unchanged_at_night(self):
+        """B 는 밤에도(영업시간으로 60분이 이미 찼으면) 알린다 — 바꾼 것은 A · C 뿐."""
+        cs = [cmt(2001, '2026-11-26T15:00:00+09:00', '[클라우드에게] 일 요청 — 새 글'),
+              cmt(1002, '2026-11-26T15:00:00+09:00', '[까망이 보류 #1001] 나중에')]
+        self.run_main('2026-11-26T21:00:00+09:00', cs)
+        self.assertEqual(len(self.posted), 1)
+        self.assertIn('B 요청 묵음', self.posted[0])
+        self.assertNotIn('A 보류', self.posted[0])
+        self.run_main('2026-11-27T08:00:00+09:00', cs)      # A 는 아침에 따로
+        self.assertEqual(len(self.posted), 2)
+        self.assertIn('A 보류 묵음', self.posted[1])
+        self.assertNotIn('B 요청', self.posted[1])
+
+
 class TestSignalB(Base):
     def test_alert_then_not_twice(self):
         cs = [cmt(2001, '2026-11-26T10:00:00+09:00', '[클라우드에게] 일 요청 — 발주방 새 글'),
               cmt(2002, '2026-11-26T10:10:00+09:00', '[클라우드에게] 질문 #1500 어느 쪽으로 할까요')]
-        self.run_main('2026-11-26T10:45:00+09:00', cs)
+        self.run_main('2026-11-26T11:15:00+09:00', cs)
         self.assertEqual(len(self.posted), 1)
         body = self.posted[0]
         self.assertIn('신호 2건', body)
         self.assertIn('댓글 2001', body)
         self.assertIn('댓글 2002', body)
-        self.run_main('2026-11-26T10:55:00+09:00', cs)
+        self.run_main('2026-11-26T11:25:00+09:00', cs)
         self.assertEqual(len(self.posted), 1)
 
-    def test_under_30_minutes(self):
+    def test_under_60_minutes(self):
         cs = [cmt(2001, '2026-11-26T10:00:00+09:00', '[클라우드에게] 일 요청 — 발주방 새 글')]
-        self.run_main('2026-11-26T10:29:00+09:00', cs)
+        self.assertEqual(sw.B_WAIT_MIN, 60)
+        self.run_main('2026-11-26T10:59:00+09:00', cs)
         self.assertEqual(self.posted, [])
+        self.run_main('2026-11-26T11:00:00+09:00', cs)
+        self.assertEqual(len(self.posted), 1)
 
     def test_night_does_not_count(self):
         cs = [cmt(2001, '2026-11-26T18:50:00+09:00', '[클라우드에게] 질문 #1500 밤에 온 질문')]
         self.run_main('2026-11-26T23:30:00+09:00', cs)      # 영업시간으로는 10분
         self.assertEqual(self.posted, [])
-        self.run_main('2026-11-27T08:15:00+09:00', cs)      # 10 + 15 = 25분
+        self.run_main('2026-11-27T08:45:00+09:00', cs)      # 10 + 45 = 55분
         self.assertEqual(self.posted, [])
-        self.run_main('2026-11-27T08:25:00+09:00', cs)      # 35분
+        self.run_main('2026-11-27T08:55:00+09:00', cs)      # 65분
         self.assertEqual(len(self.posted), 1)
 
     def test_answered(self):
