@@ -12,6 +12,9 @@
   D. 최근전표(판매.csv)가 평일 낮에 2시간 넘게 안 올라옴
   E. 평일 15시가 지나도록 오늘 판매 전표 0건 (하루 한 번)
 
+창구가 채팅 등으로 이미 처리한 요청 · 보류는 `[클라우드 확인 #ID] 한 줄`(또는 `[클라우드 처리 #ID]`)로 닫는다
+(ID = 그 댓글 ID 또는 #요청ID). 본문 첫머리에 「참고만」 등 할 일이 없다고 적은 요청은 B 대상이 아니다.
+설치 직후 한 번: python tools/signal_watch.py --baseline  (지금 걸리는 것을 「알린 것」으로 기억만, 댓글 없음)
 설치: tools/signal-watch-install.ps1   기록: %LOCALAPPDATA%\\hittile-signal-watch.log
 시험: python tools/signal_watch.py --dry-run --now "2026-11-26T15:30:00+09:00"
       python -m unittest tools/test_signal_watch.py
@@ -78,6 +81,13 @@ SIGNAL_RE = re.compile(r'^\[클라우드에게\]\s*신호')
 ANSWER_RE = re.compile(r'\[(완료|대표님 확인 필요|까망이? 오류|까망이? 보류|(?:까망이?\s*)?진행\s?중'
                        r'|작업\s*담당\s*(?:오류|보류|진행\s?중))\s*#(\d+)\]|\[클라우드에게\]\s*질문\s*#(\d+)')
 DONE_RE = re.compile(r'\[완료\s*#(\d+)\]')
+CLOUD_ACK_RE = re.compile(r'^\[클라우드\s*(확인|처리)\s*#(\d+)\]')   # 창구의 짧은 확인: [클라우드 확인 #ID] 한 줄
+CLOUD_REQ_REF_RE = re.compile(r'^\[클라우드에게\]\s*(?:일\s*요청|질문)\s*#(\d+)')
+# B 에서 뺄 요청: 스스로 할 일이 없다고 적은 것(보수적으로 — 애매하면 빼지 않는다)
+NO_ACTION_HEAD_RE = re.compile(r'참고\s*만|참고용|알림\s*만|기록\s*용')     # 첫머리(앞 2줄)에서만 본다
+NO_ACTION_HEAD_LINES = 2
+NO_ACTION_BODY_RE = re.compile(r'(할\s*일|처리할\s*(?:것|일))\s*(?:은\s*|이\s*)?없음')   # 본문 어디든
+NO_ACTION_BOTH = (re.compile(r'전송\s*없음'), re.compile(r'새\s*요청\s*없음'))     # 둘 다 있을 때만
 LOG_TIME_RE = re.compile(r'^﻿?(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})')
 
 
@@ -194,6 +204,23 @@ def mentions(body, num):
     return bool(num) and re.search(r'(?<!\d)%s(?!\d)' % re.escape(str(num)), body) is not None
 
 
+def is_ack(body, *ids):
+    """창구의 짧은 확인([클라우드 확인 #ID] · [클라우드 처리 #ID])이 그 ID 중 하나를 적고 있는지."""
+    if not CLOUD_ACK_RE.match(body):
+        return False
+    return any(mentions(body, i) for i in ids if i)
+
+
+def is_no_action(body):
+    """요청 본문이 「참고만 · 알림만 · 기록용 · 할 일 없음 · (전송 없음 + 새 요청 없음)」처럼 할 일이 없다고 스스로 적었는지."""
+    head = [ln for ln in str(body).splitlines() if ln.strip()][:NO_ACTION_HEAD_LINES]
+    if NO_ACTION_HEAD_RE.search('\n'.join(head)):
+        return True
+    if NO_ACTION_BODY_RE.search(body):
+        return True
+    return all(r.search(body) for r in NO_ACTION_BOTH)
+
+
 def quote(text):
     """신호 댓글 안에 옮겨 적을 때: 대괄호 말머리가 다른 지킴이 정규식에 걸리지 않게 바꾸고, 표가 안 깨지게."""
     return (str(text).replace('[', '〔').replace(']', '〕').replace('|', '/')
@@ -219,6 +246,9 @@ def signal_a(comments, now):
             if TO_PC_RE.match(b) and (mentions(b, req_id) or mentions(b, c['id'])):
                 handled = True
                 break
+            if is_ack(b, req_id, c['id']):    # 창구가 [클라우드 확인 #ID] 로 닫음
+                handled = True
+                break
             if any(d == req_id for d in DONE_RE.findall(b)):   # 그 뒤에 실제로 끝났으면 묵은 것이 아님
                 handled = True
                 break
@@ -239,15 +269,20 @@ def signal_b(comments, now):
             continue
         if not CLOUD_REQ_RE.match(b):
             continue
+        if is_no_action(b):              # 「참고만」 등 할 일이 없다고 스스로 적은 요청
+            continue
         waited = business_minutes(c['at'], now, B_OPEN, B_CLOSE, B_DAYS)
         if waited < B_WAIT_MIN:
             continue
-        m = re.match(r'^\[클라우드에게\]\s*질문\s*#(\d+)', b)
+        m = CLOUD_REQ_REF_RE.match(b)    # 일 요청 #162 · 질문 #7 의 번호
         ref = m.group(1) if m else ''
         answered = False
         for later in comments[i + 1:]:
             lb = later['body']
             if TO_PC_RE.match(lb) and (mentions(lb, c['id']) or mentions(lb, ref)):
+                answered = True
+                break
+            if is_ack(lb, c['id'], ref):     # 창구가 [클라우드 확인 #ID] 로 닫음
                 answered = True
                 break
         if answered:
@@ -472,10 +507,10 @@ def write_log(path, msg):
         pass
 
 
-def collect(comments, now, args):
-    """지금 조건에 걸리는 신호 전부(이미 알린 것 포함)."""
+def collect(comments, now, args, all_hours=False):
+    """지금 조건에 걸리는 신호 전부(이미 알린 것 포함). all_hours: 영업시간 밖이어도 A · C 까지 본다(--baseline 용)."""
     sigs = []
-    open_now = in_business_hours(now)   # A · C 는 영업시간 안에서만 알린다(밤에는 건너뛰고 다음 영업시간에 다시 봄)
+    open_now = all_hours or in_business_hours(now)   # A · C 는 영업시간 안에서만 알린다(밤에는 건너뛰고 다음 영업시간에 다시 봄)
     if comments is not None:
         if open_now:
             sigs += signal_a(comments, now)
@@ -497,6 +532,8 @@ def parse_args(argv=None):
     p.add_argument('--repo', default=REPO)
     p.add_argument('--pr', default=str(PR))
     p.add_argument('--dry-run', action='store_true', help='댓글을 달지 않고 무엇을 알릴지만 출력(상태 파일도 안 바꿈)')
+    p.add_argument('--baseline', action='store_true',
+                   help='설치 직후 한 번: 지금 걸리는 신호를 전부 「알린 것」으로 상태 파일에 기억만 하고 댓글은 안 단다')
     p.add_argument('--now', help='시험용 현재 시각. 예: 2026-11-26T15:30:00+09:00')
     p.add_argument('--comments-file', help='시험용: 댓글 목록(JSON)을 gh 대신 이 파일에서 읽는다')
     p.add_argument('--inbox-dir', default=os.environ.get('HITTILE_INBOX_DIR') or DEFAULT_INBOX_DIR,
@@ -513,6 +550,32 @@ def parse_args(argv=None):
     return p.parse_args(argv)
 
 
+def run_baseline(args, comments, state, now, read_error):
+    """지금 걸리는 신호(영업시간 · 요일 상관없이)를 전부 「알린 것」으로 기억만 한다. 댓글은 달지 않는다.
+    댓글을 못 읽었으면 A · B 가 빠지므로 코드 3 으로 끝낸다(설치 스크립트가 다시 하라고 안내)."""
+    found = collect(comments, now, args, all_hours=True)
+    fresh = [s for s in found if is_new(s, state, now)]
+    if args.dry_run:
+        print('[시험 · 기준선] 댓글 없음 · 상태 파일 안 바꿈. 「알린 것」으로 기억할 신호 %d건:' % len(fresh))
+        for s in fresh:
+            print('  %s | %s | %s' % (s['kind'], s['target'], s['text']))
+        return 3 if read_error else 0
+    for s in fresh:
+        state['notified'][s['key']] = now.isoformat()
+    try:
+        save_state(args.state_file, state, now)
+    except OSError as e:
+        write_log(args.log_file, '기준선 저장 실패: %s' % e)
+        print('기준선 저장 실패: %s' % e)
+        return 5
+    msg = '기준선: 지금 걸린 신호 %d건을 「알린 것」으로 기억(댓글 없음)' % len(fresh)
+    if read_error:
+        msg += ' — 단, 연락함 댓글을 못 읽어 보류 · 요청(A · B)은 빠짐: %s' % read_error
+    write_log(args.log_file, msg)
+    print(msg)
+    return 3 if read_error else 0
+
+
 def main(argv=None):
     args = parse_args(argv)
     for s in (sys.stdout, sys.stderr):
@@ -521,7 +584,7 @@ def main(argv=None):
         except Exception:
             pass
     now = parse_time(args.now) if args.now else datetime.now(KST)
-    if now.weekday() in SILENT_DAYS:
+    if now.weekday() in SILENT_DAYS and not args.baseline:
         if args.dry_run:
             print('일요일 — 신호를 보내지 않습니다.')
         return 0
@@ -540,6 +603,8 @@ def main(argv=None):
         write_log(args.log_file, '댓글 읽기 실패: %s' % read_error)
 
     state = load_state(args.state_file)
+    if args.baseline:
+        return run_baseline(args, comments, state, now, read_error)
     found = collect(comments, now, args)
     fresh = [s for s in found if is_new(s, state, now)]
     if not fresh:

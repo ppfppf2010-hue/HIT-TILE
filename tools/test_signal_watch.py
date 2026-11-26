@@ -560,3 +560,143 @@ class TestCommon(Base):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TestCloudAck(Base):
+    """창구의 짧은 확인 [클라우드 확인 #ID] · [클라우드 처리 #ID] 는 A · B 모두 「답 있음」."""
+    NOW = '2026-11-26T15:30:00+09:00'
+
+    def fresh(self):
+        self.posted.clear()
+        if os.path.exists(self.state):
+            os.remove(self.state)
+
+    def test_ack_closes_hold(self):
+        hold = cmt(1002, '2026-11-26T10:05:00+09:00', '[까망이 보류 #1001] 이카운트 로그인 실패')
+        for ack in ('[클라우드 확인 #1001] 새 요청으로 다시 시킴', '[클라우드 처리 #1002] 채팅으로 처리',
+                    '[클라우드확인 #1001] 붙여 써도 됨'):
+            self.fresh()
+            self.run_main(self.NOW, [hold, cmt(1003, '2026-11-26T11:00:00+09:00', ack)])
+            self.assertEqual(self.posted, [], ack)
+
+    def test_ack_closes_request_by_comment_or_request_id(self):
+        req = cmt(2001, '2026-11-26T10:00:00+09:00', '[클라우드에게] 일 요청 #162\n- 방: 발주방 새 글')
+        for ack in ('[클라우드 확인 #2001] 채팅으로 대표님께 보고함', '[클라우드 확인 #162] 처리함',
+                    '[클라우드 처리 #162] 전표 확인'):
+            self.fresh()
+            self.run_main(self.NOW, [req, cmt(2002, '2026-11-26T10:30:00+09:00', ack)])
+            self.assertEqual(self.posted, [], ack)
+
+    def test_ack_must_match_id_and_come_later(self):
+        req = cmt(2001, '2026-11-26T10:00:00+09:00', '[클라우드에게] 일 요청 #162\n- 방: 발주방 새 글')
+        cases = [
+            [req, cmt(2002, '2026-11-26T10:30:00+09:00', '[클라우드 확인 #1620] 숫자 일부만 같음')],
+            [cmt(2000, '2026-11-26T09:00:00+09:00', '[클라우드 확인 #162] 먼저 쓴 글'), req],
+            [req, cmt(2002, '2026-11-26T10:30:00+09:00', '참고: [클라우드 확인 #162] 말머리가 맨 앞이 아님')],
+        ]
+        for cs in cases:
+            self.fresh()
+            self.run_main(self.NOW, cs)
+            self.assertEqual(len(self.posted), 1, cs)
+        # 보류도 다른 ID 확인은 답이 아님
+        self.fresh()
+        self.run_main(self.NOW, [cmt(1002, '2026-11-26T10:05:00+09:00', '[까망이 보류 #1001] 실패'),
+                                 cmt(1003, '2026-11-26T11:00:00+09:00', '[클라우드 확인 #999] 다른 건')])
+        self.assertEqual(len(self.posted), 1)
+
+    def test_ack_is_not_a_signal_or_request(self):
+        """확인 댓글 자체는 B 대상도, 연락함 지킴이의 PC 요청도 아니다."""
+        b = '[클라우드 확인 #162] 처리함'
+        self.assertIsNone(sw.CLOUD_REQ_RE.match(b))
+        self.assertIsNone(sw.TO_PC_RE.match(b))
+        self.assertIsNone(sw.SIGNAL_RE.match(b))
+
+
+class TestNoActionRequest(Base):
+    NOW = '2026-11-26T15:30:00+09:00'
+
+    def test_no_action_requests_skipped(self):
+        bodies = [
+            '[클라우드에게] 일 요청 #170 (참고만)\n- 방: 발주방 새 글',
+            '[클라우드에게] 일 요청 #171\n알림만 — 거래처가 통화 완료',
+            '[클라우드에게] 일 요청 #172 (기록용)',
+            '[클라우드에게] 일 요청 #173\n- 사진 1장\n- 전송 없음 · 새 요청 없음',
+            '[클라우드에게] 일 요청 #174\n- 통화 결과 공유\n- 할 일 없음',
+        ]
+        cs = [cmt(3000 + i, '2026-11-26T09:00:00+09:00', b) for i, b in enumerate(bodies)]
+        self.run_main(self.NOW, cs)
+        self.assertEqual(self.posted, [])
+
+    def test_real_requests_still_alert(self):
+        """보수적으로: 「전송 없음」만 · 셋째 줄 뒤의 「참고만」 · 「참고:」는 빼지 않는다."""
+        bodies = [
+            '[클라우드에게] 일 요청 #163 (매입단가 기록 + 견적 짝 확인, 전송 없음)\n- 단가 기록 부탁',
+            '[클라우드에게] 일 요청 #162\n- 방: 발주방\n- 원문: 반품입니다\n- 사진은 참고만',
+            '[클라우드에게] 일 요청 #164\n- 참고: 앞 요청과 같은 반품 건',
+            '[클라우드에게] 질문 #1500 새 요청 없음인데 전송해도 될까요',
+        ]
+        cs = [cmt(3100 + i, '2026-11-26T09:00:00+09:00', b) for i, b in enumerate(bodies)]
+        self.run_main(self.NOW, cs)
+        self.assertEqual(len(self.posted), 1)
+        self.assertIn('신호 4건', self.posted[0])
+
+
+class TestBaseline(Base):
+    def old_stuff(self):
+        return [cmt(1002, '2026-11-25T10:05:00+09:00', '[까망이 보류 #1001] 로그인 실패'),
+                cmt(2001, '2026-11-25T11:00:00+09:00', '[클라우드에게] 일 요청 #162 발주방 새 글')]
+
+    def test_baseline_remembers_without_posting(self):
+        cs = self.old_stuff()
+        code, out = self.run_main('2026-11-26T14:30:00+09:00', cs, extra=['--baseline'])
+        self.assertEqual(code, 0)
+        self.assertEqual(self.posted, [])
+        with open(self.state, encoding='utf-8') as f:
+            notified = json.load(f)['notified']
+        self.assertIn('A:1002', notified)
+        self.assertIn('B:2001', notified)
+        self.assertIn('2건', out)
+        with open(self.log, encoding='utf-8') as f:
+            self.assertIn('기준선', f.read())
+        # 다음 회차: 옛 건은 조용, 새로 생긴 것만 알린다
+        cs2 = cs + [cmt(2002, '2026-11-26T14:40:00+09:00', '[클라우드에게] 일 요청 #180 새 글')]
+        self.run_main('2026-11-26T15:50:00+09:00', cs2)
+        self.assertEqual(len(self.posted), 1)
+        self.assertIn('신호 1건', self.posted[0])
+        self.assertIn('댓글 2002', self.posted[0])
+        self.assertNotIn('댓글 2001', self.posted[0])
+        self.assertNotIn('댓글 1002', self.posted[0])
+
+    def test_baseline_at_night_or_sunday_includes_a(self):
+        """밤 · 일요일에 설치해도 A(영업시간에만 알리는 것)까지 기억해 아침에 옛 건이 안 올라온다."""
+        for now in ('2026-11-26T22:00:00+09:00', '2026-11-29T10:00:00+09:00'):
+            if os.path.exists(self.state):
+                os.remove(self.state)
+            self.posted.clear()
+            code, _ = self.run_main(now, self.old_stuff(), extra=['--baseline'])
+            self.assertEqual((code, self.posted), (0, []))
+            with open(self.state, encoding='utf-8') as f:
+                self.assertIn('A:1002', json.load(f)['notified'])
+        self.run_main('2026-11-30T09:30:00+09:00', self.old_stuff())
+        self.assertEqual(self.posted, [])
+
+    def test_baseline_dry_run_keeps_state(self):
+        code, out = self.run_main('2026-11-26T14:30:00+09:00', self.old_stuff(), extra=['--baseline'], dry=True)
+        self.assertEqual(code, 0)
+        self.assertFalse(os.path.exists(self.state))
+        self.assertIn('기준선', out)
+        self.assertEqual(self.posted, [])
+
+    def test_baseline_gh_failure_returns_3(self):
+        with mock.patch.object(sw, 'fetch_comments', side_effect=sw.GhError('gh 로그인 안 됨')):
+            code, out = self.run_main('2026-11-26T14:30:00+09:00', extra=['--baseline'])
+        self.assertEqual(code, 3)
+        self.assertEqual(self.posted, [])
+        self.assertIn('못 읽어', out)
+
+    def test_install_script_runs_baseline_first(self):
+        p = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'signal-watch-install.ps1')
+        with open(p, encoding='utf-8-sig') as f:
+            text = f.read()
+        self.assertIn('--baseline', text)
+        self.assertLess(text.index('--baseline'), text.index('schtasks /Create'))
