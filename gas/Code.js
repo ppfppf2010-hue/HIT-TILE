@@ -1448,10 +1448,12 @@
  }
 
  // O열 상태가 ✓(일치 · 등록됨) / ✎(이카운트 기준 수정) / ↑(시트 수정 이카운트 반영)으로 시작하면 이카운트에 있는 품목이다.
- // ⚠(이카운트에 없음 · 반영 실패)나 빈칸은 등록을 시도한다.
+ // ⚠라도 「이미 존재」 때문에 반영 실패한 것(ItemSync 시트 수정 반영)은 이카운트에 있는 품목이다 — 다시 등록하면 같은 오류만 난다.
+ // 그 밖의 ⚠(이카운트에 없음 · 반영 실패)나 빈칸은 등록을 시도한다.
  function isItemKnownInEcount_(status) {
  const st = String(status || '').trim();
- return st.indexOf('✓') === 0 || st.indexOf('✎') === 0 || st.indexOf('↑') === 0;
+ if (st.indexOf('✓') === 0 || st.indexOf('✎') === 0 || st.indexOf('↑') === 0) return true;
+ return st.indexOf('⚠') === 0 && st.indexOf('이미') >= 0 && st.indexOf('존재') >= 0;
  }
 
  function isEcountItemExistsError_(result) {
