@@ -5,9 +5,9 @@
 (`[클라우드에게] 신호 …`)를 남겨서, 그 PR을 구독 중인 클라우드 창구 세션을 깨운다.
 같은 신호는 상태 파일(%LOCALAPPDATA%\\hittile-signal-watch.json)에 적어 두고 두 번 알리지 않는다.
 
-  A. [까망이 보류/오류 #ID] · [작업담당 보류/오류 #ID] 가 2시간 넘게 그대로
+  A. [까망이 보류/오류 #ID] · [작업담당 보류/오류 #ID] · [보류/오류 #ID] 가 2시간 넘게 그대로
   B. [클라우드에게] 일 요청 / 질문 이 영업시간 60분 넘게 답 없음
-  C. 지킴이(연락함 · 카톡)가 멈춤 또는 실패 · 오류 줄이 몰림
+  C. 지킴이(연락함 · 카톡)가 멈춤 또는 실패 · 오류 줄이 몰림(직원 보고 줄은 세지 않음)
      (A · C 는 영업시간 월~토 08:00~19:00 안에서만 알림 — 밤에 걸린 것은 다음 영업시간 첫 회차에, 그때도 걸릴 때만)
   D. 최근전표(판매.csv)가 평일 낮에 2시간 넘게 안 올라옴
   E. 평일 15시가 지나도록 오늘 판매 전표 0건 (하루 한 번)
@@ -76,13 +76,16 @@ DEFAULT_INBOX_DIR = os.path.join(os.environ.get('USERPROFILE') or os.path.expand
                                  'Desktop', '히트타일업무자동화', '연락함')
 
 # 말머리 (tools/inbox-watch.ps1 의 정규식과 같은 모양)
-HOLD_RE = re.compile(r'^\[(까망이?|작업\s*담당)\s*(보류|오류)\s*#(\d+)\]')
+# 보류 · 오류 답: [까망이 보류 #ID] · [작업담당 보류 #ID] · [보류 #ID] · 앞에 [클라우드에게] 가 붙은 모양 · ID 뒤에 덧붙인 말
+HOLD_RE = re.compile(r'^(?:\[클라우드에게\]\s*)?\[(?:(까망이?|작업\s*담당)\s*)?(보류|오류)\s*#(\d+)[^\]\r\n]{0,80}\]')
 TO_PC_RE = re.compile(r'^\[(까망(이)?에게|작업\s*담당에게)\]')
 CLOUD_REQ_RE = re.compile(r'^\[클라우드에게\]\s*(일\s*요청|질문)')
 SIGNAL_RE = re.compile(r'^\[클라우드에게\]\s*신호')
-ANSWER_RE = re.compile(r'\[(완료|대표님 확인 필요|까망이? 오류|까망이? 보류|(?:까망이?\s*)?진행\s?중'
-                       r'|작업\s*담당\s*(?:오류|보류|진행\s?중))\s*#(\d+)\]|\[클라우드에게\]\s*질문\s*#(\d+)')
-DONE_RE = re.compile(r'\[완료\s*#(\d+)\]')
+# 「답 있음」 모양 — inbox-watch.ps1 · inbox-worker.ps1 의 $AnsRe 와 같게 둔다(시험이 같은지 본다)
+ANSWER_RE = re.compile(r'\[(완료|대표님 확인 필요|(?:까망이?\s*)?(?:오류|보류|진행\s?중)'
+                       r'|작업\s*담당\s*(?:오류|보류|진행\s?중))\s*#(\d+)[^\]\r\n]{0,80}\]'
+                       r'|\[클라우드에게\]\s*질문\s*#(\d+)')
+DONE_RE = re.compile(r'\[완료\s*#(\d+)[^\]\r\n]{0,80}\]')      # [완료 #ID — 덧붙인 말] 도 완료
 CLOUD_ACK_RE = re.compile(r'^\[클라우드\s*(확인|처리)\s*#(\d+)\]')   # 창구의 짧은 확인: [클라우드 확인 #ID] 한 줄
 CLOUD_REQ_REF_RE = re.compile(r'^\[클라우드에게\]\s*(?:일\s*요청|질문)\s*#(\d+)')
 # B 에서 뺄 요청: 스스로 할 일이 없다고 적은 것(보수적으로 — 애매하면 빼지 않는다)
@@ -91,6 +94,12 @@ NO_ACTION_HEAD_LINES = 2
 NO_ACTION_BODY_RE = re.compile(r'(할\s*일|처리할\s*(?:것|일))\s*(?:은\s*|이\s*)?없음')   # 본문 어디든
 NO_ACTION_BOTH = (re.compile(r'전송\s*없음'), re.compile(r'새\s*요청\s*없음'))     # 둘 다 있을 때만
 LOG_TIME_RE = re.compile(r'^﻿?(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})')
+# 기록 줄에서 시각 머리글 뒤에 오는 직원 꼬리표. 연락함 지킴이는 까망이(claude)의 출력을 `[까망이] …`,
+# 작업 담당 일꾼(inbox-worker.ps1)은 자기 줄과 claude 출력을 모두 `[작업담당] …`으로 남긴다.
+# 직원이 답으로 쓴 보고 글(「조회가 실패」 「로그인 실패 잠금」 …)은 지킴이의 오류가 아니므로 C 에서 세지 않는다(11/27 거짓 신호).
+LOG_STAFF_RE = re.compile(r'^\[(까망이?|작업\s*담당)\]\s?(.*)$')
+# 작업 담당 일꾼 스크립트가 스스로 남기는 실패 줄(inbox-worker.ps1 의 Write-Log 문구) — 이것은 그대로 센다
+WORKER_OWN_ERR_RE = re.compile(r'^(실행 실패:|답 없음 → 오류 답 대신 남김 \(#\d+\)\s*$|끝난 뒤 연락함 확인 실패|끝난 뒤 확인 실패:)')
 
 
 class GhError(Exception):
@@ -328,6 +337,18 @@ def log_line_time(line):
         return None
 
 
+def is_watcher_error_line(line):
+    """지킴이 자신의 실패 · 오류 줄인지. 직원 보고 줄([까망이] … · [작업담당] …)에 든 「실패」 · 「오류」 낱말은 세지 않는다."""
+    m = LOG_TIME_RE.match(line)
+    msg = line[m.end():].strip() if m else line.strip()
+    staff = LOG_STAFF_RE.match(msg)
+    if staff:
+        if staff.group(1).startswith('까망'):
+            return False                                  # 까망이(claude)가 한 말
+        return bool(WORKER_OWN_ERR_RE.match(staff.group(2).strip()))   # 일꾼 스크립트 자신의 실패 줄만
+    return any(w in msg for w in C_ERR_WORDS)
+
+
 def signal_c(name, tag, log_path, now, stale_min, alive_path=None, quiet_ok=False, waiting=None):
     """지킴이 기록 파일로 멈춤 · 오류 몰림을 본다.
     quiet_ok: 일이 없으면 기록을 안 남기는 지킴이(연락함 지킴이) — 마지막 기록이 오래돼도
@@ -346,7 +367,7 @@ def signal_c(name, tag, log_path, now, stale_min, alive_path=None, quiet_ok=Fals
             continue
         if last is None or t > last:
             last = t
-        if 0 <= (now - t).total_seconds() <= C_ERR_WINDOW_MIN * 60 and any(w in line for w in C_ERR_WORDS):
+        if 0 <= (now - t).total_seconds() <= C_ERR_WINDOW_MIN * 60 and is_watcher_error_line(line):
             errs += 1
     alive_used = False
     if alive_path and os.path.isfile(alive_path):
