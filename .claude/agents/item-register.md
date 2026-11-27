@@ -88,3 +88,7 @@ python3 tools/item_register.py price <코드> --release --yes                   
 ```bash
 curl -sL -m 20 -H 'Content-Type: application/json' --data "{\"action\":\"office_log_add\",\"staff\":\"item\",\"state\":\"시작\",\"text\":\"품목 등록 미리보기 대조 중\"${HITTILE_APP_KEY:+,\"key\":\"$HITTILE_APP_KEY\"}}" 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec' || true
 ```
+
+## 옛 코드 사용 금지 · 자체 세트는 HIT (대표님 11/27)
+- 숫자만 있는 옛 코드(9xxxx)는 새 전표에 쓰지 않는다. 필요한 품목이 옛 코드로만 있으면 매입처 머리글의 새 코드로 다시 등록한다(옛 품목은 지우지 않는다 — 사용중단은 대표님 결정).
+- 히트타일이 묶어 파는 부속 세트는 머리글 `HIT` + 다섯 자리 번호로 등록한다.
