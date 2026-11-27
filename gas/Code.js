@@ -329,6 +329,7 @@
  const ecountItemResults = items.map(function (it) {
  return { code: it.code, result: ecountSyncItem(it, vendorName) };
  });
+ markItemsRegisteredInEcount_(ecountItemResults, '품목 등록 때');
 
  return jsonOut({ ok: true, vendorName: vendorName, items: items, savedCount: items.length,
  ecount: { vendor: ecountVendorResult, items: ecountItemResults } });
@@ -1456,6 +1457,31 @@
  function isEcountItemExistsError_(result) {
  const msg = String((result && result.error) || '');
  return msg.indexOf('이미') >= 0 && msg.indexOf('존재') >= 0;
+ }
+
+ // 품목 등록(검토 저장 · 수기 등록 · 구매확정 신규 채번) 직후 결과를 O열(이카운트대조상태)에 남긴다.
+ // 성공이나 「이미 존재」면 ✓를 적어, 바로 이어지는 구매 · 판매 확정의 ecountSyncItemsByCode가 같은 품목을
+ // 또 등록하지 않게 한다(2026-11-27 탑세라믹 TOP00022 · TOP00023 등록 직후 구매확정 → 「이미 존재」 오류 2건).
+ // 실패한 품목은 O열을 비워 둬서 확정 때 다시 등록을 시도한다. results: [{ code, result }]
+ function markItemsRegisteredInEcount_(results, when) {
+ const done = (results || []).filter(function (x) {
+ return x && x.code && x.result && (x.result.ok || isEcountItemExistsError_(x.result));
+ });
+ if (!done.length) return;
+ try {
+ const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(MASTER_SHEET);
+ if (!sheet || sheet.getLastRow() < 2) return;
+ const codes = sheet.getRange(1, 1, sheet.getLastRow(), 1).getValues().map(function (r) { return String(r[0]).trim(); });
+ const label = Utilities.formatDate(new Date(), 'Asia/Seoul', 'MM/dd HH:mm');
+ done.forEach(function (x) {
+ const idx = codes.lastIndexOf(String(x.code).trim());
+ if (idx < 1) return;
+ if (!x.result.ok) x.result.alreadyExists = true;
+ markItemInEcount_(sheet, idx + 1, (x.result.ok ? '✓ 이카운트 등록됨 (' : '✓ 이카운트에 이미 있음 (') + when + ', ' + label + ')');
+ });
+ } catch (e) {
+ Logger.log('품목 이카운트 등록 표시 실패: ' + e.message);
+ }
  }
 
  // 기록이 실패해도 확정 흐름은 막지 않는다. rowIndex: 1부터 시작하는 행 번호

@@ -354,6 +354,7 @@
  newItemResults.push({ code: r.code, result: ecountSyncItem(r, vendorName) });
  newItemCodes[r.code] = true;
  });
+ markItemsRegisteredInEcount_(newItemResults, '구매확정 신규 등록');
  saveLastUsedByPrefix(vendorInfo.prefix, Math.max(startNumber + newRows.length - 1, sharedMax));
 
  const codeByKey = {};

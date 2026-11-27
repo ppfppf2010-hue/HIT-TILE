@@ -362,8 +362,7 @@
  // 다시 보내면 "이미 존재하는 코드" 오류가 나서 이카운트 시간당 연속 오류 30건 한도를 깎아 먹는다.
  const inEcount = {};
  for (let m = 1; m < masterDataForConfirm.length; m++) {
- const st = String(masterDataForConfirm[m][ITEM_STATUS_COL - 1] || '');
- if (st.indexOf('✓') === 0 || st.indexOf('✎') === 0) inEcount[String(masterDataForConfirm[m][0] || '').trim()] = true;
+ if (isItemKnownInEcount_(masterDataForConfirm[m][ITEM_STATUS_COL - 1])) inEcount[String(masterDataForConfirm[m][0] || '').trim()] = true;
  }
  const codesToSync = finalRows.map(function (r) { return r.itemCode; })
  .filter(function (c, i, arr) { return c && arr.indexOf(c) === i && !inEcount[c]; });

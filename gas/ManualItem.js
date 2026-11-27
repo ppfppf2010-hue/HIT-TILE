@@ -126,6 +126,8 @@ function handleItemManualAdd(body) {
     appendToMasterSheet(storedVendorName, [row]);
     if (!customCode) saveLastUsedByPrefix(prefix, startNumber); // 직접 지정한 코드는 자동 채번 번호를 쓰지 않았다
     const ecountItemResult = ecountSyncItem(row, storedVendorName);
+    // 성공하면 O열에 ✓를 남겨 바로 이어지는 구매 · 판매 확정에서 다시 등록하지 않게 한다(2026-11-27 탑세라믹)
+    markItemsRegisteredInEcount_([{ code: row.code, result: ecountItemResult }], '수기 등록 때');
 
     return jsonOut({
       ok: true, code: row.code, name: row.name, spec: row.spec, unit: row.unit,
