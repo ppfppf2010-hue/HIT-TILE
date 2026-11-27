@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import signal_watch as sw  # noqa: E402
 
 KST = sw.KST
+REAL_POST_OWNER = sw.post_owner_check   # Base 가 가짜로 바꾸기 전의 진짜 함수(웹앱 호출 모양 시험용)
 
 
 def kst(s):
@@ -42,6 +43,21 @@ class Base(unittest.TestCase):
         p = mock.patch.object(sw.subprocess, 'run', side_effect=AssertionError('시험에서 gh를 실행하면 안 됨'))
         p.start()
         self.addCleanup(p.stop)
+        # 대표님 확인(웹앱)도 진짜로 부르지 않는다 — 올린 항목만 모아 둔다
+        self.owner_posted = []
+        self.owner_ok = True
+
+        def fake_owner(items, timeout=60):
+            if not self.owner_ok:
+                raise RuntimeError('가짜 웹앱 실패')
+            self.owner_posted.append(items)
+            return {'ok': True, 'saved': [{'id': str(len(self.owner_posted)), 'created': True}]}
+        p2 = mock.patch.object(sw, 'post_owner_check', side_effect=fake_owner)
+        p2.start()
+        self.addCleanup(p2.stop)
+        p3 = mock.patch.object(sw.urllib.request, 'urlopen', side_effect=AssertionError('시험에서 웹앱을 부르면 안 됨'))
+        p3.start()
+        self.addCleanup(p3.stop)
 
     # ── 도우미 ──
     def run_main(self, now, comments=None, extra=(), dry=False, post_ok=True):
@@ -824,3 +840,190 @@ class TestBaseline(Base):
             text = f.read()
         self.assertIn('--baseline', text)
         self.assertLess(text.index('--baseline'), text.index('schtasks /Create'))
+
+
+class TestSignalF(Base):
+    """F: 집 PC 클로드 로그인 풀림 · 지킴이 확인 필요 (11/27 오후 약 3시간 멈춤)."""
+    NOW = '2026-11-27T18:45:00+09:00'
+
+    def incident(self):
+        """11/27 18:40 — 지킴이가 남긴 오류 답 3건(종료 코드 1)."""
+        return [cmt(5001, '2026-11-27T18:20:00+09:00', '[까망이에게] 뉴타운 방 최근 글 읽기 (전송 없음)'),
+                cmt(5002, '2026-11-27T18:21:00+09:00', '[작업담당에게] 최근전표 다시 받기'),
+                cmt(5003, '2026-11-27T18:22:00+09:00', '[작업담당에게] 현장납품내역 PDF'),
+                cmt(5011, '2026-11-27T18:40:00+09:00', '[까망이 오류 #5001] 까망이가 답을 남기지 못하고 끝났습니다 (종료 코드 1).'),
+                cmt(5012, '2026-11-27T18:40:10+09:00', '[작업담당 오류 #5002] 작업 담당이 답을 남기지 못하고 끝났습니다 (종료 코드 1).'),
+                cmt(5013, '2026-11-27T18:40:20+09:00', '[작업담당 오류 #5003] 작업 담당이 답을 남기지 못하고 끝났습니다 (종료 코드 1).')]
+
+    def test_error_answers_burst(self):
+        self.run_main(self.NOW, self.incident())
+        self.assertEqual(len(self.posted), 1)
+        body = self.posted[0]
+        self.assertIn('| F 집 PC 클로드 로그인 · 지킴이 확인 필요 | 집 PC |', body)
+        self.assertIn('오류 답 3건', body)
+        self.assertIn('/login', body)
+        self.assertIn('신호 1건', body)
+        # 대표님 확인 화면에도 한 줄
+        self.assertEqual(len(self.owner_posted), 1)
+        it = self.owner_posted[0][0]
+        self.assertEqual(it['category'], '대표님 손')
+        self.assertIn('집 PC 클로드 로그인 확인', it['title'])
+        self.assertIn('/login', it['desc'])
+        with open(self.log, encoding='utf-8') as f:
+            self.assertIn('대표님 확인에 올림', f.read())
+
+    def test_once_per_two_hours(self):
+        cs = self.incident()
+        self.run_main(self.NOW, cs)
+        cs.append(cmt(5014, '2026-11-27T19:30:00+09:00', '[까망이 오류 #5004] 종료 코드 1'))
+        cs.append(cmt(5015, '2026-11-27T19:31:00+09:00', '[까망이 오류 #5005] 종료 코드 1'))
+        self.run_main('2026-11-27T19:35:00+09:00', cs)                 # 50분 뒤 — 다시 알리지 않음
+        self.assertEqual((len(self.posted), len(self.owner_posted)), (1, 1))
+        cs.append(cmt(5016, '2026-11-27T20:40:00+09:00', '[작업담당 오류 #5006] 종료 코드 1'))
+        cs.append(cmt(5017, '2026-11-27T20:41:00+09:00', '[작업담당 오류 #5007] 종료 코드 1'))
+        self.run_main('2026-11-27T20:50:00+09:00', cs)                 # 2시간 지나고 아직 그대로 → 다시(영업시간 밖이어도)
+        self.assertEqual((len(self.posted), len(self.owner_posted)), (2, 2))
+
+    def test_one_error_or_old_errors_not_enough(self):
+        cs = self.incident()[:4]                                           # 오류 1건 + 답 없는 요청은 23~25분 → 2건(5002, 5003)
+        cs = [c for c in cs if c['id'] != 5003]                            # 답 없는 요청 1건만 남김
+        self.run_main(self.NOW, cs)
+        self.assertEqual(self.posted, [])
+        old = [cmt(5021, '2026-11-27T17:00:00+09:00', '[까망이 오류 #1] 종료 코드 1'),
+               cmt(5022, '2026-11-27T17:05:00+09:00', '[작업담당 오류 #2] 종료 코드 1')]
+        self.run_main(self.NOW, old)                                       # 30분 넘은 오류는 안 셈
+        self.assertEqual(self.posted, [])
+
+    def test_waiting_requests(self):
+        """14~18시처럼 답 자체가 없음: 20분 넘게 답 없는 PC 요청 2건."""
+        cs = [cmt(5031, '2026-11-27T14:10:00+09:00', '[까망이에게] 방 읽기'),
+              cmt(5032, '2026-11-27T14:15:00+09:00', '[작업담당에게] 조회')]
+        self.run_main('2026-11-27T14:30:00+09:00', cs)                    # 15분 · 20분 → 1건만
+        self.assertEqual(self.posted, [])
+        self.run_main('2026-11-27T14:40:00+09:00', cs)
+        self.assertEqual(len(self.posted), 1)
+        self.assertIn('답 없는 PC 요청 2건', self.posted[0])
+        self.assertIn('지킴이 멈춤 의심', self.posted[0])
+
+    def test_answered_or_too_old_requests_not_counted(self):
+        cs = [cmt(5041, '2026-11-27T14:10:00+09:00', '[까망이에게] 방 읽기'),
+              cmt(5042, '2026-11-27T14:15:00+09:00', '[작업담당에게] 조회'),
+              cmt(5043, '2026-11-27T14:20:00+09:00', '[완료 #5041] 읽음'),
+              cmt(5044, '2026-11-27T14:21:00+09:00', '[작업담당 보류 #5042] 이카운트 로그인 풀림')]
+        self.run_main('2026-11-27T15:00:00+09:00', cs)
+        self.assertEqual(self.posted, [])
+        old = [cmt(5051, '2026-11-26T08:00:00+09:00', '[까망이에게] 옛 요청'),
+               cmt(5052, '2026-11-26T08:05:00+09:00', '[작업담당에게] 옛 요청')]
+        self.run_main('2026-11-26T15:00:00+09:00', old)                    # 7시간 지난 옛 요청은 안 봄
+        self.assertEqual(self.posted, [])
+
+    def test_login_text_in_log_alone(self):
+        """오류 답이 아직 없어도 지킴이 기록에 claude 로그인 문구가 보이면 바로."""
+        self.write_log_file(self.inbox_log, [
+            '2026-11-27 18:39:00 새 요청 1건 → 까망이 실행 (댓글 ID: 5001)',
+            '2026-11-27 18:39:05 [까망이] Login expired · Please run /login',
+            '2026-11-27 18:39:06 까망이 종료 (코드 1)'])
+        self.run_main(self.NOW, [])
+        self.assertEqual(len(self.posted), 1)
+        self.assertIn('로그인 풀림이 보임', self.posted[0])
+        self.assertIn('로그인 문구 1줄', self.posted[0])
+
+    def test_login_text_rules(self):
+        self.write_log_file(self.inbox_log, [
+            '2026-11-27 17:00:00 [까망이] Not logged in',                     # 30분 넘음
+            '2026-11-27 18:40:00 Login expired (직원 줄이 아님)',
+            '2026-11-27 18:41:00 [작업담당] 이카운트 로그인 풀림 → 보류'])        # 이카운트 로그인은 클로드 아님
+        self.run_main(self.NOW, [])
+        self.assertEqual(self.posted, [])
+        self.assertEqual(sw.login_lines_in_log(self.inbox_log, kst(self.NOW), 30), 0)
+        for t in ('Not logged in · Please run /login', 'Login expired', 'Invalid API key · Please run /login',
+                  'OAuth token has expired'):
+            self.assertTrue(sw.CLAUDE_LOGIN_RE.search(t), t)
+
+    def test_login_note_in_error_answer(self):
+        """지킴이가 오류 답에 적은 「PC 클로드 로그인 풀림」은 한 건이라도 로그인으로 본다."""
+        cs = [cmt(5061, '2026-11-27T18:40:00+09:00',
+                  '[까망이 오류 #5001] ' + sw.LOGIN_NOTE + '. 까망이가 답을 남기지 못하고 끝났습니다 (종료 코드 1).')]
+        self.run_main(self.NOW, cs)
+        self.assertEqual(len(self.posted), 1)
+        self.assertIn('로그인 풀림이 보임', self.posted[0])
+
+    def test_owner_check_failure_keeps_comment(self):
+        self.owner_ok = False
+        code, _ = self.run_main(self.NOW, self.incident())
+        self.assertEqual((code, len(self.posted)), (0, 1))
+        with open(self.log, encoding='utf-8') as f:
+            self.assertIn('대표님 확인 올리기 실패', f.read())
+        self.run_main('2026-11-27T18:55:00+09:00', self.incident())        # 연락함은 이미 알렸으므로 다시 안 감
+        self.assertEqual(len(self.posted), 1)
+
+    def test_no_owner_check_and_dry_run(self):
+        self.run_main(self.NOW, self.incident(), extra=['--no-owner-check'])
+        self.assertEqual((len(self.posted), self.owner_posted), (1, []))
+        os.remove(self.state)
+        code, out = self.run_main(self.NOW, self.incident(), dry=True)
+        self.assertIn('대표님 확인에도 올릴 예정', out)
+        self.assertEqual(self.owner_posted, [])
+
+    def test_sunday_silent(self):
+        self.run_main('2026-11-29T18:45:00+09:00', [
+            cmt(1, '2026-11-29T18:40:00+09:00', '[까망이 오류 #9] 종료 코드 1'),
+            cmt(2, '2026-11-29T18:41:00+09:00', '[까망이 오류 #8] 종료 코드 1')])
+        self.assertEqual((self.posted, self.owner_posted), ([], []))
+
+    def test_signal_comment_not_counted(self):
+        """신호 지킴이 자기 글 · 인용은 오류 답으로 세지 않는다."""
+        self.run_main(self.NOW, self.incident())
+        body = self.posted[0]
+        self.assertIsNone(sw.STAFF_ERR_RE.match(body))
+        self.assertFalse(sw.TO_PC_RE.match(body))
+
+    def test_post_owner_check_payload(self):
+        """웹앱 호출 모양(가짜 urlopen) — 열쇠는 환경변수가 있을 때만."""
+        sent = {}
+
+        class Resp(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def fake_urlopen(req, timeout=60):
+            sent['url'], sent['body'] = req.full_url, json.loads(req.data.decode('utf-8'))
+            return Resp(json.dumps({'ok': True, 'saved': [{'id': '7'}]}).encode('utf-8'))
+        with mock.patch.object(sw.urllib.request, 'urlopen', side_effect=fake_urlopen), \
+                mock.patch.dict(os.environ, {'HITTILE_APP_KEY': ''}):
+            res = REAL_POST_OWNER([{'category': '대표님 손', 'title': 't'}])
+        self.assertEqual(res['saved'][0]['id'], '7')
+        self.assertEqual(sent['url'], sw.WEBAPP)
+        self.assertEqual(sent['body']['action'], 'owner_check_upsert')
+        self.assertNotIn('key', sent['body'])
+        with mock.patch.object(sw.urllib.request, 'urlopen', side_effect=fake_urlopen), \
+                mock.patch.dict(os.environ, {'HITTILE_APP_KEY': 'k-test'}):
+            REAL_POST_OWNER([{'title': 't'}])
+        self.assertEqual(sent['body']['key'], 'k-test')
+
+        def bad_urlopen(req, timeout=60):
+            return Resp(json.dumps({'ok': False, 'needKey': True, 'error': '열쇠가 필요합니다.'}).encode('utf-8'))
+        with mock.patch.object(sw.urllib.request, 'urlopen', side_effect=bad_urlopen):
+            with self.assertRaises(RuntimeError):
+                REAL_POST_OWNER([{'title': 't'}])
+
+
+class TestLoginReSame(unittest.TestCase):
+    """$LoginRe(inbox-watch.ps1 · inbox-worker.ps1)와 CLAUDE_LOGIN_RE · 오류 답 문구가 같은지."""
+    HERE = os.path.dirname(os.path.abspath(__file__))
+
+    def read(self, name):
+        with open(os.path.join(self.HERE, name), encoding='utf-8-sig') as f:
+            return f.read()
+
+    def test_same_pattern_and_note(self):
+        for name in ('inbox-watch.ps1', 'inbox-worker.ps1'):
+            text = self.read(name)
+            m = re.search(r"^\$LoginRe = '(.+)'\s*$", text, re.M)
+            self.assertTrue(m, name)
+            self.assertEqual(m.group(1), sw.CLAUDE_LOGIN_RE.pattern, name)
+            self.assertIn("'%s. '" % sw.LOGIN_NOTE, text, name)
+            self.assertIn('$($loginNote)', text, name)

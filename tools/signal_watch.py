@@ -11,6 +11,9 @@
      (A · C 는 영업시간 월~토 08:00~19:00 안에서만 알림 — 밤에 걸린 것은 다음 영업시간 첫 회차에, 그때도 걸릴 때만)
   D. 최근전표(판매.csv)가 평일 낮에 2시간 넘게 안 올라옴
   E. 평일 15시가 지나도록 오늘 판매 전표 0건 (하루 한 번)
+  F. 집 PC 클로드 로그인 풀림 · 지킴이 확인 필요 — [까망이/작업담당 오류] 가 30분 안에 2건 이상, 또는 PC 요청이
+     20분 넘게 답 없음 2건 이상, 또는 연락함 지킴이 기록에 「Login expired」 같은 로그인 문구(11/27 3시간 멈춤).
+     영업시간과 상관없이(저녁에 대표님이 고칠 수 있게, 일요일만 쉼) 2시간에 한 번. 대표님 확인 화면에도 한 줄 올린다.
 
 창구가 채팅 등으로 이미 처리한 요청 · 보류는 `[클라우드 확인 #ID] 한 줄`(또는 `[클라우드 처리 #ID]`)로 닫는다
 (ID = 그 댓글 ID 또는 #요청ID). 본문 첫머리에 「참고만」 등 할 일이 없다고 적은 요청은 B 대상이 아니다.
@@ -28,6 +31,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.request
 from datetime import datetime, timedelta, timezone, time as dtime
 
 # ───────────────────────── 값은 여기 한 곳에서 바꾼다 ─────────────────────────
@@ -62,6 +66,16 @@ WEEKDAYS = (0, 1, 2, 3, 4)      # 평일(월~금) — D · E 에 쓴다
 E_AFTER = dtime(15, 0)          # E: 평일 이 시각이 지나도록 오늘 전표 0건이면 알림
 E_UNTIL = dtime(19, 0)          #    이 시각 뒤에는 알리지 않는다
 
+F_ERR_WINDOW_MIN = 30           # F: 최근 이 시간 안에
+F_ERR_COUNT = 2                 #    [까망이 오류 #] · [작업담당 오류 #] 댓글이 이 개수 이상이면 알림
+F_WAIT_MIN = 20                 # F: PC 요청([까망이에게] · [작업담당에게])이 이만큼 넘게 답이 없고
+F_WAIT_COUNT = 2                #    그런 요청이 이 개수 이상이면 알림
+F_WAIT_MAX_HOURS = 6            #    이보다 오래된 요청은 안 본다(옛 요청이 남아 매번 걸리지 않게)
+F_AGAIN_HOURS = 2               # F: 한 번 알린 뒤 이 시간 동안은 다시 알리지 않는다(도배 방지)
+F_OWNER_CHECK = True            # F: 대표님 확인 화면(/confirm/)에도 한 줄 올린다(--no-owner-check 로 끔)
+WEBAPP = 'https://script.google.com/macros/s/AKfycbzx_vaUy7Ar1mqidKErG2WYcwNZpL6FGsfI8JNR0nILnSW9hf4bJ_N8aJmDM8J0DOKWwQ/exec'
+CONFIRM_URL = 'https://ppfppf2010-hue.github.io/HIT-TILE/confirm/'
+
 SILENT_DAYS = (6,)              # 일요일(6): 아무 신호도 보내지 않는다
 STATE_KEEP_DAYS = 14            # 알린 기록은 이만큼만 기억
 FOOTER = '(신호 지킴이 · 프로그램 자동 글 · 토큰 0)'
@@ -93,6 +107,13 @@ NO_ACTION_HEAD_RE = re.compile(r'참고\s*만|참고용|알림\s*만|기록\s*�
 NO_ACTION_HEAD_LINES = 2
 NO_ACTION_BODY_RE = re.compile(r'(할\s*일|처리할\s*(?:것|일))\s*(?:은\s*|이\s*)?없음')   # 본문 어디든
 NO_ACTION_BOTH = (re.compile(r'전송\s*없음'), re.compile(r'새\s*요청\s*없음'))     # 둘 다 있을 때만
+# F: 직원(까망이 · 작업 담당) 오류 답 — 맨 앞이 [까망이 오류 #ID] · [작업담당 오류 #ID] (앞에 [클라우드에게] 가 붙어도)
+STAFF_ERR_RE = re.compile(r'^(?:\[클라우드에게\]\s*)?\[(까망이?|작업\s*담당)\s*오류\s*#(\d+)[^\]\r\n]{0,80}\]')
+# F: claude 가 로그인이 풀렸을 때 내는 글자(연락함 지킴이 기록의 [까망이] · [작업담당] 줄에서 본다)
+#    tools/inbox-watch.ps1 · inbox-worker.ps1 의 $LoginRe 와 같게 둔다(시험이 같은지 본다)
+CLAUDE_LOGIN_RE = re.compile(r'Not logged in|Login expired|Please run /login|/login|Invalid API key|OAuth token has expired', re.I)
+# 지킴이가 로그인 문구를 보고 오류 답 본문에 적는 말(inbox-watch.ps1 · inbox-worker.ps1 와 같은 글자)
+LOGIN_NOTE = 'PC 클로드 로그인 풀림 — 까만 창에서 /login'
 LOG_TIME_RE = re.compile(r'^﻿?(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})')
 # 기록 줄에서 시각 머리글 뒤에 오는 직원 꼬리표. 연락함 지킴이는 까망이(claude)의 출력을 `[까망이] …`,
 # 작업 담당 일꾼(inbox-worker.ps1)은 자기 줄과 claude 출력을 모두 `[작업담당] …`으로 남긴다.
@@ -312,6 +333,80 @@ def waiting_pc_requests(comments, now, minutes):
     return [c for c in comments
             if TO_PC_RE.match(c['body']) and c['id'] not in answered
             and (now - c['at']).total_seconds() / 60.0 >= minutes]
+
+
+# ───────────────────────── 신호 F ─────────────────────────
+def login_lines_in_log(log_path, now, window_min):
+    """연락함 지킴이 기록에서 최근 window_min 분 안의 직원 줄([까망이] · [작업담당]) 중 claude 로그인 문구가 든 줄 수."""
+    if not log_path or not os.path.isfile(log_path):
+        return 0
+    try:
+        lines = read_log_tail(log_path)
+    except OSError:
+        return 0
+    n = 0
+    for line in lines:
+        t = log_line_time(line)
+        if t is None or not (0 <= (now - t).total_seconds() <= window_min * 60):
+            continue
+        msg = line[LOG_TIME_RE.match(line).end():].strip()
+        if LOG_STAFF_RE.match(msg) and CLAUDE_LOGIN_RE.search(msg):
+            n += 1
+    return n
+
+
+def signal_f(comments, now, inbox_log=None):
+    """집 PC 클로드 로그인 풀림 · 지킴이 확인 필요(11/27 오후 로그인이 풀려 약 3시간 아무 일도 못 함).
+    ① 최근 F_ERR_WINDOW_MIN 분 안에 [까망이 오류 #] · [작업담당 오류 #] 댓글 F_ERR_COUNT 건 이상
+    ② PC 요청이 F_WAIT_MIN 분 넘게(F_WAIT_MAX_HOURS 안) 답 없음 F_WAIT_COUNT 건 이상
+    ③ 오류 답에 「PC 클로드 로그인 풀림」, 또는 지킴이 기록의 직원 줄에 claude 로그인 문구(한 건이라도)
+    하나라도 걸리면 신호 하나(키 고정 — F_AGAIN_HOURS 에 한 번)."""
+    reasons, login = [], False
+    if comments is not None:
+        errs = [c for c in comments if STAFF_ERR_RE.match(c['body'])
+                and 0 <= (now - c['at']).total_seconds() <= F_ERR_WINDOW_MIN * 60]
+        if any(LOGIN_NOTE.split(' — ')[0] in c['body'] for c in errs):
+            login = True
+        if len(errs) >= F_ERR_COUNT:
+            reasons.append('최근 %d분 오류 답 %d건 (댓글 %s)'
+                           % (F_ERR_WINDOW_MIN, len(errs), ', '.join(c['id'] for c in errs[-5:])))
+        waiting = [c for c in waiting_pc_requests(comments, now, F_WAIT_MIN)
+                   if (now - c['at']).total_seconds() <= F_WAIT_MAX_HOURS * 3600]
+        if len(waiting) >= F_WAIT_COUNT:
+            reasons.append('%d분 넘게 답 없는 PC 요청 %d건 (댓글 %s)'
+                           % (F_WAIT_MIN, len(waiting), ', '.join(c['id'] for c in waiting[:5])))
+    n_log = login_lines_in_log(inbox_log, now, F_ERR_WINDOW_MIN)
+    if n_log:
+        login = True
+        reasons.append('지킴이 기록에 로그인 문구 %d줄' % n_log)
+    if login and not any('로그인' in r for r in reasons):
+        reasons.append('오류 답에 「%s」' % LOGIN_NOTE.split(' — ')[0])
+    if not reasons:
+        return []
+    head = '클로드 로그인 풀림이 보임' if login else '클로드 로그인 풀림 또는 지킴이 멈춤 의심'
+    text = '%s · %s · 집 PC 까만 창에서 claude 실행 → /login (무인 토큰이면 claude setup-token → tools/inbox-watch-set-token.ps1)' \
+           % (head, ' · '.join(reasons))
+    return [{'key': 'F:login', 'again_hours': F_AGAIN_HOURS, 'kind': 'F 집 PC 클로드 로그인 · 지킴이 확인 필요',
+             'target': '집 PC', 'text': quote(text),
+             'owner': {'category': '대표님 손', 'title': '집 PC 클로드 로그인 확인 (%s)' % fmt_kst(now),
+                       'desc': '%s. 까망이 · 작업 담당이 일을 못 하고 있을 수 있습니다. 집 PC 까만 창에서 claude 를 열어 '
+                               '/login 하시고(무인 토큰을 쓰면 claude setup-token 후 tools/inbox-watch-set-token.ps1), '
+                               '끝나면 완료 체크해 주세요. (신호 지킴이 자동 · 토큰 0)' % ' · '.join(reasons)}}]
+
+
+def post_owner_check(items, timeout=60):
+    """대표님 확인 화면(/confirm/)에 항목을 올린다(웹앱 owner_check_upsert). 실패하면 예외(호출한 쪽이 기록만 남김).
+    웹앱 열쇠: 환경변수 HITTILE_APP_KEY 가 있으면 key 로 같이 보낸다(값은 기록에 남기지 않는다)."""
+    payload = {'action': 'owner_check_upsert', 'items': items}
+    if os.environ.get('HITTILE_APP_KEY'):
+        payload['key'] = os.environ['HITTILE_APP_KEY']
+    req = urllib.request.Request(WEBAPP, data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
+                                 headers={'Content-Type': 'application/json; charset=utf-8'}, method='POST')
+    with urllib.request.urlopen(req, timeout=timeout) as r:      # Apps Script 의 302 는 urllib 가 GET 으로 따라간다
+        res = json.loads(r.read().decode('utf-8', 'replace') or '{}')
+    if not res.get('ok'):
+        raise RuntimeError(str(res.get('error') or '웹앱 응답 이상')[:200])
+    return res
 
 
 # ───────────────────────── 신호 C ─────────────────────────
@@ -544,6 +639,8 @@ def collect(comments, now, args, all_hours=False):
                          alive_path=args.inbox_alive, quiet_ok=True, waiting=waiting)
         if args.kakao_log:
             sigs += signal_c('카톡 지킴이', 'kakao', args.kakao_log, now, args.kakao_stale_min)
+    # F 는 영업시간과 상관없이 본다(대표님이 저녁에 PC 에서 고칠 수 있게). 일요일은 main 에서 통째로 쉰다.
+    sigs += signal_f(comments, now, args.inbox_log)
     if args.inbox_dir and os.path.isdir(args.inbox_dir):
         sigs += signal_d(args.inbox_dir, now)
         sigs += signal_e(args.inbox_dir, now)
@@ -586,6 +683,8 @@ def parse_args(argv=None):
                    help='카톡 지킴이 기록 파일(없으면 건너뜀). 환경변수 HITTILE_KAKAO_LOG')
     p.add_argument('--kakao-stale-min', type=int, default=C_STALE_MIN,
                    help='카톡 지킴이 「멈춤」 기준 분. 0이면 멈춤은 안 보고 오류 몰림만 본다')
+    p.add_argument('--no-owner-check', action='store_true',
+                   help='F 신호를 대표님 확인 화면(/confirm/)에는 올리지 않는다(연락함 댓글만)')
     p.add_argument('--state-file', default=DEFAULT_STATE)
     p.add_argument('--log-file', default=DEFAULT_LOG)
     return p.parse_args(argv)
@@ -660,6 +759,9 @@ def main(argv=None):
     if args.dry_run:
         print('[시험] 댓글을 달지 않습니다. 아래 내용을 알릴 예정:\n')
         print(body)
+        for s in send:
+            if s.get('owner') and F_OWNER_CHECK and not args.no_owner_check:
+                print('\n[시험] 대표님 확인에도 올릴 예정: %s' % s['owner']['title'])
         return 3 if read_error else 0
     try:
         post_comment(args.repo, args.pr, body)
@@ -674,6 +776,14 @@ def main(argv=None):
         write_log(args.log_file, '상태 파일 저장 실패(같은 신호가 다시 갈 수 있음): %s' % e)
         return 5
     write_log(args.log_file, '신호 %d건 연락함에 알림: %s' % (len(send), ', '.join(s['key'] for s in send)))
+    # 대표님 폰에서도 보이게 대표님 확인 화면에 한 줄(F). 실패해도 연락함 댓글은 이미 갔으므로 기록만 남긴다.
+    owners = [s['owner'] for s in send if s.get('owner')]
+    if owners and F_OWNER_CHECK and not args.no_owner_check:
+        try:
+            res = post_owner_check(owners)
+            write_log(args.log_file, '대표님 확인에 올림: %s' % ', '.join(str(x.get('id')) for x in res.get('saved') or []))
+        except Exception as e:
+            write_log(args.log_file, '대표님 확인 올리기 실패(연락함 댓글은 감): %s: %s' % (type(e).__name__, e))
     return 3 if read_error else 0
 
 

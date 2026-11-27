@@ -31,6 +31,8 @@ function Write-Log($m) {
 # 지킴이와 같은 「답 있음」 모양(tools/inbox-watch.ps1 의 $AnsRe — 바꾸면 같이 바꾼다)
 #   「까망이」 없는 [보류 #ID] · [오류 #ID], ID 뒤에 말을 덧붙인 [완료 #ID — 일부만]도 답으로 본다(11/27).
 $AnsRe = '\[(완료|대표님 확인 필요|(?:까망이?\s*)?(?:오류|보류|진행\s?중)|작업\s*담당\s*(?:오류|보류|진행\s?중))\s*#(\d+)[^\]\r\n]{0,80}\]|\[클라우드에게\]\s*질문\s*#(\d+)'
+# claude 로그인 풀림 글자(tools/inbox-watch.ps1 의 $LoginRe 와 같게 — 바꾸면 같이 바꾼다)
+$LoginRe = 'Not logged in|Login expired|Please run /login|/login|Invalid API key|OAuth token has expired'
 
 $idList = @($Ids -split '[,\s]+' | Where-Object { $_ -match '^\d+$' })
 if (-not $idList.Count) { Write-Log '처리할 댓글 ID가 없음 → 종료'; Remove-Item $WLock -Force -ErrorAction SilentlyContinue; exit 0 }
@@ -40,6 +42,7 @@ $tmpPrompt = Join-Path $env:TEMP "hittile-worker-prompt-$PID.txt"
 $tmpOut    = Join-Path $env:TEMP "hittile-worker-out-$PID.txt"
 $code = $null
 $timedOut = $false
+$outText = ''
 try {
   New-Item -ItemType File -Path $WLock -Force | Out-Null   # 잠금 시각을 지금으로(지킴이의 20분 판정 기준)
   Write-Log "시작 (댓글 ID: $ids, 상한 ${LimitMin}분)"
@@ -102,7 +105,11 @@ try {
     & taskkill.exe /PID $p.Id /T /F 2>&1 | Out-Null   # cmd · claude · 그 자식(파이썬 등)까지 함께 멈춤
     Write-Log "${LimitMin}분 상한을 넘겨 강제로 멈춤"
   } else { $code = $p.ExitCode }
-  if (Test-Path $tmpOut) { Get-Content $tmpOut -Encoding UTF8 | ForEach-Object { Write-Log "$_" } }
+  if (Test-Path $tmpOut) {
+    $outLines = @(Get-Content $tmpOut -Encoding UTF8)
+    $outText = $outLines -join "`n"
+    $outLines | ForEach-Object { Write-Log "$_" }
+  }
   Write-Log "종료 (코드 $code)"
 } catch {
   Write-Log "실행 실패: $($_.Exception.Message)"
@@ -115,8 +122,9 @@ try {
     if ($after) {
       foreach ($id in $idList) {
         if (-not $ans2[$id]) {
+          $loginNote = if ($outText -match $LoginRe) { 'PC 클로드 로그인 풀림 — 까만 창에서 /login. ' } else { '' }
           $why = if ($timedOut) { "${LimitMin}분 안에 끝나지 않아 멈췄습니다(사용량 한도 보호). 일을 잘게 나눠 새 요청으로" } else { "작업 담당이 답을 남기지 못하고 끝났습니다 (종료 코드 $code)" }
-          gh pr comment $Pr -R $Repo --body "[작업담당 오류 #$id] $why. 집 PC 기록: %LOCALAPPDATA%\hittile-inbox-watch.log" | Out-Null
+          gh pr comment $Pr -R $Repo --body "[작업담당 오류 #$id] $($loginNote)$why. 집 PC 기록: %LOCALAPPDATA%\hittile-inbox-watch.log" | Out-Null
           Write-Log "답 없음 → 오류 답 대신 남김 (#$id)"
         }
       }

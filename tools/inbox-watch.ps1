@@ -78,6 +78,9 @@ if ($comments -isnot [array]) { $comments = @($comments) }
 #   (tools/inbox-worker.ps1 도 같은 모양을 쓴다 — 바꾸면 같이 바꾼다)
 #   「까망이」 없는 [보류 #ID] · [오류 #ID], ID 뒤에 말을 덧붙인 [완료 #ID — 일부만]도 답으로 본다(11/27 거짓 「까망이 오류」 알림 두 번).
 $AnsRe = '\[(완료|대표님 확인 필요|(?:까망이?\s*)?(?:오류|보류|진행\s?중)|작업\s*담당\s*(?:오류|보류|진행\s?중))\s*#(\d+)[^\]\r\n]{0,80}\]|\[클라우드에게\]\s*질문\s*#(\d+)'
+# claude 가 로그인이 풀렸을 때 내는 글자(11/27 오후 약 3시간 멈춤). 보이면 오류 답 본문에 「PC 클로드 로그인 풀림 — 까만 창에서 /login」을 적는다.
+#   (tools/inbox-worker.ps1 · tools/signal_watch.py 의 CLAUDE_LOGIN_RE 도 같은 모양 — 바꾸면 같이 바꾼다)
+$LoginRe = 'Not logged in|Login expired|Please run /login|/login|Invalid API key|OAuth token has expired'
 $answered = @{}
 foreach ($c in $comments) {
   foreach ($m in [regex]::Matches([string]$c.body, $AnsRe)) { $answered[($m.Groups[2].Value + $m.Groups[3].Value)] = $true }
@@ -258,7 +261,8 @@ try {
   }
   Push-Location $Work
   try {
-    & claude -p $prompt --permission-mode bypassPermissions 2>&1 | ForEach-Object { Write-Log "[까망이] $_" }
+    $clOut = New-Object System.Collections.Generic.List[string]
+    & claude -p $prompt --permission-mode bypassPermissions 2>&1 | ForEach-Object { $ln = "$_"; $clOut.Add($ln); Write-Log "[까망이] $ln" }
     $code = $LASTEXITCODE
   } finally { Pop-Location }
   Write-Log "까망이 종료 (코드 $code)"
@@ -269,7 +273,8 @@ try {
   foreach ($c in @($after)) { foreach ($m in [regex]::Matches([string]$c.body, $AnsRe)) { $ans2[($m.Groups[2].Value + $m.Groups[3].Value)] = $true } }
   foreach ($t in $todo) {
     if (-not $ans2["$($t.id)"]) {
-      gh pr comment $Pr -R $Repo --body "[까망이 오류 #$($t.id)] 까망이가 답을 남기지 못하고 끝났습니다 (종료 코드 $code). 까망이 PC의 기록: %LOCALAPPDATA%\hittile-inbox-watch.log" | Out-Null
+      $loginNote = if (($clOut -join "`n") -match $LoginRe) { 'PC 클로드 로그인 풀림 — 까만 창에서 /login. ' } else { '' }
+      gh pr comment $Pr -R $Repo --body "[까망이 오류 #$($t.id)] $($loginNote)까망이가 답을 남기지 못하고 끝났습니다 (종료 코드 $code). 까망이 PC의 기록: %LOCALAPPDATA%\hittile-inbox-watch.log" | Out-Null
       Write-Log "답 없음 → 오류 답 대신 남김 (#$($t.id))"
     }
   }
